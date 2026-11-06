@@ -618,6 +618,32 @@
         $details.html(html);
     }
 
+    function isGroupEvent() {
+        return $('input[name="group-event"]:checked').val() === 'Yes';
+    }
+
+    /**
+     * Group events are phone-only: show the call message, hide any price, and
+     * disable submit. Airport quotes and limits are unchanged when this is No.
+     */
+    function updateGroupEventUI() {
+        var $call = $('#group-event-call');
+        var $quote = $('#booking-quote');
+        var $submit = $('#bookingForm button[type="submit"]');
+        if (isGroupEvent()) {
+            $call.show();
+            $quote.hide();
+            $('#quote-details').empty();
+            $submit.prop('disabled', true);
+        } else {
+            $call.hide();
+            $submit.prop('disabled', false);
+            if ($('input[name="group-event"]:checked').val() === 'No') {
+                $quote.show();
+            }
+        }
+    }
+
     // =================================================================
     // CONDITIONAL FIELD LOGIC
     // =================================================================
@@ -1323,6 +1349,12 @@
             $(this).closest('.form-group').find('.help-block').text('').hide();
         });
 
+        // Group events cannot be booked online and do not get a price quote
+        $('input[name="group-event"]').on('change', function() {
+            $(this).closest('.form-group').find('.help-block').text('').hide();
+            updateGroupEventUI();
+        });
+
         // Clear address errors when user starts typing
         $('#booking-pickup').on('input', function() {
             if ($(this).val().trim()) {
@@ -1355,6 +1387,18 @@
         // Form submission
         $form.on('submit', async function(e) {
             e.preventDefault();
+
+            // Group events must be booked by phone. Do not validate or send anything.
+            if (isGroupEvent()) {
+                updateGroupEventUI();
+                var $call = $('#group-event-call');
+                if ($call.length) {
+                    $('html, body').animate({
+                        scrollTop: $call.offset().top - 100
+                    }, 500);
+                }
+                return;
+            }
 
             // Clear previous errors
             $('.help-block.text-danger').text('').hide();
@@ -1495,6 +1539,12 @@
             if (!formData.airportTrip) {
                 errors.push('Please indicate if this is an airport trip');
                 $('input[name="airport-trip"]').closest('.form-group').addClass('has-error').find('.help-block').text('Please select an option').show();
+                isValid = false;
+            }
+
+            if (!$('input[name="group-event"]:checked').val()) {
+                errors.push('Please indicate if this is a group event');
+                $('input[name="group-event"]').closest('.form-group').addClass('has-error').find('.help-block').text('Please select an option').show();
                 isValid = false;
             }
 
@@ -1733,6 +1783,9 @@
                         $('#return-flight-section').hide();
                         $('#return-timeline-container').hide();
                         $('#other-requirement-section').hide();
+                        $('#group-event-call').hide();
+                        $('#booking-quote').show();
+                        $form.find('button[type="submit"]').prop('disabled', false);
                         $form.slideDown();
 
                         // Re-calculate default datetime using simple calculation
@@ -1803,6 +1856,7 @@
         // Initialize passenger capacity display
         updatePassengerCapacity();
         updateQuoteDisplay();
+        updateGroupEventUI();
         $('#booking-quote').show();
         $('#round-trip-section').show();
     });
@@ -1890,34 +1944,49 @@
         return p;
     }
     function show(html){var $d=$('#quote-details');if($d.length)$d.html(html);}
+    function groupEventYes(){
+        return $('input[name="group-event"]:checked').val()==='Yes';
+    }
+    function hideGroupQuote(){
+        show('');
+        $('#booking-quote').hide();
+    }
     function refresh(){
+        var my=++seq;
+        if(groupEventYes()){hideGroupQuote();return;}
+        $('#booking-quote').show();
         var pick=$.trim($('#booking-pickup').val()||'');
         var dest=$.trim($('#booking-destination').val()||'');
         var ap=whichAirport(dest);
         var airportYes=$('input[name="airport-trip"]:checked').val()==='Yes';
         var rt=$('#booking-round-trip').is(':checked');
-        var my=++seq;
         if(pick.length<6||!/\d/.test(pick)){show(ask);return;}
         if(!dest){show(ask);return;}
         if(!airportYes||!ap||townHit(pick)){show(fb);return;}
         show('Figuring your price&hellip;');
         geocode(pick).then(function(g){
+            if(my!==seq)return;
             if(townHit(g.city)||townHit(g.zip))throw 'out';
             if(!inArea(g))throw 'area';
             return driveMiles(g,ap);
         }).then(function(mi){
-            if(my!==seq)return;
+            if(my!==seq||groupEventYes()){if(groupEventYes())hideGroupQuote();return;}
             var one=Math.round(Math.max(q([58,61]),mi*q([63,35,58,56]))*100)/100;
             var cash=rt?one*2:one;
             var card=Math.round(cash*(1+q([61,35,61,62]))*100)/100;
             var label=rt?'Round trip, '+esc(hubs[ap].name)+' and back':'One way to '+esc(hubs[ap].name);
             show('<span class="quote-label">'+label+'</span><br><strong class="quote-total">Cash '+money(cash)+' &middot; Card '+money(card)+'</strong>');
-        }).catch(function(){if(my===seq)show(fb);});
+        }).catch(function(){
+            if(my!==seq)return;
+            if(groupEventYes()){hideGroupQuote();return;}
+            show(fb);
+        });
     }
     function later(){clearTimeout(timer);timer=setTimeout(refresh,900);}
     $(function(){
         $('#booking-pickup, #booking-destination').on('input', later).on('change blur', function(){clearTimeout(timer);refresh();});
         $('#booking-round-trip, input[name="airport-trip"]').on('change', function(){setTimeout(refresh,50);});
+        $('input[name="group-event"]').on('change', function(){clearTimeout(timer);refresh();});
         refresh();
     });
 }(window.jQuery);

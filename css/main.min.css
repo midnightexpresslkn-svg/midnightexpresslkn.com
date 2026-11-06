@@ -683,6 +683,13 @@ footer .footer-contact a {
 .has-error label {
   color: #d9534f;
 }
+#bookingForm button[type="submit"]:disabled {
+  background-color: #8d9399;
+  border-color: #8d9399;
+  color: #ffffff;
+  opacity: 1;
+  cursor: not-allowed;
+}
 
 
 /*# sourceMappingURL=main.min.css.map*/
