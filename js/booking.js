@@ -58,14 +58,14 @@
 
 
     /**
-     * Booking buffer rules:
-     * - Each ride takes 2 hours total (starting 15 min before pickup)
-     * - Block from 1h59m BEFORE pickup time (allows previous ride to complete)
-     * - Block until 1 hour 45 minutes AFTER pickup time
-     * Total blocked window: 3 hours 44 minutes
+     * Booking window rules (Donald):
+     * - Each ride occupies exactly 2 hours starting at pickup (pickup → pickup+120).
+     * - Two windows overlap iff |P - E| < 120 minutes (strict).
+     * - DRIVER_COUNT drivers can work at once; a proposed pickup is unavailable
+     *   only when it would overlap DRIVER_COUNT or more existing rides (needs another driver).
      */
-    const BUFFER_BEFORE_MINUTES = 119; // 1h 59m
-    const BUFFER_AFTER_MINUTES = 105; // 1h 45m
+    const RIDE_DURATION_MINUTES = 120;
+    const DRIVER_COUNT = 2;
 
     /**
      * Cached bookings data
@@ -178,23 +178,45 @@
     }
 
     /**
-     * Calculate blocked time ranges for a booking
-     * @param {number} hours - Booking hour (0-23)
-     * @param {number} minutes - Booking minute (0-59)
-     * @returns {object} - {startMinutes: number, endMinutes: number} (minutes since midnight)
+     * Ride occupation window: [pickup, pickup + RIDE_DURATION_MINUTES) in minutes since midnight.
+     * @param {number} hours
+     * @param {number} minutes
+     * @returns {{startMinutes: number, endMinutes: number}}
      */
-    function getBlockedRange(hours, minutes) {
-        const bookingTimeMinutes = hours * 60 + minutes;
-
+    function getRideWindow(hours, minutes) {
+        const startMinutes = hours * 60 + minutes;
         return {
-            startMinutes: bookingTimeMinutes - BUFFER_BEFORE_MINUTES,
-            endMinutes: bookingTimeMinutes + BUFFER_AFTER_MINUTES
+            startMinutes: startMinutes,
+            endMinutes: startMinutes + RIDE_DURATION_MINUTES
         };
     }
 
     /**
-     * Check if a proposed time conflicts with existing bookings
-     * @param {string} dateStr - Date in YYYY-MM-DD format
+     * Two pickups' 2-hour windows overlap when |P - E| < RIDE_DURATION_MINUTES.
+     */
+    function ridesOverlap(proposedMinutes, existingMinutes) {
+        return Math.abs(proposedMinutes - existingMinutes) < RIDE_DURATION_MINUTES;
+    }
+
+    /**
+     * How many existing rides' windows overlap a proposed pickup.
+     */
+    function countOverlappingRides(proposedMinutes, existingBookings) {
+        var count = 0;
+        for (var i = 0; i < existingBookings.length; i++) {
+            var booking = existingBookings[i];
+            var existingMinutes = booking.hours * 60 + booking.minutes;
+            if (ridesOverlap(proposedMinutes, existingMinutes)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
+     * Proposed pickup conflicts when it would need more than DRIVER_COUNT drivers
+     * (overlaps DRIVER_COUNT or more existing rides).
+     * @param {string} dateStr - Date in YYYY-MM-DD format (unused; bookings already filtered)
      * @param {string} timeStr - Time in HH:MM format
      * @param {Array} existingBookings - Array of bookings for the date
      * @returns {boolean} - True if there's a conflict
@@ -202,12 +224,7 @@
     function hasTimeConflict(dateStr, timeStr, existingBookings) {
         const [hours, minutes] = timeStr.split(':').map(Number);
         const proposedTimeMinutes = hours * 60 + minutes;
-
-        return existingBookings.some(function(booking) {
-            const blocked = getBlockedRange(booking.hours, booking.minutes);
-            return proposedTimeMinutes >= blocked.startMinutes &&
-                   proposedTimeMinutes <= blocked.endMinutes;
-        });
+        return countOverlappingRides(proposedTimeMinutes, existingBookings) >= DRIVER_COUNT;
     }
 
     // =================================================================
@@ -234,38 +251,42 @@
      * @returns {string} - HTML for timeline
      */
     function buildTimeline(bookings) {
-        // Create blocked ranges for each booking
-        const blockedRanges = bookings.map(function(booking) {
-            var range = getBlockedRange(booking.hours, booking.minutes);
+        // Red only where DRIVER_COUNT rides already overlap (all drivers busy).
+        // Half-open windows [pickup, pickup+RIDE_DURATION_MINUTES).
+        const rideWindows = bookings.map(function(booking) {
+            var range = getRideWindow(booking.hours, booking.minutes);
             return {
                 start: Math.max(0, range.startMinutes),
-                end: Math.min(1440, range.endMinutes),
-                bookingTime: booking.hours * 60 + booking.minutes
+                end: Math.min(1440, range.endMinutes)
             };
         });
 
-        // Sort by start time
-        blockedRanges.sort(function(a, b) {
-            return a.start - b.start;
+        // Sweep line: +1 at start, -1 at end. Process ends before starts at same minute
+        // so half-open intervals do not double-count a handoff instant.
+        const events = [];
+        for (var i = 0; i < rideWindows.length; i++) {
+            events.push({ t: rideWindows[i].start, d: 1 });
+            events.push({ t: rideWindows[i].end, d: -1 });
+        }
+        events.sort(function(a, b) {
+            if (a.t !== b.t) return a.t - b.t;
+            return a.d - b.d; // -1 before +1
         });
 
-        // Merge overlapping ranges
-        const mergedRanges = [];
-        for (let i = 0; i < blockedRanges.length; i++) {
-            const current = blockedRanges[i];
-
-            // If mergedRanges is empty or current doesn't overlap with last merged range
-            if (mergedRanges.length === 0 || current.start > mergedRanges[mergedRanges.length - 1].end) {
-                mergedRanges.push({
-                    start: current.start,
-                    end: current.end
-                });
-            } else {
-                // Overlaps with last merged range, extend the end time
-                mergedRanges[mergedRanges.length - 1].end = Math.max(
-                    mergedRanges[mergedRanges.length - 1].end,
-                    current.end
-                );
+        const fullBusyRanges = [];
+        var active = 0;
+        var busyStart = null;
+        for (var e = 0; e < events.length; e++) {
+            var wasFull = active >= DRIVER_COUNT;
+            active += events[e].d;
+            var isFull = active >= DRIVER_COUNT;
+            if (!wasFull && isFull) {
+                busyStart = events[e].t;
+            } else if (wasFull && !isFull) {
+                if (events[e].t > busyStart) {
+                    fullBusyRanges.push({ start: busyStart, end: events[e].t });
+                }
+                busyStart = null;
             }
         }
 
@@ -282,8 +303,8 @@
         // Main timeline bar (full 24 hours = 1440 minutes)
         html += '<div style="position: relative; height: 40px; background: #27AE60; border-radius: 4px; overflow: visible;">';
 
-        // Overlay merged blocked periods
-        mergedRanges.forEach(function(range) {
+        // Overlay fully-busy periods (both drivers occupied)
+        fullBusyRanges.forEach(function(range) {
             var startPercent = (range.start / 1440) * 100;
             var widthPercent = ((range.end - range.start) / 1440) * 100;
 
@@ -322,11 +343,6 @@
         return html;
     }
 
-    /**
-     * Format date for display
-     * @param {string} dateStr - Date in YYYY-MM-DD format
-     * @returns {string} - Formatted date
-     */
     function formatDisplayDate(dateStr) {
         const date = new Date(dateStr + 'T00:00:00');
         const options = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' };
@@ -1533,23 +1549,19 @@
                     isValid = false;
                 }
 
-                // Also check if return flight conflicts with the outbound flight we're about to submit
-                // The outbound flight will block from (pickupTime - BUFFER_BEFORE) to (pickupTime + BUFFER_AFTER)
+                // Same day: treat the outbound pickup as already booked when checking the return
+                // (return is unavailable only if outbound + existing would need a 3rd driver).
                 if (formData.pickupDate === formData.returnDate) {
-                    // Same day - check if return time conflicts with outbound buffer
                     const [pickupHours, pickupMinutes] = formData.pickupTime.split(':').map(Number);
-                    const [returnHours, returnMinutes] = formData.returnTime.split(':').map(Number);
-
-                    const pickupTimeMinutes = pickupHours * 60 + pickupMinutes;
-                    const returnTimeMinutes = returnHours * 60 + returnMinutes;
-
-                    const outboundBlockStart = pickupTimeMinutes - BUFFER_BEFORE_MINUTES;
-                    const outboundBlockEnd = pickupTimeMinutes + BUFFER_AFTER_MINUTES;
-
-                    if (returnTimeMinutes >= outboundBlockStart && returnTimeMinutes <= outboundBlockEnd) {
-                        errors.push('Return flight time conflicts with outbound flight buffer zone. Please choose a different time.');
+                    const existingForReturn = await getBookingsForDate(formData.returnDate, true);
+                    const withOutbound = existingForReturn.concat([{
+                        hours: pickupHours,
+                        minutes: pickupMinutes
+                    }]);
+                    if (hasTimeConflict(formData.returnDate, formData.returnTime, withOutbound)) {
+                        errors.push('Return flight time conflicts with outbound flight. Please choose a different time.');
                         $('#booking-return-time').closest('.form-group').addClass('has-error');
-                        $('#return-time-error').text('Conflicts with outbound flight buffer zone').show();
+                        $('#return-time-error').text('Conflicts with outbound flight').show();
                         isValid = false;
                     }
                 }
