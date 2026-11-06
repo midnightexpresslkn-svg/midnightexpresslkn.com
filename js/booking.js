@@ -33,6 +33,31 @@
     const NEW_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyUfrtvd64b5GKnkaHONJ7YDGGAXAAWGTxYK3lBASguhUjlO_iXXHiM4-iflODhJTYP4w/exec';
 
     /**
+     * Towns Midnight Express does not serve (SPEC.md EXCLUDED).
+     * Match whole town name as a word in the address (case-insensitive).
+     */
+    const EXCLUDED_TOWNS = [
+        'Mooresville',
+        'Cornelius',
+        'Davidson',
+        'Huntersville',
+        'Troutman',
+        'Statesville'
+    ];
+
+    function addressHasExcludedTown(address) {
+        const a = String(address || '');
+        for (let i = 0; i < EXCLUDED_TOWNS.length; i++) {
+            const town = EXCLUDED_TOWNS[i];
+            const re = new RegExp('\\b' + town.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&') + '\\b', 'i');
+            if (re.test(a)) return town;
+        }
+        return null;
+    }
+
+
+
+    /**
      * Booking buffer rules:
      * - Each ride takes 2 hours total (starting 15 min before pickup)
      * - Block from 1h59m BEFORE pickup time (allows previous ride to complete)
@@ -1389,6 +1414,25 @@
                 $('#booking-pickup').closest('.form-group').addClass('has-error');
                 $('#pickup-error').text('Pickup address is required').show();
                 isValid = false;
+            } else {
+                const excludedPickup = addressHasExcludedTown(formData.pickupAddress);
+                if (excludedPickup) {
+                    const msg = 'We do not serve ' + excludedPickup + '. Please call (980) 422-9125 with questions.';
+                    errors.push(msg);
+                    $('#booking-pickup').closest('.form-group').addClass('has-error');
+                    $('#pickup-error').text(msg).show();
+                    isValid = false;
+                }
+            }
+            if (formData.destinationAddress) {
+                const excludedDest = addressHasExcludedTown(formData.destinationAddress);
+                if (excludedDest) {
+                    const msg = 'We do not serve ' + excludedDest + '. Please call (980) 422-9125 with questions.';
+                    errors.push(msg);
+                    $('#booking-destination').closest('.form-group').addClass('has-error');
+                    $('#destination-error').text(msg).show();
+                    isValid = false;
+                }
             }
 
             // Destination address validation
