@@ -250,44 +250,42 @@
      * @param {Array} bookings - Array of bookings for the selected date
      * @returns {string} - HTML for timeline
      */
+    /**
+     * Build 24-hour timeline of pickup times a customer cannot choose.
+     * Red ranges use the same check as hasTimeConflict / countOverlappingRides:
+     * a minute P is unavailable when [P, P+RIDE_DURATION) would overlap
+     * DRIVER_COUNT or more existing rides.
+     * @param {Array} bookings - Array of bookings for the selected date
+     * @returns {string} - HTML for timeline
+     */
     function buildTimeline(bookings) {
-        // Red only where DRIVER_COUNT rides already overlap (all drivers busy).
-        // Half-open windows [pickup, pickup+RIDE_DURATION_MINUTES).
-        const rideWindows = bookings.map(function(booking) {
-            var range = getRideWindow(booking.hours, booking.minutes);
-            return {
-                start: Math.max(0, range.startMinutes),
-                end: Math.min(1440, range.endMinutes)
-            };
-        });
-
-        // Sweep line: +1 at start, -1 at end. Process ends before starts at same minute
-        // so half-open intervals do not double-count a handoff instant.
-        const events = [];
-        for (var i = 0; i < rideWindows.length; i++) {
-            events.push({ t: rideWindows[i].start, d: 1 });
-            events.push({ t: rideWindows[i].end, d: -1 });
-        }
-        events.sort(function(a, b) {
-            if (a.t !== b.t) return a.t - b.t;
-            return a.d - b.d; // -1 before +1
-        });
-
-        const fullBusyRanges = [];
-        var active = 0;
-        var busyStart = null;
-        for (var e = 0; e < events.length; e++) {
-            var wasFull = active >= DRIVER_COUNT;
-            active += events[e].d;
-            var isFull = active >= DRIVER_COUNT;
-            if (!wasFull && isFull) {
-                busyStart = events[e].t;
-            } else if (wasFull && !isFull) {
-                if (events[e].t > busyStart) {
-                    fullBusyRanges.push({ start: busyStart, end: events[e].t });
-                }
-                busyStart = null;
+        // Scan every minute with the same overlap rule as validation, then merge.
+        const blockedMinutes = [];
+        for (var m = 0; m < 1440; m++) {
+            if (countOverlappingRides(m, bookings) >= DRIVER_COUNT) {
+                blockedMinutes.push(m);
             }
+        }
+
+        const unavailableRanges = [];
+        var rangeStart = null;
+        var prev = null;
+        for (var i = 0; i < blockedMinutes.length; i++) {
+            var minute = blockedMinutes[i];
+            if (rangeStart === null) {
+                rangeStart = minute;
+                prev = minute;
+            } else if (minute === prev + 1) {
+                prev = minute;
+            } else {
+                // half-open [rangeStart, prev+1)
+                unavailableRanges.push({ start: rangeStart, end: prev + 1 });
+                rangeStart = minute;
+                prev = minute;
+            }
+        }
+        if (rangeStart !== null) {
+            unavailableRanges.push({ start: rangeStart, end: prev + 1 });
         }
 
         // Build continuous timeline bar
@@ -300,37 +298,27 @@
         html += '<span>11:59 PM</span>';
         html += '</div>';
 
-        // Main timeline bar (full 24 hours = 1440 minutes)
+        // Main timeline bar (full 24 hours = 1440 minutes) — no text inside red blocks
         html += '<div style="position: relative; height: 40px; background: #27AE60; border-radius: 4px; overflow: visible;">';
 
-        // Overlay fully-busy periods (both drivers occupied)
-        fullBusyRanges.forEach(function(range) {
+        unavailableRanges.forEach(function(range) {
             var startPercent = (range.start / 1440) * 100;
             var widthPercent = ((range.end - range.start) / 1440) * 100;
-
-            var startHours = Math.floor(range.start / 60);
-            var startMinutes = range.start % 60;
-            var endHours = Math.floor(range.end / 60);
-            var endMinutes = range.end % 60;
-
-            // Convert to 12-hour format with AM/PM
-            var startAmPm = startHours >= 12 ? 'PM' : 'AM';
-            var startDisplay = (startHours % 12) || 12;
-            var startTime = startDisplay + ':' + (startMinutes < 10 ? '0' : '') + startMinutes + ' ' + startAmPm;
-
-            var endAmPm = endHours >= 12 ? 'PM' : 'AM';
-            var endDisplay = (endHours % 12) || 12;
-            var endTime = endDisplay + ':' + (endMinutes < 10 ? '0' : '') + endMinutes + ' ' + endAmPm;
-
-            // Blocked period bar with times inside
-            html += '<div style="position: absolute; left: ' + startPercent + '%; width: ' + widthPercent + '%; height: 100%; background: #d9534f; border-radius: 2px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: white; font-size: 11px; font-weight: bold; line-height: 1.2;">';
-            html += '<span>' + startTime + '</span>';
-            html += '<span style="line-height: 0.2;">-</span>';
-            html += '<span>' + endTime + '</span>';
-            html += '</div>';
+            html += '<div style="position: absolute; left: ' + startPercent + '%; width: ' + widthPercent + '%; height: 100%; background: #d9534f; border-radius: 2px;"></div>';
         });
 
         html += '</div>';
+
+        // Readable labels under the bar (phone-friendly; avoids cramped text inside red)
+        if (unavailableRanges.length > 0) {
+            html += '<div style="margin-top: 8px; font-size: 12px; color: #a94442; text-align: center; line-height: 1.4;">';
+            unavailableRanges.forEach(function(range, idx) {
+                var label = 'Unavailable: ' + formatTimeFromMinutes(range.start) + ' - ' + formatTimeFromMinutes(range.end);
+                if (idx > 0) html += '<br>';
+                html += '<span>' + label + '</span>';
+            });
+            html += '</div>';
+        }
 
         html += '</div>';
 
