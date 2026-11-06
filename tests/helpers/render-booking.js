@@ -4,6 +4,7 @@ import vm from "node:vm";
 import { JSDOM } from "jsdom";
 import { waitFor } from "@testing-library/dom";
 import { placeholder, role, roles } from "./failure.js";
+import { hostnameOf } from "./hostname.js";
 
 const root = process.cwd();
 const pageHtml = fs.readFileSync(path.join(root, "index.html"), "utf8");
@@ -86,11 +87,11 @@ function jsonResponse(data) {
 }
 
 export function bookingPosts(state) {
-  return state.requests.filter(
-    (request) =>
-      request.method === "POST" &&
-      /script\.google\.com|docs\.google\.com/.test(request.url),
-  );
+  return state.requests.filter((request) => {
+    if (request.method !== "POST") return false;
+    const host = hostnameOf(request.url);
+    return host === "script.google.com" || host === "docs.google.com";
+  });
 }
 
 export async function renderBooking(script, options = {}) {
@@ -113,9 +114,10 @@ export async function renderBooking(script, options = {}) {
   const $ = window.jQuery;
   $.ajax = (settings) => {
     const url = settings.url || "";
+    const host = hostnameOf(url);
     const method = (settings.method || settings.type || "GET").toUpperCase();
     state.requests.push({ via: "ajax", method, url, mocked: true });
-    if (url.includes("geocoding.geo.census.gov")) {
+    if (host === "geocoding.geo.census.gov") {
       if (state.censusMode === "error") {
         settings.error && settings.error({}, "error", "mocked");
       } else if (state.censusMode === "miss") {
@@ -137,7 +139,7 @@ export async function renderBooking(script, options = {}) {
             },
           });
       }
-    } else if (url.includes("script.google.com")) {
+    } else if (host === "script.google.com") {
       settings.success && settings.success(state.bookings);
     } else if (settings.error) {
       settings.error({}, "error", "blocked");
@@ -147,25 +149,23 @@ export async function renderBooking(script, options = {}) {
 
   window.fetch = async (url, init = {}) => {
     const href = String(url);
+    const host = hostnameOf(href);
     const method = (init.method || "GET").toUpperCase();
     state.requests.push({ via: "fetch", method, url: href, mocked: true });
     if (state.failPost && method === "POST") {
       throw new Error("mocked network failure");
     }
-    if (href.includes("router.project-osrm.org")) {
+    if (host === "router.project-osrm.org") {
       if (state.routeMode === "error") return jsonResponse({ code: "NoRoute" });
       return jsonResponse({
         code: "Ok",
         routes: [{ distance: state.miles * 1609.344 }],
       });
     }
-    if (href.includes("nominatim.openstreetmap.org")) {
+    if (host === "nominatim.openstreetmap.org") {
       return jsonResponse([{ lat: String(state.lat), lon: String(state.lon) }]);
     }
-    if (
-      href.includes("script.google.com") ||
-      href.includes("docs.google.com")
-    ) {
+    if (host === "script.google.com" || host === "docs.google.com") {
       return {
         ok: true,
         status: 200,

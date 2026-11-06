@@ -1,27 +1,26 @@
 import { test, expect } from "@playwright/test";
+import { hostnameOf } from "../helpers/hostname.js";
 
 async function installMocks(page, { miles = 10 } = {}) {
   const posts = [];
   await page.route("**/*", async (route) => {
     const request = route.request();
     const url = request.url();
+    const host = hostnameOf(url);
     const method = request.method();
-    if (
-      url.startsWith("http://127.0.0.1") ||
-      url.startsWith("http://localhost")
-    ) {
+    if (host === "127.0.0.1" || host === "localhost") {
       await route.continue();
       return;
     }
     if (
       method === "POST" &&
-      /script\.google\.com|docs\.google\.com|google\.com\/forms/.test(url)
+      (host === "script.google.com" || host === "docs.google.com")
     ) {
       posts.push(url);
       await route.fulfill({ status: 204, body: "" });
       return;
     }
-    if (url.includes("geocoding.geo.census.gov")) {
+    if (host === "geocoding.geo.census.gov") {
       const callback = new URL(url).searchParams.get("callback") || "callback";
       const data = {
         result: {
@@ -40,7 +39,7 @@ async function installMocks(page, { miles = 10 } = {}) {
       });
       return;
     }
-    if (url.includes("router.project-osrm.org")) {
+    if (host === "router.project-osrm.org") {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -51,7 +50,7 @@ async function installMocks(page, { miles = 10 } = {}) {
       });
       return;
     }
-    if (url.includes("nominatim.openstreetmap.org")) {
+    if (host === "nominatim.openstreetmap.org") {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -59,7 +58,7 @@ async function installMocks(page, { miles = 10 } = {}) {
       });
       return;
     }
-    if (url.includes("script.google.com")) {
+    if (host === "script.google.com") {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
