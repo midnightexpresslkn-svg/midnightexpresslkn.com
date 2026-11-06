@@ -576,7 +576,7 @@
     function updateQuoteDisplay() {
         var $details = $('#quote-details');
         if (!$details.length) return;
-        var html = 'Your price is confirmed when we call to confirm your booking.';
+        var html = 'Enter your pickup address and airport to see your price.';
         $details.html(html);
     }
 
@@ -1757,3 +1757,89 @@
     });
 
     })(jQuery);
+
+/* Price total (owner rule): fare = larger of minimum or miles x rate; card adds 3%.
+   Only dollar totals are shown to customers, never the rate or minimum. */
+!function($){
+    if(!$)return;
+    var QUOTE_MIN=70, QUOTE_PER_MILE=2.75, QUOTE_CARD_FEE=0.03;
+    var QUOTE_FALLBACK='We\'ll confirm your price when we call.';
+    var QUOTE_PROMPT='Enter your pickup address and airport to see your price.';
+    var AIRPORTS={
+        CLT:{name:'Charlotte Douglas Airport (CLT)',lat:35.2140,lon:-80.9431},
+        JQF:{name:'Concord Regional Airport',lat:35.3878,lon:-80.7091}
+    };
+    var BAD_TOWNS=['Mooresville','Cornelius','Davidson','Huntersville','Troutman','Statesville'];
+    var geoCache={}, routeCache={}, timer=null, seq=0;
+    function esc(s){return String(s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+    function money(n){return '$'+n.toFixed(2);}
+    function whichAirport(d){
+        d=String(d||'');
+        if(/\bCLT\b|charlotte|douglas/i.test(d))return 'CLT';
+        if(/concord|\bJQF\b/i.test(d))return 'JQF';
+        return null;
+    }
+    function badTown(a){for(var i=0;i<BAD_TOWNS.length;i++){if(new RegExp('\\b'+BAD_TOWNS[i]+'\\b','i').test(a))return true;}return false;}
+    function censusGeo(a){
+        return new Promise(function(res,rej){
+            $.ajax({url:'https://geocoding.geo.census.gov/geocoder/locations/onelineaddress',
+                data:{address:a,benchmark:'Public_AR_Current',format:'jsonp'},dataType:'jsonp',timeout:8000,
+                success:function(r){var m=r&&r.result&&r.result.addressMatches;
+                    if(m&&m.length&&m[0].coordinates)res({lat:m[0].coordinates.y,lon:m[0].coordinates.x});else rej('nomatch');},
+                error:function(){rej('census');}});
+        });
+    }
+    function osmGeo(a){
+        var q=/\bNC\b|north carolina/i.test(a)?a:a+', NC';
+        return fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&viewbox=-81.4,35.9,-80.4,35.0&q='+encodeURIComponent(q))
+            .then(function(r){return r.json();}).then(function(j){
+                if(j&&j.length)return {lat:+j[0].lat,lon:+j[0].lon};throw 'nomatch';});
+    }
+    function geocode(a){
+        var k=a.toLowerCase();
+        if(geoCache[k])return geoCache[k];
+        var p=censusGeo(a).catch(function(){return osmGeo(a);});
+        geoCache[k]=p; p.catch(function(){delete geoCache[k];});
+        return p;
+    }
+    function inArea(g){return g.lat>34.9&&g.lat<36.2&&g.lon>-81.8&&g.lon<-80.2;}
+    function driveMiles(g,ap){
+        var k=g.lat.toFixed(5)+','+g.lon.toFixed(5)+'>'+ap;
+        if(routeCache[k])return routeCache[k];
+        var A=AIRPORTS[ap];
+        var p=fetch('https://router.project-osrm.org/route/v1/driving/'+g.lon+','+g.lat+';'+A.lon+','+A.lat+'?overview=false')
+            .then(function(r){return r.json();}).then(function(j){
+                if(j&&j.code==='Ok'&&j.routes&&j.routes.length)return j.routes[0].distance/1609.344;throw 'noroute';});
+        routeCache[k]=p; p.catch(function(){delete routeCache[k];});
+        return p;
+    }
+    function show(html){var $d=$('#quote-details');if($d.length)$d.html(html);}
+    function refresh(){
+        var pick=$.trim($('#booking-pickup').val()||'');
+        var ap=whichAirport($('#booking-destination').val());
+        var rt=$('#booking-round-trip').is(':checked');
+        var my=++seq;
+        if(pick.length<6||!/\d/.test(pick)){show(QUOTE_PROMPT);return;}
+        var dest=$.trim($('#booking-destination').val()||'');
+        if(!ap){show(dest.length>3?QUOTE_FALLBACK:QUOTE_PROMPT);return;}
+        if(badTown(pick)){show(QUOTE_FALLBACK);return;}
+        show('Figuring your price&hellip;');
+        geocode(pick).then(function(g){
+            if(!inArea(g))throw 'area';
+            return driveMiles(g,ap);
+        }).then(function(mi){
+            if(my!==seq)return;
+            var one=Math.round(Math.max(QUOTE_MIN,mi*QUOTE_PER_MILE)*100)/100;
+            var cash=rt?one*2:one;
+            var card=Math.round(cash*(1+QUOTE_CARD_FEE)*100)/100;
+            var label=rt?'Round trip, '+esc(AIRPORTS[ap].name)+' and back':'One way to '+esc(AIRPORTS[ap].name);
+            show('<span class="quote-label">'+label+'</span><br><strong class="quote-total">Cash '+money(cash)+' &middot; Card '+money(card)+'</strong>');
+        }).catch(function(){if(my===seq)show(QUOTE_FALLBACK);});
+    }
+    function later(){clearTimeout(timer);timer=setTimeout(refresh,900);}
+    $(function(){
+        $('#booking-pickup, #booking-destination').on('input', later).on('change blur', function(){clearTimeout(timer);refresh();});
+        $('#booking-round-trip, input[name="airport-trip"]').on('change', function(){setTimeout(refresh,50);});
+        refresh();
+    });
+}(window.jQuery);
