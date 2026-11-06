@@ -23,6 +23,7 @@ const scriptSource = {
 };
 
 const pendingTimers = new Set();
+const pendingJobs = new Map();
 const nativeSetTimeout = globalThis.setTimeout;
 const nativeClearTimeout = globalThis.clearTimeout;
 let timersWrapped = false;
@@ -33,13 +34,16 @@ function wrapTimers() {
   globalThis.setTimeout = (fn, ms, ...args) => {
     const id = nativeSetTimeout(() => {
       pendingTimers.delete(id);
+      pendingJobs.delete(id);
       fn(...args);
     }, ms);
     pendingTimers.add(id);
+    pendingJobs.set(id, { fn, args, ms });
     return id;
   };
   globalThis.clearTimeout = (id) => {
     pendingTimers.delete(id);
+    pendingJobs.delete(id);
     nativeClearTimeout(id);
   };
 }
@@ -47,6 +51,29 @@ function wrapTimers() {
 export function drainTimers() {
   for (const id of pendingTimers) nativeClearTimeout(id);
   pendingTimers.clear();
+  pendingJobs.clear();
+}
+
+export function hasTimer(ms) {
+  for (const job of pendingJobs.values()) {
+    if (job.ms === ms) return true;
+  }
+  return false;
+}
+
+export function flushTimersOf(ms) {
+  const due = [...pendingJobs.entries()].filter(([, job]) => job.ms === ms);
+  for (const [id] of due) {
+    nativeClearTimeout(id);
+    pendingTimers.delete(id);
+    pendingJobs.delete(id);
+  }
+  for (const [, job] of due) job.fn(...job.args);
+}
+
+export function releaseHeld(state) {
+  const jobs = state.held.splice(0);
+  for (const job of jobs) job();
 }
 
 function run(code, filename) {
@@ -97,7 +124,7 @@ export function bookingPosts(state) {
 export async function renderBooking(script, options = {}) {
   ensureLibs();
   drainTimers();
-  document.body.innerHTML = pageBody;
+  document.body.innerHTML = options.bare ? "<main></main>" : pageBody;
   const state = {
     miles: options.miles ?? 10,
     bookings: options.bookings ?? [],
@@ -107,7 +134,13 @@ export async function renderBooking(script, options = {}) {
     lon: options.lon ?? -81.03,
     censusMode: options.censusMode ?? "ok",
     routeMode: options.routeMode ?? "ok",
+    osmMode: options.osmMode ?? "ok",
+    bookingsMode: options.bookingsMode ?? "ok",
+    formMode: options.formMode ?? "opaque",
+    calendarMode: options.calendarMode ?? "opaque",
     failPost: options.failPost ?? false,
+    holdCensus: options.holdCensus ?? false,
+    held: [],
     requests: [],
   };
 
@@ -117,7 +150,7 @@ export async function renderBooking(script, options = {}) {
     const host = hostnameOf(url);
     const method = (settings.method || settings.type || "GET").toUpperCase();
     state.requests.push({ via: "ajax", method, url, mocked: true });
-    if (host === "geocoding.geo.census.gov") {
+    const deliverCensus = () => {
       if (state.censusMode === "error") {
         settings.error && settings.error({}, "error", "mocked");
       } else if (state.censusMode === "miss") {
@@ -139,8 +172,18 @@ export async function renderBooking(script, options = {}) {
             },
           });
       }
+    };
+    if (host === "geocoding.geo.census.gov") {
+      if (state.holdCensus) state.held.push(deliverCensus);
+      else deliverCensus();
     } else if (host === "script.google.com") {
-      settings.success && settings.success(state.bookings);
+      if (state.bookingsMode === "error") {
+        settings.error && settings.error({}, "error", "mocked");
+      } else if (state.bookingsMode === "bad") {
+        settings.success && settings.success({ not: "an array" });
+      } else {
+        settings.success && settings.success(state.bookings);
+      }
     } else if (settings.error) {
       settings.error({}, "error", "blocked");
     }
@@ -151,11 +194,19 @@ export async function renderBooking(script, options = {}) {
     const href = String(url);
     const host = hostnameOf(href);
     const method = (init.method || "GET").toUpperCase();
-    state.requests.push({ via: "fetch", method, url: href, mocked: true });
+    state.requests.push({
+      via: "fetch",
+      method,
+      url: href,
+      body: init.body,
+      headers: init.headers,
+      mocked: true,
+    });
     if (state.failPost && method === "POST") {
       throw new Error("mocked network failure");
     }
     if (host === "router.project-osrm.org") {
+      if (state.routeMode === "throw") throw new Error("mocked route failure");
       if (state.routeMode === "error") return jsonResponse({ code: "NoRoute" });
       return jsonResponse({
         code: "Ok",
@@ -163,12 +214,83 @@ export async function renderBooking(script, options = {}) {
       });
     }
     if (host === "nominatim.openstreetmap.org") {
+      if (state.osmMode === "throw") throw new Error("mocked geocoder failure");
+      if (state.osmMode === "empty") return jsonResponse([]);
       return jsonResponse([{ lat: String(state.lat), lon: String(state.lon) }]);
     }
-    if (host === "script.google.com" || host === "docs.google.com") {
+    if (
+      method === "POST" &&
+      (host === "script.google.com" || host === "docs.google.com")
+    ) {
+      const mode =
+        host === "docs.google.com" ? state.formMode : state.calendarMode;
+      if (mode === "network") throw new Error("mocked network failure");
+      if (mode === "abort") {
+        const err = new Error("The operation was aborted");
+        err.name = "AbortError";
+        throw err;
+      }
+      if (mode === "timeout") {
+        return await new Promise((resolve, reject) => {
+          const fail = () => {
+            const err = new Error("The operation was aborted");
+            err.name = "AbortError";
+            reject(err);
+          };
+          const signal = init.signal;
+          if (!signal) return;
+          if (signal.aborted) fail();
+          else signal.addEventListener("abort", fail, { once: true });
+        });
+      }
+      if (mode === "http") {
+        return {
+          ok: false,
+          status: 500,
+          type: "basic",
+          json: async () => ({}),
+          text: async () => "",
+        };
+      }
+      if (mode === "ok") {
+        return {
+          ok: true,
+          status: 200,
+          type: "basic",
+          json: async () => ({}),
+          text: async () => "",
+        };
+      }
+      if (mode === "status0") {
+        return {
+          ok: false,
+          status: 0,
+          type: "basic",
+          json: async () => ({}),
+          text: async () => "",
+        };
+      }
+      if (mode === "redirect") {
+        return {
+          ok: false,
+          status: 0,
+          type: "opaqueredirect",
+          json: async () => ({}),
+          text: async () => "",
+        };
+      }
+      if (mode === "redirect-basic") {
+        return {
+          ok: false,
+          status: 302,
+          type: "basic",
+          json: async () => ({}),
+          text: async () => "",
+        };
+      }
       return {
-        ok: true,
-        status: 200,
+        ok: false,
+        status: 0,
         type: "opaque",
         json: async () => [],
         text: async () => "",
