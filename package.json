@@ -3,13 +3,17 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --check js/booking.js && node --check js/booking.min.js && vitest run --coverage && playwright test",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "test:unit": "vitest run --coverage",
     "test:browser": "playwright test",
     "lint": "eslint js/booking.js",
+    "verify": "npm run lint && node --check js/booking.js && node --check js/booking.min.js && npm run test:coverage",
     "html": "html-validate index.html",
     "audit": "npm audit --audit-level=high",
-    "check": "node scripts/ci.mjs"
+    "check": "node scripts/ci.mjs",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -18,6 +22,7 @@
     "@vitest/coverage-v8": "^5.1.0",
     "eslint": "^10.14.0",
     "html-validate": "^11.18.0",
+    "husky": "^9.1.7",
     "jsdom": "^31.0.0",
     "prettier": "^3.9.10",
     "vitest": "^5.1.0"

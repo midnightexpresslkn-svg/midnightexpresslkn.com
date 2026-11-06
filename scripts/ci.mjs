@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import vitestConfig from "../vitest.config.js";
 
 const root = process.cwd();
 fs.mkdirSync(path.join(root, "test-results"), { recursive: true });
@@ -183,7 +184,7 @@ try {
     statements: summary.statements.pct,
     functions: summary.functions.pct,
     branches: summary.branches.pct,
-    thresholds: { lines: 58, statements: 58, functions: 70, branches: 45 },
+    thresholds: vitestConfig.test.coverage.thresholds,
   };
 } catch {
   addFailure(
