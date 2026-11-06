@@ -734,6 +734,54 @@ describe.each(scripts)("form validation %s", (script) => {
     });
   });
 
+  it("keeps a same-day default when three hours is still before 8 PM", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 10, 6, 16, 50, 0));
+    const view = await renderBooking(script);
+    check(view.document.querySelector("#booking-date").value, "2026-11-06", {
+      label: "4:50 PM stays on the same date",
+      source: SOURCE.advance,
+      loaded: script,
+    });
+    check(view.document.querySelector("#booking-time").value, "19:50:00", {
+      label: "4:50 PM defaults to 7:50 PM",
+      source: SOURCE.advance,
+      loaded: script,
+    });
+  });
+
+  it("moves a default that rounds to 8 PM onto 8:00 the next morning", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 10, 6, 16, 58, 0));
+    const view = await renderBooking(script);
+    check(view.document.querySelector("#booking-date").value, "2026-11-07", {
+      label: "4:58 PM rounds onto the next morning",
+      source: SOURCE.advance,
+      loaded: script,
+    });
+    check(view.document.querySelector("#booking-time").value, "08:00:00", {
+      label: "4:58 PM default time is 8:00",
+      source: SOURCE.advance,
+      loaded: script,
+    });
+  });
+
+  it("defaults an 8 PM visit to 8:00 the next morning", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 10, 6, 20, 0, 0));
+    const view = await renderBooking(script);
+    check(view.document.querySelector("#booking-date").value, "2026-11-07", {
+      label: "8:00 PM default date",
+      source: SOURCE.advance,
+      loaded: script,
+    });
+    check(view.document.querySelector("#booking-time").value, "08:00:00", {
+      label: "8:00 PM default time",
+      source: SOURCE.advance,
+      loaded: script,
+    });
+  });
+
   it("defaults a night visit to 8:00 the next morning", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date(2026, 10, 6, 21, 15, 0));

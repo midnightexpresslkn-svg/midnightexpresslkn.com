@@ -194,12 +194,13 @@
     }
 
     /**
-     * Get all bookings for a specific date (including pending bookings)
+     * Get bookings for a date, including requests already sent from this page.
+     * Every caller needs the pending rides, so a second request cannot take
+     * a driver the first request is still holding.
      * @param {string} dateStr - Date in YYYY-MM-DD format
-     * @param {boolean} includePending - Whether to include pending bookings
      * @returns {Promise<Array>} - Array of bookings for that date
      */
-    async function getBookingsForDate(dateStr, includePending = false) {
+    async function getBookingsForDate(dateStr) {
         const allBookings = await fetchBookings();
 
         const dbBookings = allBookings
@@ -215,30 +216,11 @@
                 return booking.date === dateStr;
             });
 
-        // Include pending bookings if requested
-        if (includePending) {
-            const pending = pendingBookings
-                .filter(function(booking) {
-                    return booking.date === dateStr;
-                });
-            return dbBookings.concat(pending);
-        }
-
-        return dbBookings;
-    }
-
-    /**
-     * Ride occupation window: [pickup, pickup + RIDE_DURATION_MINUTES) in minutes since midnight.
-     * @param {number} hours
-     * @param {number} minutes
-     * @returns {{startMinutes: number, endMinutes: number}}
-     */
-    function getRideWindow(hours, minutes) {
-        const startMinutes = hours * 60 + minutes;
-        return {
-            startMinutes: startMinutes,
-            endMinutes: startMinutes + RIDE_DURATION_MINUTES
-        };
+        const pending = pendingBookings
+            .filter(function(booking) {
+                return booking.date === dateStr;
+            });
+        return dbBookings.concat(pending);
     }
 
     /**
@@ -570,7 +552,7 @@
     async function validateDateTime(dateStr, timeStr) {
         // Include pending bookings in validation to catch conflicts
         // before they reach the database
-        const bookings = await getBookingsForDate(dateStr, true);
+        const bookings = await getBookingsForDate(dateStr);
         return validateDateTimeSync(dateStr, timeStr, bookings);
     }
 
@@ -975,78 +957,6 @@
     }
 
     /**
-     * Find the first available booking time slot
-     * @param {Date} currentTime - Current time
-     * @returns {Date} - First available booking time
-     */
-    async function findFirstAvailableTime(currentTime) {
-        const today = new Date(currentTime);
-        today.setHours(0, 0, 0, 0);
-
-        // Check if we need to look at tomorrow (past 8 PM or after 6 PM for bookings)
-        const currentHour = currentTime.getHours();
-        let searchDate = today;
-
-        // If it's past 8 PM, start looking at tomorrow
-        if (currentHour >= 20) {
-            searchDate = new Date(today);
-            searchDate.setDate(searchDate.getDate() + 1);
-        }
-
-        // Get bookings for the search date
-        const bookings = await getBookingsForDate(formatLocalYmd(searchDate));
-
-        // Find the first available time slot
-        let searchTime = new Date(searchDate);
-
-        // Start at 8 AM (8:00 AM) for current day, or 8 AM for future days
-        if (searchDate.toDateString() === today.toDateString()) {
-            // If it's current day, start from current time + buffer
-            searchTime = new Date(currentTime.getTime() + (3 * 60 * 60 * 1000)); // 3 hour buffer
-
-            // Round up to next 5-minute interval
-            const minutes = searchTime.getMinutes();
-            const roundedMinutes = Math.ceil(minutes / 5) * 5;
-            searchTime.setMinutes(roundedMinutes);
-            searchTime.setSeconds(0);
-
-            // If the calculated time is past 8 PM, move to tomorrow
-            if (searchTime.getHours() >= 20) {
-                searchTime = new Date(searchDate);
-                searchTime.setDate(searchTime.getDate() + 1);
-                searchTime.setHours(8, 0, 0, 0);
-            }
-        } else {
-            // For future days, start at 8 AM
-            searchTime.setHours(8, 0, 0, 0);
-        }
-
-        // Check if the calculated time is too soon (less than 3 hours from now)
-        const minAllowedTime = new Date(currentTime.getTime() + (3 * 60 * 60 * 1000));
-        if (searchTime < minAllowedTime && searchDate.toDateString() === today.toDateString()) {
-            // Time is too soon, show call message and set to next available slot
-            showCallForBookingMessage();
-
-            // Find the next available slot (at least 3 hours from now)
-            searchTime = new Date(minAllowedTime);
-            const minutes = searchTime.getMinutes();
-            const roundedMinutes = Math.ceil(minutes / 5) * 5;
-            searchTime.setMinutes(roundedMinutes);
-            searchTime.setSeconds(0);
-
-            // If this goes past 8 PM, move to tomorrow 8 AM
-            if (searchTime.getHours() >= 20) {
-                searchTime = new Date(today);
-                searchTime.setDate(searchTime.getDate() + 1);
-                searchTime.setHours(8, 0, 0, 0);
-            }
-        }
-
-        return searchTime;
-    }
-
-    
-    /**
      * Calculate simple default booking time (synchronous version)
      * @param {Date} currentTime - Current time
      * @returns {Date} - Default booking time
@@ -1066,23 +976,6 @@
             defaultTime = new Date(currentTime.getTime() + (3 * 60 * 60 * 1000));
 
             // Round up to next 5-minute interval
-            const minutes = defaultTime.getMinutes();
-            const roundedMinutes = Math.ceil(minutes / 5) * 5;
-            defaultTime.setMinutes(roundedMinutes);
-            defaultTime.setSeconds(0);
-
-            // If this goes past 8 PM, move to tomorrow 8 AM
-            if (defaultTime.getHours() >= 20) {
-                defaultTime = new Date(today);
-                defaultTime.setDate(defaultTime.getDate() + 1);
-                defaultTime.setHours(8, 0, 0, 0);
-            }
-        }
-
-        // Ensure minimum 3-hour buffer (no banner - just set valid default)
-        const minAllowedTime = new Date(currentTime.getTime() + (3 * 60 * 60 * 1000));
-        if (defaultTime < minAllowedTime) {
-            defaultTime = new Date(minAllowedTime);
             const minutes = defaultTime.getMinutes();
             const roundedMinutes = Math.ceil(minutes / 5) * 5;
             defaultTime.setMinutes(roundedMinutes);
@@ -1653,7 +1546,7 @@
                 // (return is unavailable only if outbound + existing would need a 3rd driver).
                 if (formData.pickupDate === formData.returnDate) {
                     const [pickupHours, pickupMinutes] = formData.pickupTime.split(':').map(Number);
-                    const existingForReturn = await getBookingsForDate(formData.returnDate, true);
+                    const existingForReturn = await getBookingsForDate(formData.returnDate);
                     const withOutbound = existingForReturn.concat([{
                         hours: pickupHours,
                         minutes: pickupMinutes
