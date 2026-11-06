@@ -49,6 +49,26 @@ export const SOURCE = {
   drivers: () => sourceLine("js/booking.js", "const DRIVER_COUNT = 2;"),
   group: () => sourceLine("js/booking.js", "function updateGroupEventUI()"),
   escape: () => sourceLine("js/booking.js", "function escapeHtml(value)"),
+  geocode: () => sourceLine("js/booking.js", "function geocode(a)"),
+  route: () => sourceLine("js/booking.js", "function driveMiles(g,ap)"),
+  submit: () =>
+    sourceLine(
+      "js/booking.js",
+      "function submitToGoogleSheets(submissionData)",
+    ),
+  calendar: () =>
+    sourceLine("js/booking.js", "function postBookingToCalendar(formData)"),
+  timeline: () =>
+    sourceLine("js/booking.js", "function buildTimeline(bookings)"),
+  phone: () => sourceLine("js/booking.js", "function validatePhone(phone)"),
+  email: () => sourceLine("js/booking.js", "function validateEmail(email)"),
+  flight: () =>
+    sourceLine("js/booking.js", "function validateFlightNumber(flightNumber)"),
+  advance: () =>
+    sourceLine(
+      "js/booking.js",
+      "Please book at least 3 hours in advance. For urgent bookings, call (980) 422-9125",
+    ),
   review: () => sourceLine("index.html", "Leave a review on Google"),
   manifest: () => sourceLine("manifest.webmanifest", '"start_url"'),
 };

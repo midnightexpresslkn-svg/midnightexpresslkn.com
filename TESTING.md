@@ -7,16 +7,16 @@ The live site stays static. `index.html` does not load anything from this test s
 ```bash
 npm install
 npx playwright install chromium
-npm test
+npm run verify
 ```
 
-`npm test` checks `js/booking.js` and `js/booking.min.js` with `node --check`, then runs Vitest (with coverage) and the Playwright browser checks.
+`npm test` runs the unit tests once. `npm run test:watch` reruns them while files change. `npm run test:coverage` runs them with the coverage gate. `npm run verify` runs ESLint, checks `js/booking.js` and `js/booking.min.js` with `node --check`, then runs the unit tests and the coverage gate. It exits non-zero if any step fails. The pre-commit hook runs `verify`.
 
-`npm run check` also runs ESLint, HTML validation, Prettier, `npm audit` (high and critical fail), and gitleaks. Lighthouse runs in GitHub Actions from `lighthouserc.json`.
+`npm run test:browser` runs the Playwright checks. `npm run check` also runs HTML validation, Prettier, `npm audit` (high and critical fail), and gitleaks. Lighthouse runs in GitHub Actions from `lighthouserc.json`.
 
 ## New features get tests first
 
-When you add a feature, write the code, write the tests, run `npm test`, fix what failed, and rerun until the suite is green.
+When you add a feature, write the code, write the tests, run `npm run verify`, fix what failed, and rerun until the suite is green.
 
 ## How to read a failure
 
