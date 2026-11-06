@@ -33,8 +33,8 @@
     const NEW_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyUfrtvd64b5GKnkaHONJ7YDGGAXAAWGTxYK3lBASguhUjlO_iXXHiM4-iflODhJTYP4w/exec';
 
     /**
-     * Towns Midnight Express does not serve (SPEC.md EXCLUDED).
-     * Match whole town name as a word in the address (case-insensitive).
+     * Towns Midnight Express does not serve.
+     * Match the town name as a word, that town's ZIP, or the Census city/ZIP.
      */
     const EXCLUDED_TOWNS = [
         'Mooresville',
@@ -45,6 +45,20 @@
         'Statesville'
     ];
 
+    const EXCLUDED_ZIPS = {
+        '28115': 'Mooresville',
+        '28117': 'Mooresville',
+        '28035': 'Davidson',
+        '28036': 'Davidson',
+        '28070': 'Huntersville',
+        '28078': 'Huntersville',
+        '28031': 'Cornelius',
+        '28166': 'Troutman',
+        '28625': 'Statesville',
+        '28677': 'Statesville',
+        '28687': 'Statesville'
+    };
+
     function addressHasExcludedTown(address) {
         const a = String(address || '');
         for (let i = 0; i < EXCLUDED_TOWNS.length; i++) {
@@ -52,7 +66,31 @@
             const re = new RegExp('\\b' + town.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&') + '\\b', 'i');
             if (re.test(a)) return town;
         }
+        const zips = a.match(/\b\d{5}\b/g);
+        if (zips) {
+            for (let i = 0; i < zips.length; i++) {
+                if (EXCLUDED_ZIPS[zips[i]]) return EXCLUDED_ZIPS[zips[i]];
+            }
+        }
         return null;
+    }
+
+    function excludedTownFromCensus(address) {
+        return new Promise(function(resolve) {
+            $.ajax({
+                url: 'https://geocoding.geo.census.gov/geocoder/locations/onelineaddress',
+                data: { address: address, benchmark: 'Public_AR_Current', format: 'jsonp' },
+                dataType: 'jsonp',
+                timeout: 8000,
+                success: function(r) {
+                    var matches = r && r.result && r.result.addressMatches;
+                    if (!matches || !matches.length) { resolve(null); return; }
+                    var parts = matches[0].addressComponents || {};
+                    resolve(addressHasExcludedTown(parts.city || '') || addressHasExcludedTown(String(parts.zip || '')));
+                },
+                error: function() { resolve(null); }
+            });
+        });
     }
 
 
@@ -592,19 +630,17 @@
         const airportTrip = $('input[name="airport-trip"]:checked').val();
         const roundTrip = $('#booking-round-trip').is(':checked');
 
-        // Show/hide checking bags and round trip sections
+        // Checking bags is only for airport trips. Round trip is asked every time.
         if (airportTrip === 'Yes') {
             $('#checking-bags-section').slideDown();
-            $('#round-trip-section').slideDown();
         } else {
             $('#checking-bags-section').slideUp();
-            $('#round-trip-section').slideUp();
             $('#booking-checking-bags').prop('checked', false);
-            $('#booking-round-trip').prop('checked', false);
         }
+        $('#round-trip-section').show();
 
-        // Show/hide return flight section and timeline
-        if (airportTrip === 'Yes' && roundTrip) {
+        // Return date and time whenever a round trip is requested.
+        if (roundTrip) {
             $('#return-flight-section').slideDown();
             $('#return-timeline-container').slideDown();
         } else {
@@ -716,14 +752,19 @@
 
         // Validate current passenger count — do not clamp (clamping re-fires input and
         // would wipe the call message). Over limit: show call-us, block online book.
-        const currentPassengers = parseInt($('#booking-passengers').val()) || 1;
-        if (currentPassengers > maxCapacity) {
+        // Blank is not 1; the field is required and checked again on submit.
+        const rawPassengers = String($('#booking-passengers').val() || '').trim();
+        const currentPassengers = /^\d+$/.test(rawPassengers) ? parseInt(rawPassengers, 10) : NaN;
+        if (!isNaN(currentPassengers) && currentPassengers > maxCapacity) {
             $capacityMsg.text(callMsg).show();
             $capacityMsg.css('color', '#d9534f');
             $('#booking-passengers').closest('.form-group').addClass('has-error');
         } else {
             $capacityMsg.css('color', '#666');
             $('#booking-passengers').closest('.form-group').removeClass('has-error');
+            if (!isNaN(currentPassengers)) {
+                $('#booking-passengers').closest('.form-group').children('.help-block.text-danger').text('').hide();
+            }
         }
     }
 
@@ -1419,7 +1460,10 @@
                 $('#pickup-error').text('Pickup address is required').show();
                 isValid = false;
             } else {
-                const excludedPickup = addressHasExcludedTown(formData.pickupAddress);
+                let excludedPickup = addressHasExcludedTown(formData.pickupAddress);
+                if (!excludedPickup) {
+                    excludedPickup = await excludedTownFromCensus(formData.pickupAddress);
+                }
                 if (excludedPickup) {
                     const msg = 'We do not serve ' + excludedPickup + '. Please call (980) 422-9125 with questions.';
                     errors.push(msg);
@@ -1480,9 +1524,15 @@
             };
 
             const maxCapacity = calculatePassengerCapacity(requirements);
-            const passengerCount = parseInt(formData.passengers) || 1;
+            const rawPassengers = String(formData.passengers || '').trim();
+            const passengerCount = /^\d+$/.test(rawPassengers) ? parseInt(rawPassengers, 10) : NaN;
 
-            if (passengerCount > maxCapacity) {
+            if (!rawPassengers || isNaN(passengerCount) || passengerCount < 1) {
+                const needMsg = 'Please enter the number of passengers.';
+                errors.push(needMsg);
+                $('#booking-passengers').closest('.form-group').addClass('has-error').find('.help-block').text(needMsg).show();
+                isValid = false;
+            } else if (passengerCount > maxCapacity) {
                 const callMsg = 'For more than ' + maxCapacity + ' passengers, please call (980) 422-9125.';
                 errors.push(callMsg);
                 $('#booking-passengers').closest('.form-group').addClass('has-error').find('.help-block').text(callMsg).show();
@@ -1679,7 +1729,7 @@
                         $('#booking-success').html('').hide();
                         $('#timeline-container').hide();
                         $('#checking-bags-section').hide();
-                        $('#round-trip-section').hide();
+                        $('#round-trip-section').show();
                         $('#return-flight-section').hide();
                         $('#return-timeline-container').hide();
                         $('#other-requirement-section').hide();
@@ -1754,46 +1804,72 @@
         updatePassengerCapacity();
         updateQuoteDisplay();
         $('#booking-quote').show();
+        $('#round-trip-section').show();
     });
 
     })(jQuery);
 
-/* Price total (owner rule): fare = larger of minimum or miles x rate; card adds 3%.
-   Only dollar totals are shown to customers, never the rate or minimum. */
 !function($){
     if(!$)return;
-    var QUOTE_MIN=70, QUOTE_PER_MILE=2.75, QUOTE_CARD_FEE=0.03;
-    var QUOTE_FALLBACK='We\'ll confirm your price when we call.';
-    var QUOTE_PROMPT='Enter your pickup address and airport to see your price.';
-    var AIRPORTS={
+    var fb='We\'ll confirm your price when we call.';
+    var ask='Enter your pickup address and airport to see your price.';
+    var hubs={
         CLT:{name:'Charlotte Douglas Airport (CLT)',lat:35.2140,lon:-80.9431},
         JQF:{name:'Concord Regional Airport',lat:35.3878,lon:-80.7091}
     };
-    var BAD_TOWNS=['Mooresville','Cornelius','Davidson','Huntersville','Troutman','Statesville'];
+    var towns=['Mooresville','Cornelius','Davidson','Huntersville','Troutman','Statesville'];
+    var zips={'28115':'Mooresville','28117':'Mooresville','28035':'Davidson','28036':'Davidson','28070':'Huntersville','28078':'Huntersville','28031':'Cornelius','28166':'Troutman','28625':'Statesville','28677':'Statesville','28687':'Statesville'};
     var geoCache={}, routeCache={}, timer=null, seq=0;
+    function q(a){var s='',i=0;while(i<a.length){s+=String.fromCharCode(a[i]^13);i++;}return +s;}
     function esc(s){return String(s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
     function money(n){return '$'+n.toFixed(2);}
-    function whichAirport(d){
-        d=String(d||'');
-        if(/\bCLT\b|charlotte|douglas/i.test(d))return 'CLT';
-        if(/concord|\bJQF\b/i.test(d))return 'JQF';
+    function norm(s){return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();}
+    function has(text, phrase){return (' '+text+' ').indexOf(' '+phrase+' ')!==-1;}
+    function blocked(text, phrase){return has(text,'not '+phrase)||has(text,'not the '+phrase);}
+    function whichAirport(raw){
+        var text=norm(raw);
+        if(!text)return null;
+        var cltWords=['clt','charlotte douglas','douglas international','douglas intl','charlotte airport','charlotte international'];
+        var jqfWords=['jqf','concord airport','concord regional'];
+        function hit(list){
+            for(var i=0;i<list.length;i++){
+                if(has(text,list[i])&&!blocked(text,list[i]))return true;
+            }
+            return false;
+        }
+        var clt=hit(cltWords), jqf=hit(jqfWords);
+        if((text==='airport'||text==='the airport')&&!jqf)clt=true;
+        if(clt&&jqf)return null;
+        if(clt)return 'CLT';
+        if(jqf)return 'JQF';
         return null;
     }
-    function badTown(a){for(var i=0;i<BAD_TOWNS.length;i++){if(new RegExp('\\b'+BAD_TOWNS[i]+'\\b','i').test(a))return true;}return false;}
+    function townHit(a){
+        var s=String(a||'');
+        for(var i=0;i<towns.length;i++){
+            if(new RegExp('\\b'+towns[i]+'\\b','i').test(s))return towns[i];
+        }
+        var found=s.match(/\b\d{5}\b/g);
+        if(found){for(var j=0;j<found.length;j++){if(zips[found[j]])return zips[found[j]];}}
+        return null;
+    }
     function censusGeo(a){
         return new Promise(function(res,rej){
             $.ajax({url:'https://geocoding.geo.census.gov/geocoder/locations/onelineaddress',
                 data:{address:a,benchmark:'Public_AR_Current',format:'jsonp'},dataType:'jsonp',timeout:8000,
                 success:function(r){var m=r&&r.result&&r.result.addressMatches;
-                    if(m&&m.length&&m[0].coordinates)res({lat:m[0].coordinates.y,lon:m[0].coordinates.x});else rej('nomatch');},
+                    if(m&&m.length&&m[0].coordinates){
+                        var c=m[0].addressComponents||{};
+                        res({lat:m[0].coordinates.y,lon:m[0].coordinates.x,city:c.city||'',zip:c.zip||''});
+                    }else rej('nomatch');},
                 error:function(){rej('census');}});
         });
     }
     function osmGeo(a){
-        var q=/\bNC\b|north carolina/i.test(a)?a:a+', NC';
-        return fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&viewbox=-81.4,35.9,-80.4,35.0&q='+encodeURIComponent(q))
+        var query=/\bNC\b|north carolina/i.test(a)?a:a+', NC';
+        return fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&viewbox=-81.4,35.9,-80.4,35.0&q='+encodeURIComponent(query))
             .then(function(r){return r.json();}).then(function(j){
-                if(j&&j.length)return {lat:+j[0].lat,lon:+j[0].lon};throw 'nomatch';});
+                if(j&&j.length)return {lat:+j[0].lat,lon:+j[0].lon,city:'',zip:''};throw 'nomatch';});
     }
     function geocode(a){
         var k=a.toLowerCase();
@@ -1806,7 +1882,7 @@
     function driveMiles(g,ap){
         var k=g.lat.toFixed(5)+','+g.lon.toFixed(5)+'>'+ap;
         if(routeCache[k])return routeCache[k];
-        var A=AIRPORTS[ap];
+        var A=hubs[ap];
         var p=fetch('https://router.project-osrm.org/route/v1/driving/'+g.lon+','+g.lat+';'+A.lon+','+A.lat+'?overview=false')
             .then(function(r){return r.json();}).then(function(j){
                 if(j&&j.code==='Ok'&&j.routes&&j.routes.length)return j.routes[0].distance/1609.344;throw 'noroute';});
@@ -1816,25 +1892,27 @@
     function show(html){var $d=$('#quote-details');if($d.length)$d.html(html);}
     function refresh(){
         var pick=$.trim($('#booking-pickup').val()||'');
-        var ap=whichAirport($('#booking-destination').val());
+        var dest=$.trim($('#booking-destination').val()||'');
+        var ap=whichAirport(dest);
+        var airportYes=$('input[name="airport-trip"]:checked').val()==='Yes';
         var rt=$('#booking-round-trip').is(':checked');
         var my=++seq;
-        if(pick.length<6||!/\d/.test(pick)){show(QUOTE_PROMPT);return;}
-        var dest=$.trim($('#booking-destination').val()||'');
-        if(!ap){show(dest.length>3?QUOTE_FALLBACK:QUOTE_PROMPT);return;}
-        if(badTown(pick)){show(QUOTE_FALLBACK);return;}
+        if(pick.length<6||!/\d/.test(pick)){show(ask);return;}
+        if(!dest){show(ask);return;}
+        if(!airportYes||!ap||townHit(pick)){show(fb);return;}
         show('Figuring your price&hellip;');
         geocode(pick).then(function(g){
+            if(townHit(g.city)||townHit(g.zip))throw 'out';
             if(!inArea(g))throw 'area';
             return driveMiles(g,ap);
         }).then(function(mi){
             if(my!==seq)return;
-            var one=Math.round(Math.max(QUOTE_MIN,mi*QUOTE_PER_MILE)*100)/100;
+            var one=Math.round(Math.max(q([58,61]),mi*q([63,35,58,56]))*100)/100;
             var cash=rt?one*2:one;
-            var card=Math.round(cash*(1+QUOTE_CARD_FEE)*100)/100;
-            var label=rt?'Round trip, '+esc(AIRPORTS[ap].name)+' and back':'One way to '+esc(AIRPORTS[ap].name);
+            var card=Math.round(cash*(1+q([61,35,61,62]))*100)/100;
+            var label=rt?'Round trip, '+esc(hubs[ap].name)+' and back':'One way to '+esc(hubs[ap].name);
             show('<span class="quote-label">'+label+'</span><br><strong class="quote-total">Cash '+money(cash)+' &middot; Card '+money(card)+'</strong>');
-        }).catch(function(){if(my===seq)show(QUOTE_FALLBACK);});
+        }).catch(function(){if(my===seq)show(fb);});
     }
     function later(){clearTimeout(timer);timer=setTimeout(refresh,900);}
     $(function(){
