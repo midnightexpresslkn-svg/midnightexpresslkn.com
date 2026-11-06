@@ -690,6 +690,87 @@ footer .footer-contact a {
   opacity: 1;
   cursor: not-allowed;
 }
+.booking-legal {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #666;
+  text-align: center;
+}
+footer .footer-legal {
+  margin: 12px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+footer .footer-legal a {
+  color: #ffffff;
+  text-decoration: underline;
+}
+footer .footer-legal a:hover,
+footer .footer-legal a:focus {
+  color: #00BFA6;
+}
+section.legal-hero {
+  background: #2C2F33;
+  color: #ffffff;
+  text-align: center;
+  padding: 120px 15px 48px;
+}
+section.legal-hero h1 {
+  margin: 0;
+  font-size: 2em;
+  line-height: 1.2;
+  color: #ffffff;
+}
+section.legal-hero .legal-kicker {
+  margin: 0;
+  font-size: 1.15em;
+  font-weight: 300;
+}
+.legal-logo {
+  display: block;
+  width: 76px;
+  height: 76px;
+  margin: 0 auto 16px;
+}
+section.legal-body {
+  padding-top: 40px;
+}
+.legal-copy h2 {
+  font-size: 1.45em;
+  text-align: left;
+  margin: 1.5em 0 0.55em;
+}
+.legal-copy p,
+.legal-copy li {
+  font-size: 18px;
+  line-height: 1.7;
+}
+.legal-copy ul {
+  margin: 0 0 16px;
+  padding-left: 1.25em;
+}
+.legal-copy li {
+  margin-bottom: 6px;
+}
+.legal-copy .legal-meta {
+  color: #666;
+  font-size: 16px;
+}
+.legal-note {
+  background: #f8f8f8;
+  border-left: 4px solid #00BFA6;
+  padding: 14px 16px;
+  margin: 16px 0;
+}
+@media (min-width: 768px) {
+  section.legal-hero {
+    padding: 180px 15px 70px;
+  }
+  section.legal-hero h1 {
+    font-size: 3em;
+  }
+}
 
 
 /*# sourceMappingURL=main.min.css.map*/
