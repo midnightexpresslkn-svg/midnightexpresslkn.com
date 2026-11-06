@@ -1,0 +1,19 @@
+{
+  "extends": ["html-validate:recommended"],
+  "elements": ["html5"],
+  "rules": {
+    "doctype-style": "off",
+    "no-raw-characters": "off",
+    "long-title": "off",
+    "no-conditional-comment": "off",
+    "attribute-boolean-style": "off",
+    "wcag/h30": "off",
+    "prefer-native-element": "off",
+    "tel-non-breaking": "off",
+    "no-inline-style": "off",
+    "aria-label-misuse": "off",
+    "element-permitted-content": "off",
+    "no-implicit-input-type": "off",
+    "valid-autocomplete": "off"
+  }
+}

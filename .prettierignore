@@ -1,0 +1,15 @@
+node_modules
+coverage
+test-results
+lighthouse-results
+package-lock.json
+js
+css
+index.html
+404.html
+font-awesome
+fonts
+assets
+mail
+docs
+tools

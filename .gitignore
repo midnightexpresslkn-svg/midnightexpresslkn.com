@@ -1,0 +1,10 @@
+node_modules/
+coverage/
+test-results/
+test-summary.json
+playwright-report/
+blob-report/
+.lighthouseci/
+lighthouse-results/
+*.log
+.DS_Store

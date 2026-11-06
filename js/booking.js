@@ -59,6 +59,18 @@
         '28687': 'Statesville'
     };
 
+    function escapeHtml(value) {
+        return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
+            return {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;'
+            }[ch];
+        });
+    }
+
     function addressHasExcludedTown(address) {
         const a = String(address || '');
         for (let i = 0; i < EXCLUDED_TOWNS.length; i++) {
@@ -1658,7 +1670,7 @@
             if (errors.length > 0) {
                 let errorHtml = '<div class="alert alert-danger"><strong>Please correct the following:</strong><ul style="margin: 10px 0 0 0; padding-left: 20px;">';
                 errors.forEach(function(error) {
-                    errorHtml += '<li>' + error + '</li>';
+                    errorHtml += '<li>' + escapeHtml(error) + '</li>';
                 });
                 errorHtml += '</ul></div>';
 
@@ -1728,20 +1740,20 @@
                 let successHtml =
                     '<div class="alert alert-success">' +
                     '<h4><i class="fa fa-check-circle"></i> Request received. We\'ll call to confirm</h4>' +
-                    '<p>Thank you, <strong>' + formData.name + '</strong>!</p>';
+                    '<p>Thank you, <strong>' + escapeHtml(formData.name) + '</strong>!</p>';
 
                 if (formData.roundTrip === 'Yes') {
                     successHtml +=
                         '<p>Your round-trip requests were sent:</p>' +
                         '<ul style="text-align: left; display: inline-block;">' +
-                        '<li><strong>Outbound:</strong> ' + formatDisplayDate(formData.pickupDate) + ' at ' + formData.pickupTime + '</li>' +
-                        '<li><strong>Return:</strong> ' + formatDisplayDate(formData.returnDate) + ' at ' + formData.returnTime + '</li>' +
+                        '<li><strong>Outbound:</strong> ' + escapeHtml(formatDisplayDate(formData.pickupDate)) + ' at ' + escapeHtml(formData.pickupTime) + '</li>' +
+                        '<li><strong>Return:</strong> ' + escapeHtml(formatDisplayDate(formData.returnDate)) + ' at ' + escapeHtml(formData.returnTime) + '</li>' +
                         '</ul>' +
-                        '<p>We will call you at <strong>' + formData.phone + '</strong> to confirm both bookings.</p>';
+                        '<p>We will call you at <strong>' + escapeHtml(formData.phone) + '</strong> to confirm both bookings.</p>';
                 } else {
                     successHtml +=
-                        '<p>Your request for <strong>' + formatDisplayDate(formData.pickupDate) + '</strong> at <strong>' + formData.pickupTime + '</strong> was sent.</p>' +
-                        '<p>We will call you at <strong>' + formData.phone + '</strong> to confirm your booking.</p>';
+                        '<p>Your request for <strong>' + escapeHtml(formatDisplayDate(formData.pickupDate)) + '</strong> at <strong>' + escapeHtml(formData.pickupTime) + '</strong> was sent.</p>' +
+                        '<p>We will call you at <strong>' + escapeHtml(formData.phone) + '</strong> to confirm your booking.</p>';
                 }
 
                 successHtml +=
@@ -1829,7 +1841,7 @@
                     '<div class="alert alert-danger">' +
                     '<h4><i class="fa fa-exclamation-triangle"></i> Submission Error</h4>' +
                     '<p>We could not send your booking request. Please call (980) 422-9125 to book.</p>' +
-                    '<p><strong>Error:</strong> ' + error.message + '</p>' +
+                    '<p><strong>Error:</strong> ' + escapeHtml(error.message) + '</p>' +
                     '</div>';
 
                 console.log('Setting error HTML and showing...');
