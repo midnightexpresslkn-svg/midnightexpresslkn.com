@@ -1606,12 +1606,9 @@
                 // Handle dual submission for round-trip bookings
                 const submissions = await handleDualSubmission(formData);
 
-                // Best-effort calendar mirror to Apps Script
-                try {
-                    await postBookingToCalendar(formData);
-                } catch (calendarErr) {
-                    console.warn('Calendar mirror error ignored:', calendarErr);
-                }
+                // Best-effort calendar mirror. postBookingToCalendar already
+                // catches a failed mirror so the rider still sees the request.
+                await postBookingToCalendar(formData);
 
                 // Invalidate cache after successful submission so future validations fetch fresh data
                 cachedBookings = [];
