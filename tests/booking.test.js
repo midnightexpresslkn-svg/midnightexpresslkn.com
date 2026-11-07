@@ -4,6 +4,7 @@ import { check, role, roles } from "./helpers/failure.js";
 import {
   atLocal,
   bookingPosts,
+  chooseTrip,
   drainTimers,
   fillValid,
   renderBooking,
@@ -36,6 +37,51 @@ function quoteTotal(document) {
 
 function quoteLabel(document) {
   return document.querySelector(".quote-label")?.textContent?.trim() || "";
+}
+
+async function submitAnother(view) {
+  const form = view.document.querySelector("#bookingForm");
+  view.window.jQuery(form).show();
+  const success = view.document.querySelector("#booking-success");
+  success.innerHTML = "";
+  view.window.jQuery(success).hide();
+  await submitForm(view);
+}
+
+function quotedAddresses(view) {
+  return view.state.requests
+    .filter((request) => request.address)
+    .map((request) => request.address);
+}
+
+function shown(element) {
+  let node = element;
+  while (node && node.nodeType === 1) {
+    if (node.hidden) return false;
+    if (node.style && node.style.display === "none") return false;
+    node = node.parentElement;
+  }
+  return Boolean(element);
+}
+
+function visibleFormText(document) {
+  const root = document.querySelector("#bookingForm");
+  const parts = [];
+  const walker = document.createTreeWalker(root, 4);
+  while (walker.nextNode()) {
+    const text = walker.currentNode.textContent || "";
+    if (!text.trim()) continue;
+    if (!shown(walker.currentNode.parentElement)) continue;
+    parts.push(text);
+  }
+  return parts.join(" ").replace(/\s+/g, " ");
+}
+
+function calendarPayload(view) {
+  const post = bookingPosts(view.state).find((request) =>
+    request.url.includes("script.google.com"),
+  );
+  return post && post.body ? JSON.parse(post.body) : null;
 }
 
 describe("booking", () => {
@@ -111,6 +157,103 @@ describe("booking", () => {
           source: SOURCE.quote,
           loaded: script,
         });
+      });
+
+      it("prices each typed pickup from that address, not a saved one", async () => {
+        const denver = "3738 NC-16, Denver, NC 28037";
+        const maiden = "19 N Main Ave, Maiden, NC 28650";
+        const view = await renderBooking(script, {
+          places: {
+            [denver]: {
+              lat: 35.53,
+              lon: -81.03,
+              city: "Denver",
+              state: "NC",
+              zip: "28037",
+              miles: 30,
+            },
+            [maiden]: {
+              lat: 35.58,
+              lon: -81.21,
+              city: "Maiden",
+              state: "NC",
+              zip: "28650",
+              miles: 40,
+            },
+          },
+        });
+        chooseTrip(view.document, "airport");
+        check(
+          view.document.querySelector("#quote-details").textContent,
+          "Enter your pickup address and airport to see your price.",
+          {
+            label: "airport quote starts blank",
+            source: SOURCE.quote,
+            loaded: script,
+          },
+        );
+        check(quoteTotal(view.document).includes("Cash"), false, {
+          label: "blank form has no fare",
+          source: SOURCE.quote,
+          loaded: script,
+        });
+        await showQuote(view, { pickup: denver, destination: "CLT" });
+        check(quoteTotal(view.document), "Cash $82.50 · Card $84.98", {
+          label: "Denver pickup uses its own miles",
+          source: SOURCE.quote,
+          loaded: script,
+        });
+        await showQuote(view, { pickup: maiden, destination: "CLT" });
+        check(quoteTotal(view.document), "Cash $110.00 · Card $113.30", {
+          label: "Maiden pickup gets a different fare",
+          source: SOURCE.quote,
+          loaded: script,
+        });
+        const routes = view.state.requests
+          .filter((request) => request.url.includes("router.project-osrm.org"))
+          .map((request) => request.url);
+        check(
+          routes.some((url) => url.includes("-81.03,35.53")),
+          true,
+          {
+            label: "Denver quote asks for Denver's coordinates",
+            actual: routes,
+            source: SOURCE.quote,
+            loaded: script,
+          },
+        );
+        check(
+          routes.some((url) => url.includes("-81.21,35.58")),
+          true,
+          {
+            label: "Maiden quote asks for Maiden's coordinates",
+            actual: routes,
+            source: SOURCE.quote,
+            loaded: script,
+          },
+        );
+        check(quotedAddresses(view).includes(denver), true, {
+          label: "geocoder receives the Denver text the customer typed",
+          actual: quotedAddresses(view),
+          source: SOURCE.quote,
+          loaded: script,
+        });
+        check(quotedAddresses(view).includes(maiden), true, {
+          label: "geocoder receives the Maiden text the customer typed",
+          actual: quotedAddresses(view),
+          source: SOURCE.quote,
+          loaded: script,
+        });
+        view.window.jQuery("#booking-pickup").val("12").trigger("blur");
+        check(
+          view.document.querySelector("#quote-details").textContent,
+          "Enter your pickup address and airport to see your price.",
+          {
+            label: "clearing the pickup drops the previous fare",
+            source: SOURCE.quote,
+            loaded: script,
+          },
+        );
       });
 
       it("keeps the $70 minimum on a very short trip", async () => {
@@ -750,26 +893,217 @@ describe("booking", () => {
             loaded: script,
           },
         );
+        const formText = visibleFormText(view.document);
+        check(/\$\d|price|pricing|fare|\bcost\b/i.test(formText), false, {
+          label: "group form shows no price or cost wording",
+          actual: formText,
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(view.document.querySelector("#group-pricing-note"), null, {
+          label: "call for pricing line is gone",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(shown(view.document.querySelector("#booking-name")), true, {
+          label: "group form asks for a name",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(shown(view.document.querySelector("#booking-phone")), true, {
+          label: "group form asks for a phone",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(shown(view.document.querySelector("#booking-email")), true, {
+          label: "group form asks for an email",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(shown(view.document.querySelector("#booking-pickup")), true, {
+          label: "group form asks for a pickup address",
+          source: SOURCE.group,
+          loaded: script,
+        });
         check(
-          /\$\d/.test(view.document.querySelector("#group-fields").textContent),
-          false,
-          {
-            label: "group form shows no price",
-            source: SOURCE.group,
-            loaded: script,
-          },
-        );
-        check(
-          view.document
-            .querySelector("#group-fields")
-            .textContent.includes("We'll call you to confirm"),
+          shown(view.document.querySelector("#booking-destination")),
           true,
           {
-            label: "group form says we will call",
+            label: "group form asks for a drop-off",
             source: SOURCE.group,
             loaded: script,
           },
         );
+        check(
+          view.document.querySelector("#destination-label")?.textContent.trim(),
+          "Drop-off / venue *",
+          {
+            label: "drop-off is labeled as the venue",
+            source: SOURCE.group,
+            loaded: script,
+          },
+        );
+        check(shown(view.document.querySelector("#booking-date")), true, {
+          label: "group form asks for a date",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(shown(view.document.querySelector("#booking-time")), true, {
+          label: "group form asks for a pickup time",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(shown(view.document.querySelector("#booking-passengers")), true, {
+          label: "group form asks for passengers",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(
+          shown(view.document.querySelector("#booking-checking-bags")),
+          true,
+          {
+            label: "group form asks about bags",
+            source: SOURCE.group,
+            loaded: script,
+          },
+        );
+        check(shown(view.document.querySelector("#booking-flight")), true, {
+          label: "group form asks for an optional flight number",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(shown(view.document.querySelector("#booking-round-trip")), true, {
+          label: "group form asks about a return trip",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(shown(view.document.querySelector("#booking-notes")), true, {
+          label: "group form asks for notes",
+          source: SOURCE.group,
+          loaded: script,
+        });
+      });
+
+      it("opens the group form from the home page link", async () => {
+        const view = await renderBooking(script, {
+          url: "/?type=group#booking",
+        });
+        const link = view.document.querySelector("#book-group-ride");
+        check(link?.textContent.trim(), "Book a Group Ride", {
+          label: "home page has Book a Group Ride",
+          actual: link?.textContent,
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(link?.getAttribute("href"), "/?type=group#booking", {
+          label: "group link opens the booking form with group selected",
+          actual: link?.getAttribute("href"),
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(view.document.querySelector("#trip-type").value, "group", {
+          label: "type=group preselects Group",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(
+          shown(view.document.querySelector("#booking-destination")),
+          true,
+          {
+            label: "preselected group form is the booking form",
+            source: SOURCE.group,
+            loaded: script,
+          },
+        );
+      });
+
+      it("sends a group booking to the calendar as an unconfirmed group request", async () => {
+        const view = await renderBooking(script);
+        await fillValid(view, {
+          trip: "group",
+          passengers: "4",
+          destination: "200 Oak St, Sherrills Ford NC",
+          bags: true,
+          flight: "AA1234",
+          notes: "reunion",
+          roundTrip: true,
+          returnDate: "2026-12-16",
+          returnTime: "15:00:00",
+          time: "10:00:00",
+        });
+        await submitForm(view);
+        check(resultText(view.document).includes("Request received"), true, {
+          label: "group booking is accepted",
+          actual: resultText(view.document),
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(/\$\d|price|fare/i.test(resultText(view.document)), false, {
+          label: "group confirmation has no price",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        const payload = calendarPayload(view);
+        check(Boolean(payload), true, {
+          label: "group booking posts to the calendar script",
+          actual: payload,
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(payload.groupEvent, "Yes", {
+          label: "calendar post is labeled as a group event",
+          actual: payload.groupEvent,
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(String(payload.specialNotes).includes("Group event"), true, {
+          label: "calendar notes say it is a group event",
+          actual: payload.specialNotes,
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(payload.pickupAddress, "123 Main Street, Denver NC 28037", {
+          label: "group pickup is the address the customer typed",
+          actual: payload.pickupAddress,
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(payload.destinationAddress, "200 Oak St, Sherrills Ford NC", {
+          label: "group drop-off is the venue",
+          actual: payload.destinationAddress,
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(payload.checkingBags, "Yes", {
+          label: "group bags are sent",
+          actual: payload.checkingBags,
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(payload.flightNumber, "AA1234", {
+          label: "group flight number is sent",
+          actual: payload.flightNumber,
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(payload.roundTrip, "Yes", {
+          label: "group return trip is sent",
+          actual: payload.roundTrip,
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(payload.returnTime, "15:00:00", {
+          label: "group return time is sent",
+          actual: payload.returnTime,
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(String(payload.specialNotes).includes("reunion"), true, {
+          label: "group notes are sent",
+          actual: payload.specialNotes,
+          source: SOURCE.group,
+          loaded: script,
+        });
       });
 
       it("asks a group larger than six to call", async () => {
@@ -966,6 +1300,277 @@ describe("booking", () => {
         check(resultText(view.document).includes("That time is booked"), true, {
           label: "11:00 overlaps both the 10:00 and 10:30 rides",
           source: SOURCE.overlap,
+          loaded: script,
+        });
+      });
+
+      it("accepts two rides at the same time and refuses the third", async () => {
+        const view = await renderBooking(script);
+        await fillValid(view, { date: day, time: "10:00:00" });
+        await submitForm(view);
+        check(resultText(view.document).includes("Request received"), true, {
+          label: "first ride at 10:00 is accepted",
+          actual: resultText(view.document),
+          source: SOURCE.drivers,
+          loaded: script,
+        });
+        const afterFirst = bookingPosts(view.state).length;
+        check(afterFirst > 0, true, {
+          label: "first ride is sent",
+          actual: afterFirst,
+          source: SOURCE.drivers,
+          loaded: script,
+        });
+        await submitAnother(view);
+        check(resultText(view.document).includes("Request received"), true, {
+          label: "second ride at the same time is accepted",
+          actual: resultText(view.document),
+          source: SOURCE.drivers,
+          loaded: script,
+        });
+        const afterSecond = bookingPosts(view.state).length;
+        check(afterSecond > afterFirst, true, {
+          label: "second ride is sent",
+          actual: afterSecond,
+          source: SOURCE.drivers,
+          loaded: script,
+        });
+        await submitAnother(view);
+        check(resultText(view.document).includes("That time is booked"), true, {
+          label: "third ride at the same time is refused",
+          expected: "That time is booked",
+          actual: resultText(view.document),
+          source: SOURCE.conflict,
+          loaded: script,
+        });
+        check(bookingPosts(view.state).length, afterSecond, {
+          label: "third ride sends nothing",
+          source: SOURCE.conflict,
+          loaded: script,
+        });
+      });
+
+      it("accepts two group events at the same start and refuses the third", async () => {
+        const view = await renderBooking(script);
+        await fillValid(view, {
+          trip: "group",
+          date: day,
+          time: "10:00:00",
+          hours: "4",
+        });
+        await submitForm(view);
+        check(resultText(view.document).includes("Request received"), true, {
+          label: "first group event is accepted",
+          actual: resultText(view.document),
+          source: SOURCE.group,
+          loaded: script,
+        });
+        await submitAnother(view);
+        check(resultText(view.document).includes("Request received"), true, {
+          label: "second group event at the same start is accepted",
+          actual: resultText(view.document),
+          source: SOURCE.drivers,
+          loaded: script,
+        });
+        const sent = bookingPosts(view.state).length;
+        await submitAnother(view);
+        check(resultText(view.document).includes("That time is booked"), true, {
+          label: "third group event is refused",
+          expected: "That time is booked",
+          actual: resultText(view.document),
+          source: SOURCE.conflict,
+          loaded: script,
+        });
+        check(bookingPosts(view.state).length, sent, {
+          label: "third group event sends nothing",
+          source: SOURCE.conflict,
+          loaded: script,
+        });
+      });
+
+      it("refuses a pickup one minute before the two-hour mark when both drivers are busy", async () => {
+        const view = await renderBooking(script, {
+          bookings: [
+            { datetime: atLocal(day, 10, 0) },
+            { datetime: atLocal(day, 10, 0) },
+          ],
+        });
+        await fillValid(view, { date: day, time: "11:59:00" });
+        await submitForm(view);
+        check(resultText(view.document).includes("That time is booked"), true, {
+          label: "11:59 still overlaps two 10:00 rides",
+          expected: "That time is booked",
+          actual: resultText(view.document),
+          source: SOURCE.overlap,
+          loaded: script,
+        });
+        check(bookingPosts(view.state).length, 0, {
+          label: "11:59 sends nothing",
+          source: SOURCE.overlap,
+          loaded: script,
+        });
+      });
+
+      it("refuses 12:30 AM when both drivers are still out from 11:30 PM", async () => {
+        const view = await renderBooking(script, {
+          bookings: [
+            { datetime: atLocal("2026-12-14", 23, 30) },
+            { datetime: atLocal("2026-12-14", 23, 30) },
+          ],
+        });
+        await fillValid(view, { date: day, time: "00:30:00" });
+        await submitForm(view);
+        check(resultText(view.document).includes("That time is booked"), true, {
+          label: "a ride can stay busy across midnight",
+          expected: "That time is booked",
+          actual: resultText(view.document),
+          source: SOURCE.overlap,
+          loaded: script,
+        });
+        check(bookingPosts(view.state).length, 0, {
+          label: "cross-midnight overlap sends nothing",
+          source: SOURCE.overlap,
+          loaded: script,
+        });
+      });
+
+      it("accepts 12:30 AM when only one driver is still out from the night before", async () => {
+        const view = await renderBooking(script, {
+          bookings: [{ datetime: atLocal("2026-12-14", 23, 30) }],
+        });
+        await fillValid(view, { date: day, time: "00:30:00" });
+        await submitForm(view);
+        check(resultText(view.document).includes("Request received"), true, {
+          label: "one overnight ride still leaves a driver",
+          actual: resultText(view.document),
+          source: SOURCE.drivers,
+          loaded: script,
+        });
+      });
+
+      it("accepts midnight when both evening rides ended on the dot", async () => {
+        const view = await renderBooking(script, {
+          bookings: [
+            { datetime: atLocal("2026-12-14", 22, 0) },
+            { datetime: atLocal("2026-12-14", 22, 0) },
+          ],
+        });
+        await fillValid(view, { date: day, time: "00:00:00" });
+        await submitForm(view);
+        check(
+          resultText(view.document).includes("That time is booked"),
+          false,
+          {
+            label: "back-to-back across midnight is open",
+            actual: resultText(view.document),
+            source: SOURCE.overlap,
+            loaded: script,
+          },
+        );
+        check(resultText(view.document).includes("Request received"), true, {
+          label: "midnight pickup is accepted",
+          source: SOURCE.overlap,
+          loaded: script,
+        });
+      });
+
+      it("keeps a 4-hour group busy past the normal two-hour mark", async () => {
+        const blocked = await renderBooking(script, {
+          bookings: [
+            { datetime: atLocal(day, 10, 0), durationMinutes: 240 },
+            { datetime: atLocal(day, 10, 0), durationMinutes: 240 },
+          ],
+        });
+        await fillValid(blocked, { date: day, time: "12:00:00" });
+        await submitForm(blocked);
+        check(
+          resultText(blocked.document).includes("That time is booked"),
+          true,
+          {
+            label:
+              "noon still overlaps two 4-hour groups that started at 10:00",
+            expected: "That time is booked",
+            actual: resultText(blocked.document),
+            source: SOURCE.overlap,
+            loaded: script,
+          },
+        );
+        const open = await renderBooking(script, {
+          bookings: [
+            { datetime: atLocal(day, 10, 0), durationMinutes: 240 },
+            { datetime: atLocal(day, 10, 0), durationMinutes: 240 },
+          ],
+        });
+        await fillValid(open, { date: day, time: "14:00:00" });
+        await submitForm(open);
+        check(resultText(open.document).includes("Request received"), true, {
+          label: "2:00 PM is free once the 4-hour groups have ended",
+          actual: resultText(open.document),
+          source: SOURCE.overlap,
+          loaded: script,
+        });
+        const oneGroup = await renderBooking(script, {
+          bookings: [{ datetime: atLocal(day, 10, 0), durationMinutes: 240 }],
+        });
+        await fillValid(oneGroup, { date: day, time: "12:00:00" });
+        await submitForm(oneGroup);
+        check(
+          resultText(oneGroup.document).includes("Request received"),
+          true,
+          {
+            label: "one 4-hour group leaves the second driver free",
+            actual: resultText(oneGroup.document),
+            source: SOURCE.drivers,
+            loaded: script,
+          },
+        );
+      });
+
+      it("accepts a same-day return that needs the second driver", async () => {
+        const view = await renderBooking(script);
+        await fillValid(view, {
+          date: day,
+          time: "10:00:00",
+          roundTrip: true,
+          returnDate: day,
+          returnTime: "10:30:00",
+        });
+        await submitForm(view);
+        check(resultText(view.document).includes("Request received"), true, {
+          label: "a round trip may use both drivers",
+          actual: resultText(view.document),
+          source: SOURCE.drivers,
+          loaded: script,
+        });
+      });
+
+      it("refuses a same-day return that would need a third driver", async () => {
+        const view = await renderBooking(script, {
+          bookings: [{ datetime: atLocal(day, 10, 0) }],
+        });
+        await fillValid(view, {
+          date: day,
+          time: "10:00:00",
+          roundTrip: true,
+          returnDate: day,
+          returnTime: "10:30:00",
+        });
+        await submitForm(view);
+        check(
+          resultText(view.document).includes(
+            "Return flight time conflicts with outbound flight",
+          ),
+          true,
+          {
+            label: "return plus outbound plus one ride is three drivers",
+            actual: resultText(view.document),
+            source: SOURCE.conflict,
+            loaded: script,
+          },
+        );
+        check(bookingPosts(view.state).length, 0, {
+          label: "overbooked round trip sends nothing",
+          source: SOURCE.conflict,
           loaded: script,
         });
       });

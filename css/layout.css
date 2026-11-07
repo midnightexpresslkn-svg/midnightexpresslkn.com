@@ -476,3 +476,16 @@ header.hero img.header-logo,
     margin-top: 8px !important;
   }
 }
+
+.add-home-tip {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: center;
+  color: #5c6570;
+}
+
+.add-home-tip button {
+  font-size: 13px;
+  padding: 4px 10px;
+}

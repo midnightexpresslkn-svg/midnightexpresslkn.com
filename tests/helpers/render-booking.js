@@ -110,6 +110,7 @@ export async function renderBooking(script, options = {}) {
     censusZip: options.censusZip ?? "28037",
     lat: options.lat ?? 35.53,
     lon: options.lon ?? -81.03,
+    places: options.places ?? null,
     censusMode: options.censusMode ?? "ok",
     routeMode: options.routeMode ?? "ok",
     failPost: options.failPost ?? false,
@@ -121,8 +122,18 @@ export async function renderBooking(script, options = {}) {
     const url = settings.url || "";
     const host = hostnameOf(url);
     const method = (settings.method || settings.type || "GET").toUpperCase();
-    state.requests.push({ via: "ajax", method, url, mocked: true });
+    state.requests.push({
+      via: "ajax",
+      method,
+      url,
+      address: settings.data && settings.data.address,
+      mocked: true,
+    });
     if (host === "geocoding.geo.census.gov") {
+      const place =
+        state.places && settings.data
+          ? state.places[settings.data.address]
+          : null;
       if (state.censusMode === "error") {
         settings.error && settings.error({}, "error", "mocked");
       } else if (state.censusMode === "miss") {
@@ -134,11 +145,14 @@ export async function renderBooking(script, options = {}) {
             result: {
               addressMatches: [
                 {
-                  coordinates: { x: state.lon, y: state.lat },
+                  coordinates: {
+                    x: place ? place.lon : state.lon,
+                    y: place ? place.lat : state.lat,
+                  },
                   addressComponents: {
-                    city: state.censusCity,
-                    state: state.censusState,
-                    zip: state.censusZip,
+                    city: place ? place.city : state.censusCity,
+                    state: place ? place.state : state.censusState,
+                    zip: place ? place.zip : state.censusZip,
                   },
                 },
               ],
@@ -157,15 +171,37 @@ export async function renderBooking(script, options = {}) {
     const href = String(url);
     const host = hostnameOf(href);
     const method = (init.method || "GET").toUpperCase();
-    state.requests.push({ via: "fetch", method, url: href, mocked: true });
+    state.requests.push({
+      via: "fetch",
+      method,
+      url: href,
+      body: typeof init.body === "string" ? init.body : "",
+      mocked: true,
+    });
     if (state.failPost && method === "POST") {
       throw new Error("mocked network failure");
     }
     if (host === "router.project-osrm.org") {
       if (state.routeMode === "error") return jsonResponse({ code: "NoRoute" });
+      let miles = state.miles;
+      if (state.places) {
+        const match = href.match(/driving\/([-\d.]+),([-\d.]+);/);
+        if (match) {
+          const lon = Number(match[1]);
+          const lat = Number(match[2]);
+          for (const place of Object.values(state.places)) {
+            if (
+              Math.abs(place.lon - lon) < 0.00001 &&
+              Math.abs(place.lat - lat) < 0.00001
+            ) {
+              miles = place.miles;
+            }
+          }
+        }
+      }
       return jsonResponse({
         code: "Ok",
-        routes: [{ distance: state.miles * 1609.344 }],
+        routes: [{ distance: miles * 1609.344 }],
       });
     }
     if (host === "nominatim.openstreetmap.org") {
@@ -199,6 +235,7 @@ export async function renderBooking(script, options = {}) {
   console.info = quiet;
   console.warn = quiet;
 
+  window.history.replaceState(null, "", options.url || "/");
   run(serviceAreaSource, "js/service-area.js");
   run(scriptSource[script], script);
   await new Promise((resolve) => nativeSetTimeout(resolve, 0));
@@ -290,23 +327,38 @@ export async function fillValid(view, overrides = {}) {
     placeholder(doc, "123 Main Street, Denver NC 28037"),
     overrides.pickup ?? "123 Main Street, Denver NC 28037",
   );
-  if (trip !== "group") {
-    setControl(placeholder(doc, "CLT Airport"), overrides.destination ?? "CLT");
-  }
+  setControl(
+    placeholder(doc, "CLT Airport"),
+    overrides.destination ??
+      (trip === "group" ? "200 Oak St, Sherrills Ford NC" : "CLT"),
+  );
   if (trip === "group") {
-    setControl(
-      doc.querySelector("#group-pickup"),
-      overrides.groupPickup ?? "100 Main St, Denver NC",
-    );
-    setControl(
-      doc.querySelector("#group-dropoff"),
-      overrides.groupDropoff ?? "200 Oak St, Sherrills Ford NC",
-    );
-    setControl(
-      doc.querySelector("#group-description"),
-      overrides.description ?? "Family reunion",
-    );
-    setControl(doc.querySelector("#group-hours"), overrides.hours ?? "3");
+    const groupPickup = doc.querySelector("#group-pickup");
+    const groupDropoff = doc.querySelector("#group-dropoff");
+    const groupDescription = doc.querySelector("#group-description");
+    const groupHours = doc.querySelector("#group-hours");
+    if (groupPickup) {
+      setControl(
+        groupPickup,
+        overrides.groupPickup ?? "100 Main St, Denver NC",
+      );
+    }
+    if (groupDropoff) {
+      setControl(
+        groupDropoff,
+        overrides.groupDropoff ?? "200 Oak St, Sherrills Ford NC",
+      );
+    }
+    if (groupDescription) {
+      setControl(groupDescription, overrides.description ?? "Family reunion");
+    }
+    if (groupHours) setControl(groupHours, overrides.hours ?? "3");
+  }
+  if (overrides.flight) {
+    setControl(doc.querySelector("#booking-flight"), overrides.flight);
+  }
+  if (overrides.notes) {
+    setControl(doc.querySelector("#booking-notes"), overrides.notes);
   }
   if (overrides.bags) {
     const bags = role(doc, "checkbox", {

@@ -766,19 +766,7 @@
         var kind = tripKind();
         var $submit = $('#bookingForm button[type="submit"]');
         $submit.prop('disabled', false);
-        if (kind === 'group') {
-            setCols($('#name-group, #phone-group, #email-group, #address-group, #date-group, #time-group, #passengers-group'), true);
-            $('#g-contact').append($('#name-group'), $('#address-group'), $('#phone-group'), $('#email-group'));
-            $('#g-when').append($('#date-group'), $('#time-group'), $('#passengers-group'));
-            setFieldLabel('address-label', 'Address *');
-            setFieldLabel('date-label', 'Date *');
-            setFieldLabel('time-label', 'Start time *');
-            setFieldLabel('passengers-label', 'Number of people *');
-            $('#airport-fields').attr('hidden', 'hidden').hide();
-            $('#group-fields').removeAttr('hidden').show();
-            $('#booking-quote').hide();
-            $('#quote-details').empty();
-        } else if (kind === 'airport') {
+        if (kind === 'group' || kind === 'airport') {
             setCols($('#name-group, #phone-group, #email-group, #passengers-group, #date-group, #time-group, #address-group'), false);
             $('#a-name-phone').append($('#name-group'), $('#phone-group'));
             $('#a-email-people').append($('#email-group'), $('#passengers-group'));
@@ -790,7 +778,14 @@
             setFieldLabel('passengers-label', 'Number of Passengers *');
             $('#group-fields').attr('hidden', 'hidden').hide();
             $('#airport-fields').removeAttr('hidden').show();
-            $('#booking-quote').show();
+            if (kind === 'group') {
+                setFieldLabel('destination-label', 'Drop-off / venue *');
+                $('#booking-quote').hide();
+                $('#quote-details').empty();
+            } else {
+                setFieldLabel('destination-label', 'Destination Address *');
+                $('#booking-quote').show();
+            }
         } else {
             $('#airport-fields, #group-fields').attr('hidden', 'hidden').hide();
             $('#booking-quote').hide();
@@ -807,12 +802,26 @@
      * Update conditional fields based on airport trip and round trip selections
      * Follows existing show/hide patterns from booking.js
      */
+    function placeFlightField() {
+        var $flight = $('#flight-group');
+        if (!$flight.length) return;
+        if (isGroupEvent()) {
+            $flight.removeClass('col-md-4').addClass('col-md-12');
+            $('#flight-label').text('Flight number');
+            $('#flight-slot').append($flight).show();
+        } else {
+            $flight.removeClass('col-md-12').addClass('col-md-4');
+            $('#flight-label').text('Return Flight Number');
+            $('#return-flight-section').append($flight);
+            $('#flight-slot').hide();
+        }
+    }
+
     function updateConditionalFields() {
-        const airportTrip = isAirportTrip() ? 'Yes' : 'No';
         const roundTrip = $('#booking-round-trip').is(':checked');
 
-        // Checking bags is only for airport trips. Round trip is asked every time.
-        if (airportTrip === 'Yes') {
+        // Bags are collected for airport and group bookings.
+        if (isAirportTrip() || isGroupEvent()) {
             $('#checking-bags-section').slideDown();
         } else {
             $('#checking-bags-section').slideUp();
@@ -829,10 +838,13 @@
             $('#return-timeline-container').slideUp();
             $('#booking-return-date').val('');
             $('#booking-return-time').val('');
-            $('#booking-flight').val('');
+            if (!isGroupEvent()) {
+                $('#booking-flight').val('');
+            }
             $('#return-date-error').text('').hide();
             $('#return-time-error').text('').hide();
         }
+        placeFlightField();
     }
 
     /**
@@ -1586,36 +1598,32 @@
             const returnTime = $('#booking-return-time').val();
 
             const trip = tripKind();
-            const groupHours = parseInt($('#group-hours').val(), 10);
             const contactAddress = $('#booking-pickup').val().trim();
-            const groupPickup = $('#group-pickup').val().trim();
-            const groupDropoff = $('#group-dropoff').val().trim();
-            const groupDescription = $('#group-description').val().trim();
             var notes = $('#booking-notes').val().trim();
             if (trip === 'group') {
-                notes = 'Group event, ' + (isFinite(groupHours) ? groupHours : '') + ' hours. Address: ' + contactAddress + '. ' + groupDescription;
+                notes = notes ? 'Group event. ' + notes : 'Group event.';
             }
+            const asksTripDetails = trip === 'airport' || trip === 'group';
             const formData = {
                 name: $('#booking-name').val().trim(),
                 phone: $('#booking-phone').data('raw-value') || $('#booking-phone').val().replace(/\D/g, ''),
                 email: $('#booking-email').val().trim(),
                 pickupDate: pickupDate,
-                pickupAddress: trip === 'group' ? groupPickup : contactAddress,
-                destinationAddress: trip === 'group' ? groupDropoff : $('#booking-destination').val().trim(),
+                pickupAddress: contactAddress,
+                destinationAddress: $('#booking-destination').val().trim(),
                 passengers: $('#booking-passengers').val().trim(),
                 specialNotes: notes,
                 airportTrip: trip === 'airport' ? 'Yes' : 'No',
-                flightNumber: trip === 'airport' ? $('#booking-flight').val().trim() : '',
+                flightNumber: asksTripDetails ? $('#booking-flight').val().trim() : '',
                 pickupTime: pickupTime,
-                checkingBags: trip === 'airport' && $('#booking-checking-bags').is(':checked') ? 'Yes' : 'No',
-                roundTrip: trip === 'airport' && $('#booking-round-trip').is(':checked') ? 'Yes' : 'No',
-                returnDate: trip === 'airport' ? returnDate : '',
-                returnTime: trip === 'airport' ? returnTime : '',
+                checkingBags: asksTripDetails && $('#booking-checking-bags').is(':checked') ? 'Yes' : 'No',
+                roundTrip: asksTripDetails && $('#booking-round-trip').is(':checked') ? 'Yes' : 'No',
+                returnDate: asksTripDetails ? returnDate : '',
+                returnTime: asksTripDetails ? returnTime : '',
                 specialRequirements: trip === 'airport' ? specialRequirements : [],
                 otherRequirementText: trip === 'airport' ? otherRequirementText : '',
                 groupEvent: trip === 'group' ? 'Yes' : 'No',
-                durationHours: trip === 'group' && isFinite(groupHours) ? groupHours : '',
-                durationMinutes: trip === 'group' && isFinite(groupHours) ? groupHours * 60 : RIDE_DURATION_MINUTES,
+                durationMinutes: RIDE_DURATION_MINUTES,
                 contactAddress: contactAddress
             };
 
@@ -1696,41 +1704,8 @@
                 isValid = false;
             }
 
-            if (trip === 'group') {
-                if (!contactAddress) {
-                    errors.push('Address is required');
-                    $('#booking-pickup').closest('.form-group').addClass('has-error');
-                    $('#pickup-error').text('Address is required').show();
-                    isValid = false;
-                }
-                if (!groupPickup) {
-                    errors.push('Pickup location is required');
-                    $('#group-pickup').closest('.form-group').addClass('has-error');
-                    $('#group-pickup-error').text('Pickup location is required').show();
-                    isValid = false;
-                }
-                if (!groupDropoff) {
-                    errors.push('Drop-off location is required');
-                    $('#group-dropoff').closest('.form-group').addClass('has-error');
-                    $('#group-dropoff-error').text('Drop-off location is required').show();
-                    isValid = false;
-                }
-                if (!groupDescription) {
-                    errors.push('Please describe the event');
-                    $('#group-description').closest('.form-group').addClass('has-error');
-                    $('#group-description-error').text('Please describe the event').show();
-                    isValid = false;
-                }
-                if (!isFinite(groupHours) || groupHours < 1 || groupHours > 24) {
-                    errors.push('Enter how many hours, from 1 to 24');
-                    $('#group-hours').closest('.form-group').addClass('has-error');
-                    $('#group-hours-error').text('Enter how many hours, from 1 to 24').show();
-                    isValid = false;
-                }
-            }
-
-            // Validate flight number if airport trip is yes
-            if (formData.airportTrip === 'Yes' && formData.flightNumber && !validateFlightNumber(formData.flightNumber)) {
+            // Validate flight number when one was typed. It is optional.
+            if ((formData.airportTrip === 'Yes' || formData.groupEvent === 'Yes') && formData.flightNumber && !validateFlightNumber(formData.flightNumber)) {
                 errors.push('Please enter a valid flight number (e.g., AA1234)');
                 $('#booking-flight').closest('.form-group').addClass('has-error').find('.help-block').text('Please enter a valid flight number (e.g., AA1234)').show();
                 isValid = false;
@@ -2056,6 +2031,16 @@
         updatePassengerCapacity();
         updateQuoteDisplay();
         updateTripLayout();
+        var presetTrip = '';
+        try {
+            presetTrip = new URLSearchParams(window.location.search).get('type') || '';
+        } catch (err) {
+            void err;
+        }
+        if (presetTrip === 'group' || presetTrip === 'airport') {
+            $('#trip-type').val(presetTrip);
+            updateTripLayout();
+        }
         globalThis.MidnightBooking = {
             formatDisplayTime: formatDisplayTime,
             placeInView: placeInView

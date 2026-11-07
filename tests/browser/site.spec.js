@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { hostnameOf } from "../helpers/hostname.js";
 
-async function installMocks(page, { miles = 10 } = {}) {
+async function installMocks(page, { miles = 10, bookings = [] } = {}) {
   const posts = [];
   await page.route("**/*", async (route) => {
     const request = route.request();
@@ -62,7 +62,7 @@ async function installMocks(page, { miles = 10 } = {}) {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: "[]",
+        body: JSON.stringify(bookings),
       });
       return;
     }
@@ -106,9 +106,17 @@ test.describe("booking page", () => {
     const posts = await installMocks(page);
     await page.goto("/");
     await page.locator("#trip-type").selectOption("group");
-    await expect(page.locator("#group-call-note")).toBeVisible();
-    await expect(page.locator("#group-call-note")).not.toContainText("$");
+    await expect(page.locator("#group-pricing-note")).toHaveCount(0);
     await expect(page.locator("#booking-quote")).toBeHidden();
+    await expect(page.locator("#destination-label")).toHaveText(
+      "Drop-off / venue *",
+    );
+    await expect(page.locator("#booking-checking-bags")).toBeVisible();
+    await expect(page.locator("#booking-flight")).toBeVisible();
+    await expect(page.locator("#booking-round-trip")).toBeVisible();
+    await expect(page.locator("#booking-notes")).toBeVisible();
+    const visible = await page.locator("#bookingForm").innerText();
+    expect(visible).not.toMatch(/price|pricing|fare|\$\d/i);
     await expect(
       page.getByRole("button", { name: /request booking/i }),
     ).toBeEnabled();
@@ -124,11 +132,10 @@ test.describe("booking page", () => {
     await page.locator("#booking-name").fill("TEST, DO NOT BOOK");
     await page.locator("#booking-phone").fill("9804229125");
     await page.locator("#booking-passengers").fill("2");
-    await page.locator("#booking-pickup").fill("100 Main St, Denver NC");
-    await page.locator("#group-pickup").fill("8109 pike road charlotte");
-    await page.locator("#group-dropoff").fill("200 Oak St, Sherrills Ford NC");
-    await page.locator("#group-description").fill("party");
-    await page.locator("#group-hours").fill("2");
+    await page.locator("#booking-pickup").fill("8109 pike road charlotte");
+    await page
+      .locator("#booking-destination")
+      .fill("200 Oak St, Sherrills Ford NC");
     await page.locator("#booking-date").evaluate((el) => {
       el._flatpickr.setDate("2026-12-15", true);
       el.value = "2026-12-15";
@@ -143,6 +150,120 @@ test.describe("booking page", () => {
     await expect(result).not.toContainText("980");
     await expect(result).not.toContainText(/call/i);
     expect(posts).toEqual([]);
+  });
+
+  test("accepts one overlapping ride and refuses the third", async ({
+    page,
+  }) => {
+    const at = new Date(2026, 11, 15, 10, 0, 0, 0).toISOString();
+    const posts = await installMocks(page, {
+      bookings: [{ datetime: at }],
+    });
+    await page.goto("/");
+    await page.locator("#trip-type").selectOption("airport");
+    await page.locator("#booking-name").fill("TEST, DO NOT BOOK");
+    await page.locator("#booking-phone").fill("9804229125");
+    await page.locator("#booking-passengers").fill("2");
+    await page
+      .getByPlaceholder("123 Main Street, Denver NC 28037")
+      .fill("123 Main Street, Denver NC 28037");
+    await page.getByPlaceholder("CLT Airport").fill("CLT");
+    await page.locator("#booking-date").evaluate((el) => {
+      el._flatpickr.setDate("2026-12-15", true);
+      el.value = "2026-12-15";
+    });
+    await page.locator("#booking-time").evaluate((el) => {
+      el._flatpickr.setDate("10:00:00", true);
+      el.value = "10:00:00";
+    });
+    await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
+    await expect(page.locator("#booking-success")).toContainText(
+      "Request received",
+    );
+    expect(posts.length).toBeGreaterThan(0);
+  });
+
+  test("refuses a third ride when both drivers are already busy", async ({
+    page,
+  }) => {
+    const at = new Date(2026, 11, 15, 10, 0, 0, 0).toISOString();
+    const posts = await installMocks(page, {
+      bookings: [{ datetime: at }, { datetime: at }],
+    });
+    await page.goto("/");
+    await page.locator("#trip-type").selectOption("airport");
+    await page.locator("#booking-name").fill("TEST, DO NOT BOOK");
+    await page.locator("#booking-phone").fill("9804229125");
+    await page.locator("#booking-passengers").fill("2");
+    await page
+      .getByPlaceholder("123 Main Street, Denver NC 28037")
+      .fill("123 Main Street, Denver NC 28037");
+    await page.getByPlaceholder("CLT Airport").fill("CLT");
+    await page.locator("#booking-date").evaluate((el) => {
+      el._flatpickr.setDate("2026-12-15", true);
+      el.value = "2026-12-15";
+    });
+    await page.locator("#booking-time").evaluate((el) => {
+      el._flatpickr.setDate("10:00:00", true);
+      el.value = "10:00:00";
+    });
+    await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
+    await expect(page.locator("#booking-success")).toContainText(
+      "That time is booked",
+    );
+    expect(posts).toEqual([]);
+  });
+
+  test("home page opens the group form with group selected", async ({
+    page,
+  }) => {
+    await installMocks(page);
+    await page.goto("/");
+    const link = page.getByRole("link", { name: "Book a Group Ride" });
+    await expect(link).toHaveAttribute("href", "/?type=group#booking");
+    await page.goto("/?type=group#booking");
+    await expect(page.locator("#trip-type")).toHaveValue("group");
+    await expect(page.locator("#booking")).toBeVisible();
+    await expect(page.locator("#destination-label")).toHaveText(
+      "Drop-off / venue *",
+    );
+    await expect(page.locator("#booking-quote")).toBeHidden();
+  });
+
+  test("iPhone shows how to add the booking page to the home screen", async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({
+      userAgent:
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+      viewport: { width: 390, height: 844 },
+    });
+    const page = await context.newPage();
+    await installMocks(page);
+    await page.goto("/#booking");
+    await expect(page.locator("#add-home-ios")).toBeVisible();
+    await expect(page.locator("#add-home-ios")).toHaveText(
+      "Tap Share, then Add to Home Screen",
+    );
+    await expect(page.locator("#add-home-button")).toBeHidden();
+    await context.close();
+  });
+
+  test("Android shows Add to Home Screen when the browser offers it", async ({
+    page,
+  }) => {
+    await installMocks(page);
+    await page.goto("/#booking");
+    await expect(page.locator("#add-home-tip")).toBeHidden();
+    await page.evaluate(() => {
+      const event = new Event("beforeinstallprompt", { cancelable: true });
+      event.prompt = () => Promise.resolve();
+      window.dispatchEvent(event);
+    });
+    await expect(page.locator("#add-home-button")).toBeVisible();
+    await expect(page.locator("#add-home-button")).toHaveText(
+      "Add to Home Screen",
+    );
   });
 
   test("manifest start url opens the booking section", async ({ page }) => {
