@@ -698,90 +698,192 @@ describe("booking", () => {
     });
 
     describe("group event", () => {
-      it("shows the call-us message and blocks submit", async () => {
+      it("starts with no trip selected and no schedule bar", async () => {
+        const view = await renderBooking(script);
+        const select = view.document.querySelector("#trip-type");
+        check(select.value, "", {
+          label: "trip type starts on Select",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(view.document.querySelector("#timeline-container"), null, {
+          label: "schedule bar is not on the page",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(
+          view.document.body.textContent.includes(
+            "Group events must be booked by phone",
+          ),
+          false,
+          {
+            label: "group events are not phone-only",
+            source: SOURCE.group,
+            loaded: script,
+          },
+        );
+      });
+
+      it("hides the airport fare when Group is chosen", async () => {
         const view = await renderBooking(script, { miles: 40 });
         await showQuote(view, {
           pickup: "123 Main Street, Denver NC 28037",
           destination: "CLT",
         });
-        const yesRadios = roles(
-          view.document,
-          "radio",
-          { name: /^yes$/i },
-          {
-            label: "Group event Yes control",
-            expected: "a Group event Yes radio",
-            source: SOURCE.group,
-            loaded: script,
-          },
-        );
-        const yes = yesRadios.find((node) => node.name === "group-event");
-        check(Boolean(yes), true, {
-          label: "Group event Yes control",
-          expected: "a Group event Yes radio",
-          actual: yes ? "found" : "missing",
-          source: SOURCE.group,
+        check(quoteTotal(view.document).includes("Cash"), true, {
+          label: "airport quote is visible before switching",
+          source: SOURCE.quote,
           loaded: script,
         });
-        yes.checked = true;
-        window.jQuery(yes).trigger("change");
-        const status = role(
-          view.document,
-          "status",
-          {},
-          {
-            label: "group event call message",
-            expected: "Group events must be booked by phone",
-            source: SOURCE.group,
-            loaded: script,
-          },
-        );
+        view.document.querySelector("#trip-type").value = "group";
+        window.jQuery("#trip-type").trigger("change");
+        const quote = view.document.querySelector("#booking-quote");
         check(
-          /Group events must be booked by phone/.test(status.textContent),
+          quote.hidden ||
+            quote.style.display === "none" ||
+            quote.offsetParent === null,
           true,
           {
-            label: "group event call copy",
-            source: SOURCE.group,
-            loaded: script,
-          },
-        );
-        const link = role(
-          status,
-          "link",
-          { name: "(980) 422-9125" },
-          {
-            label: "group event phone link",
-            expected: "tel:+19804229125",
-            source: SOURCE.group,
-            loaded: script,
-          },
-        );
-        check(link.getAttribute("href"), "tel:+19804229125", {
-          label: "group event telephone link",
-          source: SOURCE.group,
-          loaded: script,
-        });
-        check(
-          view.document.querySelector("#booking-quote").style.display,
-          "none",
-          {
             label: "group event hides the quote",
+            actual: quote.style.display,
             source: SOURCE.group,
             loaded: script,
           },
         );
-        const submit = role(view.document, "button", {
-          name: /request booking/i,
-        });
-        check(submit.disabled, true, {
-          label: "group event disables submit",
+        check(
+          /\$\d/.test(view.document.querySelector("#group-fields").textContent),
+          false,
+          {
+            label: "group form shows no price",
+            source: SOURCE.group,
+            loaded: script,
+          },
+        );
+        check(
+          view.document
+            .querySelector("#group-fields")
+            .textContent.includes("We'll call you to confirm"),
+          true,
+          {
+            label: "group form says we will call",
+            source: SOURCE.group,
+            loaded: script,
+          },
+        );
+      });
+
+      it("asks a group larger than six to call", async () => {
+        const view = await renderBooking(script);
+        await fillValid(view, { trip: "group", passengers: "7" });
+        await submitForm(view);
+        check(
+          resultText(view.document).includes(
+            "Please call (980) 422-9125 to book a group that size.",
+          ),
+          true,
+          {
+            label: "seven people must call",
+            actual: resultText(view.document),
+            source: SOURCE.group,
+            loaded: script,
+          },
+        );
+        check(bookingPosts(view.state).length, 0, {
+          label: "oversized group sends no request",
           source: SOURCE.group,
           loaded: script,
         });
-        window.jQuery("#bookingForm").trigger("submit");
-        await new Promise((resolve) => setTimeout(resolve, 30));
-        check(bookingPosts(view.state).length, 0, {
-          label: "group event sends no request",
+      });
+
+      it("sends a group of six with the requested hours and no fare", async () => {
+        const view = await renderBooking(script);
+        await fillValid(view, {
+          trip: "group",
+          passengers: "6",
+          hours: "4",
+          time: "06:30:00",
+        });
+        await submitForm(view);
+        const text = resultText(view.document);
+        check(text.includes("Request received"), true, {
+          label: "group of six is accepted",
+          actual: text,
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(text.includes("6:30 AM"), true, {
+          label: "confirmation time is 6:30 AM",
+          actual: text,
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(text.includes("06:30:00"), false, {
+          label: "confirmation does not show seconds",
+          actual: text,
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(/\$\d/.test(text), false, {
+          label: "confirmation has no price",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        const posts = bookingPosts(view.state);
+        check(posts.length > 0, true, {
+          label: "group request is sent",
+          actual: posts.length,
+          source: SOURCE.group,
+          loaded: script,
+        });
+      });
+    });
+
+    describe("clock", () => {
+      it("shows 12-hour times with AM and PM", async () => {
+        const view = await renderBooking(script);
+        const fmt = view.window.MidnightBooking.formatDisplayTime;
+        check(fmt("00:00:00"), "12:00 AM", {
+          label: "midnight",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(fmt("00:05"), "12:05 AM", {
+          label: "after midnight",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(fmt("06:30:00"), "6:30 AM", {
+          label: "morning",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(fmt("12:00"), "12:00 PM", {
+          label: "noon",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(fmt("15:09:00"), "3:09 PM", {
+          label: "afternoon",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(fmt("23:59"), "11:59 PM", {
+          label: "late night",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(fmt(""), "", {
+          label: "blank time",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(fmt("99:99"), "", {
+          label: "impossible time",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(fmt(null), "", {
+          label: "missing time",
           source: SOURCE.group,
           loaded: script,
         });
@@ -820,17 +922,13 @@ describe("booking", () => {
         });
         await fillValid(view, { date: day, time: "10:00:00" });
         await submitForm(view);
-        check(
-          resultText(view.document).includes("This time slot is not available"),
-          true,
-          {
-            label: "both drivers busy blocks the pickup",
-            expected: "This time slot is not available",
-            actual: resultText(view.document),
-            source: SOURCE.conflict,
-            loaded: script,
-          },
-        );
+        check(resultText(view.document).includes("That time is booked"), true, {
+          label: "both drivers busy blocks the pickup",
+          expected: "That time is booked",
+          actual: resultText(view.document),
+          source: SOURCE.conflict,
+          loaded: script,
+        });
         check(bookingPosts(view.state).length, 0, {
           label: "blocked time sends no booking",
           source: SOURCE.conflict,
@@ -865,15 +963,11 @@ describe("booking", () => {
         });
         await fillValid(view, { date: day, time: "11:00:00" });
         await submitForm(view);
-        check(
-          resultText(view.document).includes("This time slot is not available"),
-          true,
-          {
-            label: "11:00 overlaps both the 10:00 and 10:30 rides",
-            source: SOURCE.overlap,
-            loaded: script,
-          },
-        );
+        check(resultText(view.document).includes("That time is booked"), true, {
+          label: "11:00 overlaps both the 10:00 and 10:30 rides",
+          source: SOURCE.overlap,
+          loaded: script,
+        });
       });
     });
   });

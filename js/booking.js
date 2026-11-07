@@ -276,14 +276,19 @@
     /**
      * How many existing rides' windows overlap a proposed pickup.
      */
-    function countOverlappingRides(proposedMinutes, existingBookings) {
+    function countOverlappingRides(proposedMinutes, existingBookings, proposedDuration) {
+        var durP = proposedDuration || RIDE_DURATION_MINUTES;
         var count = 0;
         for (var i = 0; i < existingBookings.length; i++) {
             var booking = existingBookings[i];
-            var existingMinutes = booking.hours * 60 + booking.minutes;
-            if (ridesOverlap(proposedMinutes, existingMinutes)) {
-                count++;
-            }
+            var existingMinutes = booking.startMinutes != null
+                ? booking.startMinutes
+                : booking.hours * 60 + booking.minutes;
+            var durE = booking.durationMinutes || RIDE_DURATION_MINUTES;
+            var overlaps = (durP === RIDE_DURATION_MINUTES && durE === RIDE_DURATION_MINUTES)
+                ? ridesOverlap(proposedMinutes, existingMinutes)
+                : (proposedMinutes < existingMinutes + durE && existingMinutes < proposedMinutes + durP);
+            if (overlaps) count++;
         }
         return count;
     }
@@ -296,10 +301,41 @@
      * @param {Array} existingBookings - Array of bookings for the date
      * @returns {boolean} - True if there's a conflict
      */
-    function hasTimeConflict(dateStr, timeStr, existingBookings) {
+    function hasTimeConflict(dateStr, timeStr, existingBookings, durationMinutes) {
         const [hours, minutes] = timeStr.split(':').map(Number);
         const proposedTimeMinutes = hours * 60 + minutes;
-        return countOverlappingRides(proposedTimeMinutes, existingBookings) >= DRIVER_COUNT;
+        return countOverlappingRides(proposedTimeMinutes, existingBookings, durationMinutes || RIDE_DURATION_MINUTES) >= DRIVER_COUNT;
+    }
+
+    function formatDisplayTime(timeStr) {
+        var parts = String(timeStr == null ? '' : timeStr).split(':');
+        var hours = parseInt(parts[0], 10);
+        var minutes = parseInt(parts[1], 10);
+        if (!isFinite(hours) || !isFinite(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+            return '';
+        }
+        return formatTimeFromMinutes(hours * 60 + minutes);
+    }
+
+    function placeInView(el, align) {
+        var node = el && el.jquery ? el[0] : el;
+        if (!node || !node.getBoundingClientRect || !window.scrollTo) return;
+        var nav = document.querySelector('.navbar-fixed-top');
+        var topBar = (nav && nav.offsetHeight ? nav.offsetHeight : 0) + 12;
+        var rect = node.getBoundingClientRect();
+        var viewH = window.innerHeight || document.documentElement.clientHeight;
+        var top = window.pageYOffset + rect.top - topBar;
+        if (align === 'center' && rect.height + topBar < viewH) {
+            top -= Math.max(0, (viewH - topBar - rect.height) / 2);
+        } else if (align !== 'center' && rect.top >= topBar && rect.bottom <= viewH - 8) {
+            return;
+        }
+        if (top < 0) top = 0;
+        try {
+            window.scrollTo({ top: top, behavior: 'smooth' });
+        } catch (err) {
+            window.scrollTo(0, top);
+        }
     }
 
     // =================================================================
@@ -543,7 +579,7 @@
      * @param {Array} bookings - Pre-loaded bookings for this date
      * @returns {object} - {valid: boolean, error: string}
      */
-    function validateDateTimeSync(dateStr, timeStr, bookings) {
+    function validateDateTimeSync(dateStr, timeStr, bookings, durationMinutes) {
         if (!dateStr || !timeStr) {
             return {
                 valid: false,
@@ -572,10 +608,10 @@
         }
 
         // Check booking conflicts
-        if (hasTimeConflict(dateStr, timeStr, bookings)) {
+        if (hasTimeConflict(dateStr, timeStr, bookings, durationMinutes || RIDE_DURATION_MINUTES)) {
             return {
                 valid: false,
-                error: 'This time slot is not available (conflicts with existing booking). Please choose a different time.'
+                error: 'That time is booked. Please pick another time.'
             };
         }
 
@@ -592,11 +628,46 @@
      * @param {string} timeStr - Time in HH:MM format
      * @returns {Promise<object>} - {valid: boolean, error: string}
      */
-    async function validateDateTime(dateStr, timeStr) {
-        // Include pending bookings in validation to catch conflicts
-        // before they reach the database
-        const bookings = await getBookingsForDate(dateStr, true);
-        return validateDateTimeSync(dateStr, timeStr, bookings);
+    function minutesFromDate(dateStr, booking) {
+        if (!booking.date) return booking.hours * 60 + booking.minutes;
+        var a = dateStr.split('-').map(Number);
+        var b = String(booking.date).split('-').map(Number);
+        var day0 = Date.UTC(a[0], a[1] - 1, a[2]);
+        var day1 = Date.UTC(b[0], b[1] - 1, b[2]);
+        var delta = Math.round((day1 - day0) / 86400000);
+        return delta * 1440 + booking.hours * 60 + booking.minutes;
+    }
+
+    async function validateDateTime(dateStr, timeStr, durationMinutes) {
+        var dur = durationMinutes || RIDE_DURATION_MINUTES;
+        var all = await fetchBookings();
+        var parsed = (Array.isArray(all) ? all : []).map(function(raw) {
+            var p = parseBookingDateTime(raw.datetime);
+            var mins = Number(raw.durationMinutes);
+            return {
+                date: p.date,
+                hours: p.hours,
+                minutes: p.minutes,
+                durationMinutes: mins > 0 ? mins : RIDE_DURATION_MINUTES
+            };
+        });
+        var pending = pendingBookings.map(function(b) {
+            return {
+                date: b.date,
+                hours: b.hours,
+                minutes: b.minutes,
+                durationMinutes: b.durationMinutes || RIDE_DURATION_MINUTES
+            };
+        });
+        var combined = parsed.concat(pending).map(function(b) {
+            return {
+                startMinutes: minutesFromDate(dateStr, b),
+                durationMinutes: b.durationMinutes,
+                hours: b.hours,
+                minutes: b.minutes
+            };
+        });
+        return validateDateTimeSync(dateStr, timeStr, combined, dur);
     }
 
 
@@ -638,7 +709,10 @@
             checkingBags: formData.checkingBags || 'No',
             roundTrip: formData.roundTrip || 'No',
             returnDate: formData.returnDate || '',
-            returnTime: formData.returnTime || ''
+            returnTime: formData.returnTime || '',
+            groupEvent: formData.groupEvent || 'No',
+            durationMinutes: formData.durationMinutes || RIDE_DURATION_MINUTES,
+            contactAddress: formData.contactAddress || ''
         };
         return fetch(NEW_SCRIPT_URL, {
             method: 'POST',
@@ -662,30 +736,67 @@
         $details.html(html);
     }
 
+    function tripKind() {
+        var value = $('#trip-type').val();
+        return value === 'airport' || value === 'group' ? value : '';
+    }
+
     function isGroupEvent() {
-        return $('input[name="group-event"]:checked').val() === 'Yes';
+        return tripKind() === 'group';
+    }
+
+    function isAirportTrip() {
+        return tripKind() === 'airport';
+    }
+
+    function setCols($group, wide) {
+        $group.toggleClass('col-md-6', !wide).toggleClass('col-md-12', !!wide);
+    }
+
+    function setFieldLabel(id, text) {
+        $('#' + id).text(text);
     }
 
     /**
-     * Group events are phone-only: show the call message, hide any price, and
-     * disable submit. Airport quotes and limits are unchanged when this is No.
+     * One trip-type dropdown. Airport keeps today's fields. Group uses the
+     * same name, address, phone, and email inputs, then its own fields.
+     * Group rides do not show a fare.
      */
-    function updateGroupEventUI() {
-        var $call = $('#group-event-call');
-        var $quote = $('#booking-quote');
+    function updateTripLayout() {
+        var kind = tripKind();
         var $submit = $('#bookingForm button[type="submit"]');
-        if (isGroupEvent()) {
-            $call.show();
-            $quote.hide();
+        $submit.prop('disabled', false);
+        if (kind === 'group') {
+            setCols($('#name-group, #phone-group, #email-group, #address-group, #date-group, #time-group, #passengers-group'), true);
+            $('#g-contact').append($('#name-group'), $('#address-group'), $('#phone-group'), $('#email-group'));
+            $('#g-when').append($('#date-group'), $('#time-group'), $('#passengers-group'));
+            setFieldLabel('address-label', 'Address *');
+            setFieldLabel('date-label', 'Date *');
+            setFieldLabel('time-label', 'Start time *');
+            setFieldLabel('passengers-label', 'Number of people *');
+            $('#airport-fields').attr('hidden', 'hidden').hide();
+            $('#group-fields').removeAttr('hidden').show();
+            $('#booking-quote').hide();
             $('#quote-details').empty();
-            $submit.prop('disabled', true);
+        } else if (kind === 'airport') {
+            setCols($('#name-group, #phone-group, #email-group, #passengers-group, #date-group, #time-group, #address-group'), false);
+            $('#a-name-phone').append($('#name-group'), $('#phone-group'));
+            $('#a-email-people').append($('#email-group'), $('#passengers-group'));
+            $('#a-when').append($('#date-group'), $('#time-group'));
+            $('#a-places').append($('#address-group'), $('#dest-group'));
+            setFieldLabel('address-label', 'Pickup Address *');
+            setFieldLabel('date-label', 'Pickup Date *');
+            setFieldLabel('time-label', 'Pickup Time *');
+            setFieldLabel('passengers-label', 'Number of Passengers *');
+            $('#group-fields').attr('hidden', 'hidden').hide();
+            $('#airport-fields').removeAttr('hidden').show();
+            $('#booking-quote').show();
         } else {
-            $call.hide();
-            $submit.prop('disabled', false);
-            if ($('input[name="group-event"]:checked').val() === 'No') {
-                $quote.show();
-            }
+            $('#airport-fields, #group-fields').attr('hidden', 'hidden').hide();
+            $('#booking-quote').hide();
         }
+        updateConditionalFields();
+        updatePassengerCapacity();
     }
 
     // =================================================================
@@ -697,7 +808,7 @@
      * Follows existing show/hide patterns from booking.js
      */
     function updateConditionalFields() {
-        const airportTrip = $('input[name="airport-trip"]:checked').val();
+        const airportTrip = isAirportTrip() ? 'Yes' : 'No';
         const roundTrip = $('#booking-round-trip').is(':checked');
 
         // Checking bags is only for airport trips. Round trip is asked every time.
@@ -789,7 +900,10 @@
         };
 
         const maxCapacity = calculatePassengerCapacity(requirements);
-        const callMsg = 'For more than ' + maxCapacity + ' passengers, please call (980) 422-9125.';
+        const callMsg = isGroupEvent()
+            ? 'Please call (980) 422-9125 to book a group that size.'
+            : 'For more than ' + maxCapacity + ' passengers, please call (980) 422-9125.';
+        const limit = isGroupEvent() ? 6 : maxCapacity;
 
         // Update or create capacity message
         let $capacityMsg = $('#passenger-capacity-message');
@@ -825,7 +939,7 @@
         // Blank is not 1; the field is required and checked again on submit.
         const rawPassengers = String($('#booking-passengers').val() || '').trim();
         const currentPassengers = /^\d+$/.test(rawPassengers) ? parseInt(rawPassengers, 10) : NaN;
-        if (!isNaN(currentPassengers) && currentPassengers > maxCapacity) {
+        if (!isNaN(currentPassengers) && currentPassengers > limit) {
             $capacityMsg.text(callMsg).show();
             $capacityMsg.css('color', '#d9534f');
             $('#booking-passengers').closest('.form-group').addClass('has-error');
@@ -1401,9 +1515,10 @@
         });
 
         // Group events cannot be booked online and do not get a price quote
-        $('input[name="group-event"]').on('change', function() {
-            $(this).closest('.form-group').find('.help-block').text('').hide();
-            updateGroupEventUI();
+        $('#trip-type').on('change', function() {
+            $('#trip-type-error').text('').hide();
+            $(this).closest('.form-group').removeClass('has-error');
+            updateTripLayout();
         });
 
         // Clear address errors when user starts typing
@@ -1439,18 +1554,6 @@
         $form.on('submit', async function(e) {
             e.preventDefault();
 
-            // Group events must be booked by phone. Do not validate or send anything.
-            if (isGroupEvent()) {
-                updateGroupEventUI();
-                var $call = $('#group-event-call');
-                if ($call.length) {
-                    $('html, body').animate({
-                        scrollTop: $call.offset().top - 100
-                    }, 500);
-                }
-                return;
-            }
-
             // Clear previous errors
             $('.help-block.text-danger').text('').hide();
             $('.has-error').removeClass('has-error');
@@ -1482,24 +1585,38 @@
             const returnDate = $('#booking-return-date').val();
             const returnTime = $('#booking-return-time').val();
 
+            const trip = tripKind();
+            const groupHours = parseInt($('#group-hours').val(), 10);
+            const contactAddress = $('#booking-pickup').val().trim();
+            const groupPickup = $('#group-pickup').val().trim();
+            const groupDropoff = $('#group-dropoff').val().trim();
+            const groupDescription = $('#group-description').val().trim();
+            var notes = $('#booking-notes').val().trim();
+            if (trip === 'group') {
+                notes = 'Group event, ' + (isFinite(groupHours) ? groupHours : '') + ' hours. Address: ' + contactAddress + '. ' + groupDescription;
+            }
             const formData = {
                 name: $('#booking-name').val().trim(),
                 phone: $('#booking-phone').data('raw-value') || $('#booking-phone').val().replace(/\D/g, ''),
                 email: $('#booking-email').val().trim(),
                 pickupDate: pickupDate,
-                pickupAddress: $('#booking-pickup').val().trim(),
-                destinationAddress: $('#booking-destination').val().trim(),
+                pickupAddress: trip === 'group' ? groupPickup : contactAddress,
+                destinationAddress: trip === 'group' ? groupDropoff : $('#booking-destination').val().trim(),
                 passengers: $('#booking-passengers').val().trim(),
-                specialNotes: $('#booking-notes').val().trim(),
-                airportTrip: $('input[name="airport-trip"]:checked').val(),
-                flightNumber: $('#booking-flight').val().trim(),
+                specialNotes: notes,
+                airportTrip: trip === 'airport' ? 'Yes' : 'No',
+                flightNumber: trip === 'airport' ? $('#booking-flight').val().trim() : '',
                 pickupTime: pickupTime,
-                checkingBags: $('#booking-checking-bags').is(':checked') ? 'Yes' : 'No',
-                roundTrip: $('#booking-round-trip').is(':checked') ? 'Yes' : 'No',
-                returnDate: returnDate,
-                returnTime: returnTime,
-                specialRequirements: specialRequirements,
-                otherRequirementText: otherRequirementText
+                checkingBags: trip === 'airport' && $('#booking-checking-bags').is(':checked') ? 'Yes' : 'No',
+                roundTrip: trip === 'airport' && $('#booking-round-trip').is(':checked') ? 'Yes' : 'No',
+                returnDate: trip === 'airport' ? returnDate : '',
+                returnTime: trip === 'airport' ? returnTime : '',
+                specialRequirements: trip === 'airport' ? specialRequirements : [],
+                otherRequirementText: trip === 'airport' ? otherRequirementText : '',
+                groupEvent: trip === 'group' ? 'Yes' : 'No',
+                durationHours: trip === 'group' && isFinite(groupHours) ? groupHours : '',
+                durationMinutes: trip === 'group' && isFinite(groupHours) ? groupHours * 60 : RIDE_DURATION_MINUTES,
+                contactAddress: contactAddress
             };
 
             // Validation
@@ -1572,17 +1689,44 @@
                 isValid = false;
             }
 
-            // Airport trip validation
-            if (!formData.airportTrip) {
-                errors.push('Please indicate if this is an airport trip');
-                $('input[name="airport-trip"]').closest('.form-group').addClass('has-error').find('.help-block').text('Please select an option').show();
+            if (trip !== 'airport' && trip !== 'group') {
+                errors.push('Please choose a trip type');
+                $('#trip-type').closest('.form-group').addClass('has-error');
+                $('#trip-type-error').text('Please choose Airport or Group').show();
                 isValid = false;
             }
 
-            if (!$('input[name="group-event"]:checked').val()) {
-                errors.push('Please indicate if this is a group event');
-                $('input[name="group-event"]').closest('.form-group').addClass('has-error').find('.help-block').text('Please select an option').show();
-                isValid = false;
+            if (trip === 'group') {
+                if (!contactAddress) {
+                    errors.push('Address is required');
+                    $('#booking-pickup').closest('.form-group').addClass('has-error');
+                    $('#pickup-error').text('Address is required').show();
+                    isValid = false;
+                }
+                if (!groupPickup) {
+                    errors.push('Pickup location is required');
+                    $('#group-pickup').closest('.form-group').addClass('has-error');
+                    $('#group-pickup-error').text('Pickup location is required').show();
+                    isValid = false;
+                }
+                if (!groupDropoff) {
+                    errors.push('Drop-off location is required');
+                    $('#group-dropoff').closest('.form-group').addClass('has-error');
+                    $('#group-dropoff-error').text('Drop-off location is required').show();
+                    isValid = false;
+                }
+                if (!groupDescription) {
+                    errors.push('Please describe the event');
+                    $('#group-description').closest('.form-group').addClass('has-error');
+                    $('#group-description-error').text('Please describe the event').show();
+                    isValid = false;
+                }
+                if (!isFinite(groupHours) || groupHours < 1 || groupHours > 24) {
+                    errors.push('Enter how many hours, from 1 to 24');
+                    $('#group-hours').closest('.form-group').addClass('has-error');
+                    $('#group-hours-error').text('Enter how many hours, from 1 to 24').show();
+                    isValid = false;
+                }
             }
 
             // Validate flight number if airport trip is yes
@@ -1619,7 +1763,12 @@
                 errors.push(needMsg);
                 $('#booking-passengers').closest('.form-group').addClass('has-error').find('.help-block').text(needMsg).show();
                 isValid = false;
-            } else if (passengerCount > maxCapacity) {
+            } else if (trip === 'group' && passengerCount > 6) {
+                const callMsg = 'Please call (980) 422-9125 to book a group that size.';
+                errors.push(callMsg);
+                $('#booking-passengers').closest('.form-group').addClass('has-error').find('.help-block').text(callMsg).show();
+                isValid = false;
+            } else if (trip !== 'group' && passengerCount > maxCapacity) {
                 const callMsg = 'For more than ' + maxCapacity + ' passengers, please call (980) 422-9125.';
                 errors.push(callMsg);
                 $('#booking-passengers').closest('.form-group').addClass('has-error').find('.help-block').text(callMsg).show();
@@ -1655,7 +1804,11 @@
 
             // Re-validate date/time against latest bookings
             if (formData.pickupDate && formData.pickupTime) {
-                const dateTimeValidation = await validateDateTime(formData.pickupDate, formData.pickupTime);
+                const dateTimeValidation = await validateDateTime(
+                    formData.pickupDate,
+                    formData.pickupTime,
+                    trip === 'group' ? formData.durationMinutes : RIDE_DURATION_MINUTES
+                );
                 if (!dateTimeValidation.valid) {
                     errors.push(dateTimeValidation.error);
                     $('#booking-date').closest('.form-group').addClass('has-error');
@@ -1709,9 +1862,7 @@
                 }
 
                 $('#booking-success').html(errorHtml).show();
-                $('html, body').animate({
-                    scrollTop: $('#booking-success').offset().top - 100
-                }, 500);
+                placeInView($('#booking-success'), 'nearest');
                 return;
             }
 
@@ -1721,7 +1872,8 @@
             pendingBookings.push({
                 date: formData.pickupDate,
                 hours: outboundHours,
-                minutes: outboundMinutes
+                minutes: outboundMinutes,
+                durationMinutes: formData.durationMinutes || RIDE_DURATION_MINUTES
             });
 
             // If round trip, also add return booking to pending
@@ -1779,14 +1931,14 @@
                 if (formData.roundTrip === 'Yes') {
                     successHtml +=
                         '<p>Your round-trip requests were sent:</p>' +
-                        '<ul style="text-align: left; display: inline-block;">' +
-                        '<li><strong>Outbound:</strong> ' + escapeHtml(formatDisplayDate(formData.pickupDate)) + ' at ' + escapeHtml(formData.pickupTime) + '</li>' +
-                        '<li><strong>Return:</strong> ' + escapeHtml(formatDisplayDate(formData.returnDate)) + ' at ' + escapeHtml(formData.returnTime) + '</li>' +
+                        '<ul class="confirm-legs">' +
+                        '<li><strong>Outbound:</strong> ' + escapeHtml(formatDisplayDate(formData.pickupDate)) + ' at ' + escapeHtml(formatDisplayTime(formData.pickupTime)) + '</li>' +
+                        '<li><strong>Return:</strong> ' + escapeHtml(formatDisplayDate(formData.returnDate)) + ' at ' + escapeHtml(formatDisplayTime(formData.returnTime)) + '</li>' +
                         '</ul>' +
                         '<p>We will call you at <strong>' + escapeHtml(formData.phone) + '</strong> to confirm both bookings.</p>';
                 } else {
                     successHtml +=
-                        '<p>Your request for <strong>' + escapeHtml(formatDisplayDate(formData.pickupDate)) + '</strong> at <strong>' + escapeHtml(formData.pickupTime) + '</strong> was sent.</p>' +
+                        '<p>Your request for <strong>' + escapeHtml(formatDisplayDate(formData.pickupDate)) + '</strong> at <strong>' + escapeHtml(formatDisplayTime(formData.pickupTime)) + '</strong> was sent.</p>' +
                         '<p>We will call you at <strong>' + escapeHtml(formData.phone) + '</strong> to confirm your booking.</p>';
                 }
 
@@ -1801,16 +1953,12 @@
 
                 // Hide the form (like contact form)
                 console.log('Hiding form...');
-                $form.slideUp();
+                $form.hide();
 
                 // Reset button
                 $submitBtn.html(originalBtnText).prop('disabled', false);
 
-                // Scroll to success message
-                console.log('Scrolling to success message...');
-                $('html, body').animate({
-                    scrollTop: $('#booking-success').offset().top - 100
-                }, 500);
+                placeInView($('#booking-success'), 'center');
 
                 // Show option to make another booking after 2 seconds (like contact form)
                 setTimeout(function() {
@@ -1854,9 +2002,7 @@
                         updateTimeline(dateForInput);
 
                         // Scroll back to form
-                        $('html, body').animate({
-                            scrollTop: $form.offset().top - 100
-                        }, 500);
+                        placeInView($form, 'nearest');
                     });
                 }, 2000);
 
@@ -1876,9 +2022,7 @@
                         '<div class="alert alert-danger">' + escapeHtml(error.message) + '</div>'
                     ).show();
                     $submitBtn.html(originalBtnText).prop('disabled', false);
-                    $('html, body').animate({
-                        scrollTop: $('#booking-success').offset().top - 100
-                    }, 500);
+                    placeInView($('#booking-success'), 'nearest');
                     return;
                 }
 
@@ -1895,9 +2039,7 @@
 
                 $submitBtn.html(originalBtnText).prop('disabled', false);
 
-                $('html, body').animate({
-                    scrollTop: $('#booking-success').offset().top - 100
-                }, 500);
+                placeInView($('#booking-success'), 'nearest');
             }
         });
 
@@ -1913,9 +2055,11 @@
         // Initialize passenger capacity display
         updatePassengerCapacity();
         updateQuoteDisplay();
-        updateGroupEventUI();
-        $('#booking-quote').show();
-        $('#round-trip-section').show();
+        updateTripLayout();
+        globalThis.MidnightBooking = {
+            formatDisplayTime: formatDisplayTime,
+            placeInView: placeInView
+        };
     });
 
     })(jQuery);
@@ -1972,9 +2116,15 @@
         routeCache[k]=p; p.catch(function(){delete routeCache[k];});
         return p;
     }
-    function show(html){var $d=$('#quote-details');if($d.length)$d.html(html);}
+    function show(html){
+        var $d=$('#quote-details');
+        if($d.length)$d.html(html);
+        if(html && String(html).indexOf('quote-total')!==-1 && globalThis.MidnightBooking){
+            globalThis.MidnightBooking.placeInView(document.getElementById('booking-quote'),'nearest');
+        }
+    }
     function groupEventYes(){
-        return $('input[name="group-event"]:checked').val()==='Yes';
+        return ($('#trip-type').val()||'')==='group';
     }
     function hideGroupQuote(){
         show('');
@@ -1983,11 +2133,12 @@
     function refresh(){
         var my=++seq;
         if(groupEventYes()){hideGroupQuote();return;}
+        if(($('#trip-type').val()||'')!=='airport'){$('#booking-quote').hide();return;}
         $('#booking-quote').show();
         var pick=$.trim($('#booking-pickup').val()||'');
         var dest=$.trim($('#booking-destination').val()||'');
         var ap=whichAirport(dest);
-        var airportYes=$('input[name="airport-trip"]:checked').val()==='Yes';
+        var airportYes=true;
         var rt=$('#booking-round-trip').is(':checked');
         if(pick.length<6||!/\d/.test(pick)){show(ask);return;}
         if(!dest){show(ask);return;}
@@ -2027,8 +2178,7 @@
     function later(){clearTimeout(timer);timer=setTimeout(refresh,900);}
     $(function(){
         $('#booking-pickup, #booking-destination').on('input', later).on('change blur', function(){clearTimeout(timer);refresh();});
-        $('#booking-round-trip, input[name="airport-trip"]').on('change', function(){setTimeout(refresh,50);});
-        $('input[name="group-event"]').on('change', function(){clearTimeout(timer);refresh();});
+        $('#booking-round-trip, #trip-type').on('change', function(){setTimeout(refresh,50);});
         refresh();
     });
 }(window.jQuery);

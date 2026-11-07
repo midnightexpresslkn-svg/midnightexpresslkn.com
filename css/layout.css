@@ -1,0 +1,334 @@
+/* Mobile layout.
+   The hero text box sets padding with a zero left and right, so the Bootstrap
+   row inside it grows 15px past each edge of the phone. iOS Safari ignores
+   overflow-x: hidden on the body, and that extra width lets the page slide.
+   Text and the header logo then clip on the left. These rules keep every
+   section inside the screen and compact on a phone. */
+
+header.hero .hero-content > .row {
+  margin-left: 0;
+  margin-right: 0;
+  width: auto;
+  max-width: 100%;
+}
+
+header.hero img.header-logo,
+.navbar-logo {
+  flex: 0 0 auto;
+}
+
+#booking-quote,
+#booking-success {
+  scroll-margin-top: 76px;
+}
+
+.trip-kind {
+  margin: 0 0 18px;
+  padding: 0;
+  border: 0;
+}
+
+.trip-kind legend {
+  display: block;
+  width: 100%;
+  font-weight: bold;
+  font-size: 16px;
+  margin-bottom: 6px;
+  padding: 0;
+  border: 0;
+  float: none;
+}
+
+.confirm-legs {
+  text-align: left;
+  margin: 0.5rem auto;
+  padding-left: 1.2rem;
+  max-width: 100%;
+}
+
+#booking-success .alert {
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 767px) {
+  .container {
+    width: 100%;
+    max-width: 100%;
+    padding-left: 16px;
+    padding-right: 16px;
+    box-sizing: border-box;
+  }
+
+  .row {
+    margin-left: 0;
+    margin-right: 0;
+    max-width: 100%;
+  }
+
+  .row > [class*="col-"] {
+    float: none;
+    width: 100%;
+    max-width: 100%;
+    padding-left: 0;
+    padding-right: 0;
+    box-sizing: border-box;
+  }
+
+  header.hero .hero-content {
+    padding-left: 16px;
+    padding-right: 16px;
+    box-sizing: border-box;
+    max-width: 100%;
+  }
+
+  header.hero .intro-text .name {
+    font-size: clamp(1.35rem, 6.2vw, 1.85rem);
+    overflow-wrap: anywhere;
+  }
+
+  .navbar-fixed-top .navbar-header {
+    float: none;
+    width: 100%;
+    margin: 0;
+    position: relative;
+    text-align: center;
+  }
+
+  .navbar-fixed-top .navbar-brand {
+    float: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: auto;
+    max-width: calc(100% - 96px);
+    margin: 8px auto;
+    padding: 4px 0;
+    font-size: 12px;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+
+  .navbar-fixed-top .navbar-toggle {
+    position: absolute;
+    right: 8px;
+    top: 8px;
+    margin: 0;
+    z-index: 3;
+  }
+
+  section,
+  section h2,
+  section h3,
+  section h4,
+  section p,
+  section li,
+  header.hero,
+  header.hero .intro-text,
+  footer,
+  footer h3,
+  footer p,
+  footer li {
+    text-align: center;
+  }
+
+  section {
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+
+  section h2 {
+    font-size: 22px;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+
+  hr.star-light,
+  hr.star-primary {
+    margin: 8px auto 10px;
+  }
+
+  section h3,
+  #services h3 {
+    font-size: 16px;
+    line-height: 1.25;
+    margin-top: 4px;
+    margin-bottom: 4px;
+    overflow-wrap: anywhere;
+  }
+
+  #services {
+    padding-top: 12px;
+    padding-bottom: 4px;
+  }
+
+  #services .fa-5x {
+    font-size: 2.2em;
+  }
+
+  #services .service-description {
+    font-size: 15px;
+    line-height: 1.4;
+    margin-bottom: 8px;
+  }
+
+  #services .col-md-4 {
+    margin-bottom: 8px;
+  }
+
+  #why-choose-us {
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+
+  #why-choose-us h2 {
+    font-size: 18px;
+    line-height: 1.25;
+    margin-bottom: 0;
+  }
+
+  #why-choose-us .feature-list {
+    font-size: 15px;
+    line-height: 1.4;
+    margin-bottom: 0;
+  }
+
+  #why-choose-us .feature-list li {
+    margin-bottom: 8px;
+  }
+
+  #about-us {
+    padding-top: 8px;
+    padding-bottom: 4px;
+  }
+
+  #about-us h2 {
+    font-size: 20px;
+  }
+
+  #about-us .about-text {
+    font-size: 16px;
+    line-height: 1.5;
+    margin-bottom: 10px;
+  }
+
+  .about-cta {
+    margin-top: 8px;
+    margin-bottom: 0;
+    font-size: 18px;
+  }
+
+  #reviews {
+    padding-top: 10px;
+  }
+
+  #areas-served {
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  #areas-served .service-area-list {
+    padding-left: 0;
+    margin: 0 0 8px;
+    list-style: none;
+    line-height: 1.6;
+  }
+
+  #areas-served .service-area-column {
+    margin-bottom: 8px;
+  }
+
+  #contact {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  #contact h2 {
+    font-size: 22px;
+  }
+
+  .contact-lines {
+    width: min(100%, 18.5rem);
+    margin: 0 auto;
+    text-align: left;
+  }
+
+  .contact-lines p {
+    display: grid;
+    grid-template-columns: 1.5rem minmax(0, 1fr);
+    column-gap: 0.45rem;
+    align-items: start;
+    justify-items: start;
+    margin: 0.3rem 0;
+    font-size: 0.95rem;
+    line-height: 1.35;
+    text-align: left;
+  }
+
+  .contact-lines a,
+  .contact-lines span {
+    overflow-wrap: anywhere;
+  }
+
+  footer .footer-above {
+    padding-top: 12px;
+  }
+
+  footer .footer-col {
+    margin-bottom: 10px;
+  }
+
+  footer h3 {
+    font-size: 1rem;
+    margin-bottom: 4px;
+  }
+
+  footer p,
+  footer .footer-contact,
+  footer .footer-legal {
+    font-size: 14px;
+    margin-bottom: 4px;
+  }
+
+  footer .btn-social {
+    width: 36px;
+    height: 36px;
+    line-height: 32px;
+    font-size: 16px;
+  }
+
+  footer .footer-below {
+    padding: 8px 0;
+  }
+
+  #booking {
+    padding-top: 12px;
+    padding-bottom: 16px;
+  }
+
+  #bookingForm,
+  #bookingForm label,
+  #bookingForm .form-control,
+  #bookingForm textarea,
+  #bookingForm select,
+  #bookingForm .help-block,
+  #contactForm,
+  #contactForm label,
+  #contactForm .form-control,
+  #contactForm textarea {
+    text-align: left;
+  }
+
+  #bookingForm .form-control,
+  #bookingForm select,
+  #bookingForm textarea {
+    font-size: 16px;
+  }
+
+  #booking .booking-legal,
+  #booking .text-center {
+    text-align: center;
+  }
+}
