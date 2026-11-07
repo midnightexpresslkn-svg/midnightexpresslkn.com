@@ -135,8 +135,8 @@ header.hero img.header-logo,
   }
 
   section {
-    padding-top: 16px;
-    padding-bottom: 16px;
+    padding-top: 8px;
+    padding-bottom: 8px;
   }
 
   section h2 {
@@ -147,7 +147,19 @@ header.hero img.header-logo,
 
   hr.star-light,
   hr.star-primary {
-    margin: 8px auto 10px;
+    margin: 4px auto 6px;
+  }
+
+  .mt-xl {
+    margin-top: 8px;
+  }
+
+  .mt-lg {
+    margin-top: 6px;
+  }
+
+  .mt-md {
+    margin-top: 4px;
   }
 
   section h3,
@@ -160,8 +172,8 @@ header.hero img.header-logo,
   }
 
   #services {
-    padding-top: 12px;
-    padding-bottom: 4px;
+    padding-top: 6px;
+    padding-bottom: 2px;
   }
 
   #services .fa-5x {
@@ -179,8 +191,8 @@ header.hero img.header-logo,
   }
 
   #why-choose-us {
-    padding-top: 8px;
-    padding-bottom: 8px;
+    padding-top: 4px;
+    padding-bottom: 4px;
   }
 
   #why-choose-us h2 {
@@ -200,8 +212,8 @@ header.hero img.header-logo,
   }
 
   #about-us {
-    padding-top: 8px;
-    padding-bottom: 4px;
+    padding-top: 4px;
+    padding-bottom: 2px;
   }
 
   #about-us h2 {
@@ -221,12 +233,13 @@ header.hero img.header-logo,
   }
 
   #reviews {
-    padding-top: 10px;
+    padding-top: 6px;
+    padding-bottom: 6px;
   }
 
   #areas-served {
-    padding-top: 10px;
-    padding-bottom: 10px;
+    padding-top: 6px;
+    padding-bottom: 4px;
   }
 
   #areas-served .service-area-list {
@@ -241,35 +254,55 @@ header.hero img.header-logo,
   }
 
   #contact {
-    padding-top: 12px;
-    padding-bottom: 12px;
+    padding-top: 6px;
+    padding-bottom: 4px;
   }
 
   #contact h2 {
-    font-size: 22px;
+    font-size: 18px;
+    line-height: 1.15;
+  }
+
+  #contact .contact-info {
+    margin-bottom: 0;
   }
 
   .contact-lines {
-    width: min(100%, 18.5rem);
+    width: max-content;
+    max-width: 100%;
     margin: 0 auto;
     text-align: left;
   }
 
+  #contact .contact-info p,
   .contact-lines p {
     display: grid;
-    grid-template-columns: 1.5rem minmax(0, 1fr);
-    column-gap: 0.45rem;
+    grid-template-columns: 22px minmax(0, 1fr);
+    column-gap: 6px;
     align-items: start;
     justify-items: start;
-    margin: 0.3rem 0;
-    font-size: 0.95rem;
-    line-height: 1.35;
+    margin: 2px 0;
+    font-size: 15px;
+    line-height: 1.25;
     text-align: left;
+  }
+
+  #contact .contact-info p.contact-phone,
+  #contact .contact-info p.contact-phone a {
+    font-size: 17px;
+    line-height: 1.2;
+  }
+
+  #contact .contact-info p.contact-email,
+  #contact .contact-info p.contact-address {
+    margin-top: 2px;
+    font-size: 15px;
+    line-height: 1.25;
   }
 
   .contact-lines a,
   .contact-lines span {
-    overflow-wrap: anywhere;
+    overflow-wrap: normal;
   }
 
   footer .footer-above {
@@ -304,8 +337,36 @@ header.hero img.header-logo,
   }
 
   #booking {
-    padding-top: 12px;
-    padding-bottom: 16px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+
+  #booking h2 {
+    font-size: 18px;
+    line-height: 1.15;
+  }
+
+  #bookingForm > br {
+    display: none;
+  }
+
+  #booking .trip-kind {
+    margin-bottom: 8px;
+  }
+
+  #bookingForm button[type="submit"] {
+    padding: 10px 16px;
+    font-size: 16px;
+    line-height: 1.2;
+  }
+
+  #booking .booking-legal {
+    margin-top: 6px;
+    line-height: 1.35;
+  }
+
+  #booking p.text-center {
+    margin-top: 6px !important;
   }
 
   #bookingForm,
@@ -330,5 +391,88 @@ header.hero img.header-logo,
   #booking .booking-legal,
   #booking .text-center {
     text-align: center;
+  }
+}
+
+/* Desktop sections still use 100px of padding. Tighten the bands and the
+   space between sections. The footer rules above stay as they are. */
+@media (min-width: 768px) {
+  section {
+    padding: 40px 0;
+  }
+
+  hr.star-light,
+  hr.star-primary {
+    margin: 12px auto 14px;
+  }
+
+  .mt-xl {
+    margin-top: 16px;
+  }
+
+  .mt-lg {
+    margin-top: 12px;
+  }
+
+  .mt-md {
+    margin-top: 8px;
+  }
+
+  #contact {
+    padding: 22px 0 14px;
+  }
+
+  #contact h2 {
+    font-size: 28px;
+    line-height: 1.15;
+  }
+
+  #contact .contact-info {
+    margin-bottom: 0;
+  }
+
+  #contact .contact-info p {
+    margin-top: 6px;
+    line-height: 1.3;
+  }
+
+  #contact .contact-info p.contact-phone,
+  #contact .contact-info p.contact-phone a {
+    font-size: 20px;
+    line-height: 1.2;
+  }
+
+  #contact .contact-info p.contact-email,
+  #contact .contact-info p.contact-address {
+    margin-top: 4px;
+    font-size: 16px;
+    line-height: 1.3;
+  }
+
+  #booking {
+    padding: 28px 0 24px;
+  }
+
+  #booking h2 {
+    font-size: 28px;
+    line-height: 1.15;
+  }
+
+  #bookingForm > br {
+    display: none;
+  }
+
+  #bookingForm button[type="submit"] {
+    padding: 10px 18px;
+    font-size: 16px;
+    line-height: 1.2;
+  }
+
+  #booking .booking-legal {
+    margin-top: 8px;
+  }
+
+  #booking p.text-center {
+    margin-top: 8px !important;
   }
 }
