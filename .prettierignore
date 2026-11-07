@@ -1,4 +1,5 @@
 node_modules
+.githooks
 coverage
 test-results
 lighthouse-results

@@ -28,7 +28,12 @@ export const SOURCE = {
     ),
   airport: () => sourceLine("js/booking.js", "function whichAirport(raw)"),
   excluded: () =>
-    sourceLine("js/booking.js", "function addressHasExcludedTown(address)"),
+    sourceLine("js/service-area.js", "function evaluateTrip(input)"),
+  serviceArea: () =>
+    sourceLine(
+      "js/booking.js",
+      "async function decideServiceArea(pickup, destination)",
+    ),
   passengers: () =>
     sourceLine(
       "js/booking.js",

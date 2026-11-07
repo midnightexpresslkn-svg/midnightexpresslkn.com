@@ -27,7 +27,7 @@ async function installMocks(page, { miles = 10 } = {}) {
           addressMatches: [
             {
               coordinates: { x: -81.03, y: 35.53 },
-              addressComponents: { city: "Denver", zip: "28037" },
+              addressComponents: { city: "Denver", state: "NC", zip: "28037" },
             },
           ],
         },
@@ -117,6 +117,34 @@ test.describe("booking page", () => {
       page.getByRole("button", { name: /request booking/i }),
     ).toBeDisabled();
     await expect(page.locator("#booking-quote")).toBeHidden();
+    expect(posts).toEqual([]);
+  });
+
+  test("refuses a Charlotte pickup and does not create a request", async ({
+    page,
+  }) => {
+    const posts = await installMocks(page);
+    await page.goto("/");
+    await page.locator("#booking-name").fill("TEST, DO NOT BOOK");
+    await page.locator("#booking-phone").fill("9804229125");
+    await page.locator("#booking-passengers").fill("2");
+    await page.locator("#booking-pickup").fill("8109 pike road charlotte");
+    await page.locator("#booking-destination").fill("Suya king restaurant");
+    await page.locator("#airport-trip-no").check();
+    await page.locator("#group-event-no").check();
+    await page.locator("#booking-date").evaluate((el) => {
+      el._flatpickr.setDate("2026-12-15", true);
+      el.value = "2026-12-15";
+    });
+    await page.locator("#booking-time").evaluate((el) => {
+      el._flatpickr.setDate("10:00:00", true);
+      el.value = "10:00:00";
+    });
+    await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
+    const result = page.locator("#booking-success");
+    await expect(result).toHaveText("Sorry, we don't service that area.");
+    await expect(result).not.toContainText("980");
+    await expect(result).not.toContainText(/call/i);
     expect(posts).toEqual([]);
   });
 

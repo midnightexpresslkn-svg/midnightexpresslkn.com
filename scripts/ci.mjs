@@ -52,7 +52,11 @@ function parseLocation(text) {
 
 console.log("\n== syntax ==");
 let syntaxOk = true;
-for (const file of ["js/booking.js", "js/booking.min.js"]) {
+for (const file of [
+  "js/service-area.js",
+  "js/booking.js",
+  "js/booking.min.js",
+]) {
   const result = run(process.execPath, ["--check", file], { stdio: "inherit" });
   if (result.status !== 0) {
     syntaxOk = false;

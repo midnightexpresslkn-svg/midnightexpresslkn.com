@@ -32,32 +32,8 @@
      */
     const NEW_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyUfrtvd64b5GKnkaHONJ7YDGGAXAAWGTxYK3lBASguhUjlO_iXXHiM4-iflODhJTYP4w/exec';
 
-    /**
-     * Towns Midnight Express does not serve.
-     * Match the town name as a word, that town's ZIP, or the Census city/ZIP.
-     */
-    const EXCLUDED_TOWNS = [
-        'Mooresville',
-        'Cornelius',
-        'Davidson',
-        'Huntersville',
-        'Troutman',
-        'Statesville'
-    ];
-
-    const EXCLUDED_ZIPS = {
-        '28115': 'Mooresville',
-        '28117': 'Mooresville',
-        '28035': 'Davidson',
-        '28036': 'Davidson',
-        '28070': 'Huntersville',
-        '28078': 'Huntersville',
-        '28031': 'Cornelius',
-        '28166': 'Troutman',
-        '28625': 'Statesville',
-        '28677': 'Statesville',
-        '28687': 'Statesville'
-    };
+    var OUT_OF_AREA_MESSAGE = "Sorry, we don't service that area.";
+    var UNCLEAR_AREA_MESSAGE = "Please include the town and state, for example Denver, NC.";
 
     function escapeHtml(value) {
         return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
@@ -71,23 +47,7 @@
         });
     }
 
-    function addressHasExcludedTown(address) {
-        const a = String(address || '');
-        for (let i = 0; i < EXCLUDED_TOWNS.length; i++) {
-            const town = EXCLUDED_TOWNS[i];
-            const re = new RegExp('\\b' + town.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&') + '\\b', 'i');
-            if (re.test(a)) return town;
-        }
-        const zips = a.match(/\b\d{5}\b/g);
-        if (zips) {
-            for (let i = 0; i < zips.length; i++) {
-                if (EXCLUDED_ZIPS[zips[i]]) return EXCLUDED_ZIPS[zips[i]];
-            }
-        }
-        return null;
-    }
-
-    function excludedTownFromCensus(address) {
+    function censusPlace(address) {
         return new Promise(function(resolve) {
             $.ajax({
                 url: 'https://geocoding.geo.census.gov/geocoder/locations/onelineaddress',
@@ -98,11 +58,76 @@
                     var matches = r && r.result && r.result.addressMatches;
                     if (!matches || !matches.length) { resolve(null); return; }
                     var parts = matches[0].addressComponents || {};
-                    resolve(addressHasExcludedTown(parts.city || '') || addressHasExcludedTown(String(parts.zip || '')));
+                    resolve({
+                        city: parts.city || '',
+                        state: parts.state || '',
+                        zip: String(parts.zip || '')
+                    });
                 },
                 error: function() { resolve(null); }
             });
         });
+    }
+
+    /**
+     * Refuse a ride before any booking request is created.
+     * Text that already names a served or unserved place is not sent to the geocoder.
+     */
+    async function decideServiceArea(pickup, destination) {
+        var api = globalThis.MidnightServiceArea;
+        if (!api) {
+            return {
+                ok: false,
+                code: 'unclear',
+                message: UNCLEAR_AREA_MESSAGE,
+                pickupGeo: null,
+                destinationGeo: null
+            };
+        }
+        var pickupGeo = null;
+        var destinationGeo = null;
+        if (!api.isAirportEnd(pickup) && api.classifyAddress(pickup).status === 'unclear') {
+            pickupGeo = await censusPlace(pickup);
+        }
+        if (!api.isAirportEnd(destination) && api.classifyAddress(destination).status === 'unclear') {
+            destinationGeo = await censusPlace(destination);
+        }
+        var decision = api.evaluateTrip({
+            pickup: pickup,
+            destination: destination,
+            pickupGeo: pickupGeo,
+            destinationGeo: destinationGeo
+        });
+        decision.pickupGeo = pickupGeo;
+        decision.destinationGeo = destinationGeo;
+        return decision;
+    }
+
+    function serviceAreaError(decision) {
+        var err = new Error(decision.message);
+        err.serviceArea = true;
+        err.code = decision.code;
+        return err;
+    }
+
+    function markServiceAreaFields(pickup, destination, area) {
+        var api = globalThis.MidnightServiceArea;
+        var message = area.message;
+        if (!api) {
+            $('#pickup-error').text(message).show();
+            $('#booking-pickup').closest('.form-group').addClass('has-error');
+            return;
+        }
+        var pickupEnd = api.classifyEnd(pickup, area.pickupGeo || null);
+        var destEnd = api.classifyEnd(destination, area.destinationGeo || null);
+        if (pickupEnd.status === 'outside' || pickupEnd.status === 'unclear') {
+            $('#booking-pickup').closest('.form-group').addClass('has-error');
+            $('#pickup-error').text(message).show();
+        }
+        if (destEnd.status === 'outside' || destEnd.status === 'unclear') {
+            $('#booking-destination').closest('.form-group').addClass('has-error');
+            $('#destination-error').text(message).show();
+        }
     }
 
 
@@ -591,6 +616,13 @@
         if (!isNewScriptReady()) {
             return Promise.resolve({ skipped: true });
         }
+        return decideServiceArea(formData.pickupAddress, formData.destinationAddress).then(function(decision) {
+            if (!decision.ok) return Promise.reject(serviceAreaError(decision));
+            return postCalendarPayload(formData);
+        });
+    }
+
+    function postCalendarPayload(formData) {
         var payload = {
             name: formData.name,
             phone: formData.phone,
@@ -939,6 +971,13 @@
      * Never claim booked/confirmed.
      */
     function submitToGoogleSheets(submissionData) {
+        return decideServiceArea(submissionData.pickupAddress, submissionData.destinationAddress).then(function(decision) {
+            if (!decision.ok) return Promise.reject(serviceAreaError(decision));
+            return postGoogleForm(submissionData);
+        });
+    }
+
+    function postGoogleForm(submissionData) {
         return new Promise(function(resolve, reject) {
             var googleFormData = buildGoogleFormData(submissionData);
             var controller = new AbortController();
@@ -1515,26 +1554,12 @@
                 $('#booking-pickup').closest('.form-group').addClass('has-error');
                 $('#pickup-error').text('Pickup address is required').show();
                 isValid = false;
-            } else {
-                let excludedPickup = addressHasExcludedTown(formData.pickupAddress);
-                if (!excludedPickup) {
-                    excludedPickup = await excludedTownFromCensus(formData.pickupAddress);
-                }
-                if (excludedPickup) {
-                    const msg = 'We do not serve ' + excludedPickup + '. Please call (980) 422-9125 with questions.';
-                    errors.push(msg);
-                    $('#booking-pickup').closest('.form-group').addClass('has-error');
-                    $('#pickup-error').text(msg).show();
-                    isValid = false;
-                }
             }
-            if (formData.destinationAddress) {
-                const excludedDest = addressHasExcludedTown(formData.destinationAddress);
-                if (excludedDest) {
-                    const msg = 'We do not serve ' + excludedDest + '. Please call (980) 422-9125 with questions.';
-                    errors.push(msg);
-                    $('#booking-destination').closest('.form-group').addClass('has-error');
-                    $('#destination-error').text(msg).show();
+            if (formData.pickupAddress && formData.destinationAddress) {
+                const area = await decideServiceArea(formData.pickupAddress, formData.destinationAddress);
+                if (!area.ok) {
+                    errors.push(area.message);
+                    markServiceAreaFields(formData.pickupAddress, formData.destinationAddress, area);
                     isValid = false;
                 }
             }
@@ -1668,11 +1693,20 @@
             }
 
             if (errors.length > 0) {
-                let errorHtml = '<div class="alert alert-danger"><strong>Please correct the following:</strong><ul style="margin: 10px 0 0 0; padding-left: 20px;">';
-                errors.forEach(function(error) {
-                    errorHtml += '<li>' + escapeHtml(error) + '</li>';
-                });
-                errorHtml += '</ul></div>';
+                const areaAlone = errors.length === 1 && (
+                    errors[0] === OUT_OF_AREA_MESSAGE ||
+                    errors[0] === UNCLEAR_AREA_MESSAGE
+                );
+                let errorHtml;
+                if (areaAlone) {
+                    errorHtml = '<div class="alert alert-danger">' + escapeHtml(errors[0]) + '</div>';
+                } else {
+                    errorHtml = '<div class="alert alert-danger"><strong>Please correct the following:</strong><ul style="margin: 10px 0 0 0; padding-left: 20px;">';
+                    errors.forEach(function(error) {
+                        errorHtml += '<li>' + escapeHtml(error) + '</li>';
+                    });
+                    errorHtml += '</ul></div>';
+                }
 
                 $('#booking-success').html(errorHtml).show();
                 $('html, body').animate({
@@ -1837,6 +1871,17 @@
                 pendingBookings.splice(0, numBookings);
                 console.log('Cleared pending bookings due to error');
 
+                if (error && error.serviceArea) {
+                    $('#booking-success').html(
+                        '<div class="alert alert-danger">' + escapeHtml(error.message) + '</div>'
+                    ).show();
+                    $submitBtn.html(originalBtnText).prop('disabled', false);
+                    $('html, body').animate({
+                        scrollTop: $('#booking-success').offset().top - 100
+                    }, 500);
+                    return;
+                }
+
                 const errorHtml =
                     '<div class="alert alert-danger">' +
                     '<h4><i class="fa fa-exclamation-triangle"></i> Submission Error</h4>' +
@@ -1883,41 +1928,13 @@
         CLT:{name:'Charlotte Douglas Airport (CLT)',lat:35.2140,lon:-80.9431},
         JQF:{name:'Concord Regional Airport',lat:35.3878,lon:-80.7091}
     };
-    var towns=['Mooresville','Cornelius','Davidson','Huntersville','Troutman','Statesville'];
-    var zips={'28115':'Mooresville','28117':'Mooresville','28035':'Davidson','28036':'Davidson','28070':'Huntersville','28078':'Huntersville','28031':'Cornelius','28166':'Troutman','28625':'Statesville','28677':'Statesville','28687':'Statesville'};
     var geoCache={}, routeCache={}, timer=null, seq=0;
     function q(a){var s='',i=0;while(i<a.length){s+=String.fromCharCode(a[i]^13);i++;}return +s;}
     function esc(s){return String(s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
     function money(n){return '$'+n.toFixed(2);}
-    function norm(s){return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();}
-    function has(text, phrase){return (' '+text+' ').indexOf(' '+phrase+' ')!==-1;}
-    function blocked(text, phrase){return has(text,'not '+phrase)||has(text,'not the '+phrase);}
     function whichAirport(raw){
-        var text=norm(raw);
-        if(!text)return null;
-        var cltWords=['clt','charlotte douglas','douglas international','douglas intl','charlotte airport','charlotte international'];
-        var jqfWords=['jqf','concord airport','concord regional'];
-        function hit(list){
-            for(var i=0;i<list.length;i++){
-                if(has(text,list[i])&&!blocked(text,list[i]))return true;
-            }
-            return false;
-        }
-        var clt=hit(cltWords), jqf=hit(jqfWords);
-        if((text==='airport'||text==='the airport')&&!jqf)clt=true;
-        if(clt&&jqf)return null;
-        if(clt)return 'CLT';
-        if(jqf)return 'JQF';
-        return null;
-    }
-    function townHit(a){
-        var s=String(a||'');
-        for(var i=0;i<towns.length;i++){
-            if(new RegExp('\\b'+towns[i]+'\\b','i').test(s))return towns[i];
-        }
-        var found=s.match(/\b\d{5}\b/g);
-        if(found){for(var j=0;j<found.length;j++){if(zips[found[j]])return zips[found[j]];}}
-        return null;
+        var api=globalThis.MidnightServiceArea;
+        return api?api.whichAirport(raw):null;
     }
     function censusGeo(a){
         return new Promise(function(res,rej){
@@ -1926,7 +1943,7 @@
                 success:function(r){var m=r&&r.result&&r.result.addressMatches;
                     if(m&&m.length&&m[0].coordinates){
                         var c=m[0].addressComponents||{};
-                        res({lat:m[0].coordinates.y,lon:m[0].coordinates.x,city:c.city||'',zip:c.zip||''});
+                        res({lat:m[0].coordinates.y,lon:m[0].coordinates.x,city:c.city||'',zip:c.zip||'',state:c.state||''});
                     }else rej('nomatch');},
                 error:function(){rej('census');}});
         });
@@ -1935,7 +1952,7 @@
         var query=/\bNC\b|north carolina/i.test(a)?a:a+', NC';
         return fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&viewbox=-81.4,35.9,-80.4,35.0&q='+encodeURIComponent(query))
             .then(function(r){return r.json();}).then(function(j){
-                if(j&&j.length)return {lat:+j[0].lat,lon:+j[0].lon,city:'',zip:''};throw 'nomatch';});
+                if(j&&j.length)return {lat:+j[0].lat,lon:+j[0].lon,city:'',zip:'',state:''};throw 'nomatch';});
     }
     function geocode(a){
         var k=a.toLowerCase();
@@ -1974,11 +1991,22 @@
         var rt=$('#booking-round-trip').is(':checked');
         if(pick.length<6||!/\d/.test(pick)){show(ask);return;}
         if(!dest){show(ask);return;}
-        if(!airportYes||!ap||townHit(pick)){show(fb);return;}
+        var api=globalThis.MidnightServiceArea;
+        var prelim=api?api.evaluateTrip({pickup:pick,destination:dest}):{code:'unclear'};
+        if(prelim.code==='outside'){show(esc(api.OUT_OF_AREA_MESSAGE));return;}
+        if(!airportYes||!ap){show(fb);return;}
         show('Figuring your price&hellip;');
         geocode(pick).then(function(g){
             if(my!==seq)return;
-            if(townHit(g.city)||townHit(g.zip))throw 'out';
+            if(api){
+                var decision=api.evaluateTrip({
+                    pickup:pick,
+                    destination:dest,
+                    pickupGeo:{city:g.city||'',state:g.state||'',zip:g.zip||''}
+                });
+                if(decision.code==='outside')throw 'out';
+                if(!decision.ok)throw 'unclear';
+            }
             if(!inArea(g))throw 'area';
             return driveMiles(g,ap);
         }).then(function(mi){
@@ -1988,9 +2016,11 @@
             var card=Math.round(cash*(1+q([61,35,61,62]))*100)/100;
             var label=rt?'Round trip, '+esc(hubs[ap].name)+' and back':'One way to '+esc(hubs[ap].name);
             show('<span class="quote-label">'+label+'</span><br><strong class="quote-total">Cash '+money(cash)+' &middot; Card '+money(card)+'</strong>');
-        }).catch(function(){
+        }).catch(function(err){
             if(my!==seq)return;
             if(groupEventYes()){hideGroupQuote();return;}
+            if(err==='out'&&api){show(esc(api.OUT_OF_AREA_MESSAGE));return;}
+            if(err==='unclear'&&api){show(esc(api.UNCLEAR_MESSAGE));return;}
             show(fb);
         });
     }
