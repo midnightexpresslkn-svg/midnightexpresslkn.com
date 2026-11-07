@@ -32,4 +32,4 @@ Not-served ZIPs: 28031 Cornelius, 28035 and 28036 Davidson, 28070 and 28078 Hunt
 
 ## What still needs the owner
 
-The calendar event is created by the Google Apps Script web app. That project is not in this repository. The website refuses before it sends the post. A person who posts straight to the script URL would skip this check until the same `evaluateTrip` rule is added inside that script.
+The calendar event is created by the Google Apps Script web app. Its source is `apps-script/Code.gs`, and it runs from the owner's Google account, not from this static site. The website refuses before it sends the post. A person who posts straight to the script URL would skip this check until the same `evaluateTrip` rule is added inside that script.

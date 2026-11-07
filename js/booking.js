@@ -31,6 +31,7 @@
      * Same deployment as BOOKINGS_API_URL (GET busy slots). No-op only if placeholder.
      */
     const NEW_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyUfrtvd64b5GKnkaHONJ7YDGGAXAAWGTxYK3lBASguhUjlO_iXXHiM4-iflODhJTYP4w/exec';
+    globalThis.MIDNIGHT_BOOKING_SCRIPT_URL = NEW_SCRIPT_URL;
 
     var OUT_OF_AREA_MESSAGE = "Sorry, we don't service that area.";
     var UNCLEAR_AREA_MESSAGE = "Please include the town and state, for example Denver, NC.";
@@ -1924,8 +1925,12 @@
     if(!$)return;
     var fb='We\'ll confirm your price when we call.';
     var ask='Enter your pickup address and airport to see your price.';
+    // lat/lon is the passenger curb, kept so the old airfield pin is not reused.
+    // 35.2140, -80.9431 is the CLT airfield reference point, not the terminal.
+    // Routing to that pin was 32.9 miles from 7740 Marlette Ln. The quote asks
+    // Google for driving distance to the airport place, the same search as the phone.
     var hubs={
-        CLT:{name:'Charlotte Douglas Airport (CLT)',lat:35.2140,lon:-80.9431},
+        CLT:{name:'Charlotte Douglas Airport (CLT)',lat:35.2224,lon:-80.9423},
         JQF:{name:'Concord Regional Airport',lat:35.3878,lon:-80.7091}
     };
     var geoCache={}, routeCache={}, timer=null, seq=0;
@@ -1948,29 +1953,56 @@
                 error:function(){rej('census');}});
         });
     }
-    function osmGeo(a){
-        var query=/\bNC\b|north carolina/i.test(a)?a:a+', NC';
-        return fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&viewbox=-81.4,35.9,-80.4,35.0&q='+encodeURIComponent(query))
-            .then(function(r){return r.json();}).then(function(j){
-                if(j&&j.length)return {lat:+j[0].lat,lon:+j[0].lon,city:'',zip:'',state:''};throw 'nomatch';});
-    }
     function geocode(a){
         var k=a.toLowerCase();
         if(geoCache[k])return geoCache[k];
-        var p=censusGeo(a).catch(function(){return osmGeo(a);});
+        var p=censusGeo(a);
         geoCache[k]=p; p.catch(function(){delete geoCache[k];});
         return p;
     }
     function inArea(g){return g.lat>34.9&&g.lat<36.2&&g.lon>-81.8&&g.lon<-80.2;}
-    function driveMiles(g,ap){
-        var k=g.lat.toFixed(5)+','+g.lon.toFixed(5)+'>'+ap;
+    function googleMiles(origin,ap){
+        var lib=globalThis.MidnightQuoteMiles;
+        var url=globalThis.MIDNIGHT_BOOKING_SCRIPT_URL||'';
+        if(!lib||url.indexOf('http')!==0)return Promise.reject('google');
+        var k=String(origin).toLowerCase()+'>'+ap;
         if(routeCache[k])return routeCache[k];
-        var A=hubs[ap];
-        var p=fetch('https://router.project-osrm.org/route/v1/driving/'+g.lon+','+g.lat+';'+A.lon+','+A.lat+'?overview=false')
-            .then(function(r){return r.json();}).then(function(j){
-                if(j&&j.code==='Ok'&&j.routes&&j.routes.length)return j.routes[0].distance/1609.344;throw 'noroute';});
+        var p=new Promise(function(res,rej){
+            $.ajax({
+                url:url,
+                data:{action:'miles',origin:origin,airport:ap},
+                dataType:'jsonp',
+                timeout:12000,
+                cache:true,
+                success:function(r){
+                    var mi=lib.milesFromPayload(r);
+                    if(mi==null)rej('nomiles');
+                    else res(mi);
+                },
+                error:function(){rej('google');}
+            });
+        });
         routeCache[k]=p; p.catch(function(){delete routeCache[k];});
         return p;
+    }
+    function readyOrigin(pick,dest,prelim,api){
+        if(prelim.ok)return Promise.resolve(pick);
+        return geocode(pick).then(function(g){
+            if(api){
+                var decision=api.evaluateTrip({
+                    pickup:pick,
+                    destination:dest,
+                    pickupGeo:{city:g.city||'',state:g.state||'',zip:g.zip||''}
+                });
+                if(decision.code==='outside')throw 'out';
+                if(!decision.ok)throw 'unclear';
+            }
+            if(!inArea(g))throw 'area';
+            return (+g.lat).toFixed(6)+','+(+g.lon).toFixed(6);
+        },function(err){
+            if(err==='nomatch'||err==='census')throw 'unclear';
+            throw err;
+        });
     }
     function show(html){var $d=$('#quote-details');if($d.length)$d.html(html);}
     function groupEventYes(){
@@ -1996,21 +2028,12 @@
         if(prelim.code==='outside'){show(esc(api.OUT_OF_AREA_MESSAGE));return;}
         if(!airportYes||!ap){show(fb);return;}
         show('Figuring your price&hellip;');
-        geocode(pick).then(function(g){
+        readyOrigin(pick,dest,prelim,api).then(function(origin){
             if(my!==seq)return;
-            if(api){
-                var decision=api.evaluateTrip({
-                    pickup:pick,
-                    destination:dest,
-                    pickupGeo:{city:g.city||'',state:g.state||'',zip:g.zip||''}
-                });
-                if(decision.code==='outside')throw 'out';
-                if(!decision.ok)throw 'unclear';
-            }
-            if(!inArea(g))throw 'area';
-            return driveMiles(g,ap);
+            return googleMiles(origin,ap);
         }).then(function(mi){
             if(my!==seq||groupEventYes()){if(groupEventYes())hideGroupQuote();return;}
+            if(typeof mi!=='number'||!isFinite(mi)||mi<=0){show(fb);return;}
             var one=Math.round(Math.max(q([58,61]),mi*q([63,35,58,56]))*100)/100;
             var cash=rt?one*2:one;
             var card=Math.round(cash*(1+q([61,35,61,62]))*100)/100;

@@ -15,7 +15,7 @@ export default defineConfig({
     },
     coverage: {
       provider: "v8",
-      include: ["js/booking.js", "js/service-area.js"],
+      include: ["js/booking.js", "js/service-area.js", "js/quote-miles.js"],
       reporter: ["text", "json-summary", "lcov"],
       reportsDirectory: "coverage",
       thresholds: {
@@ -24,6 +24,13 @@ export default defineConfig({
         functions: 70,
         branches: 45,
         "js/service-area.js": {
+          lines: 100,
+          statements: 100,
+          functions: 100,
+          branches: 100,
+          perFile: true,
+        },
+        "js/quote-miles.js": {
           lines: 100,
           statements: 100,
           functions: 100,

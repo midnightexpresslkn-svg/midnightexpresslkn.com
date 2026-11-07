@@ -10,7 +10,7 @@ npx playwright install chromium
 npm test
 ```
 
-`npm test` checks `js/service-area.js`, `js/booking.js`, and `js/booking.min.js` with `node --check`, then runs Vitest (with coverage) and the Playwright browser checks.
+`npm test` checks `js/service-area.js`, `js/quote-miles.js`, `js/booking.js`, and `js/booking.min.js` with `node --check`, then runs Vitest (with coverage) and the Playwright browser checks.
 
 `npm run verify` is the single gate. It runs those checks plus ESLint, HTML validation, Prettier, `npm audit`, and gitleaks. `npm install` points Git at `.githooks/pre-commit`, which runs `npm run verify` before a commit. Both the command and the hook were added with the service-area check.
 
