@@ -187,7 +187,7 @@ try {
     statements: summary.statements.pct,
     functions: summary.functions.pct,
     branches: summary.branches.pct,
-    thresholds: { lines: 58, statements: 58, functions: 70, branches: 45 },
+    thresholds: { lines: 70, statements: 71, functions: 79, branches: 64 },
   };
 } catch {
   addFailure(

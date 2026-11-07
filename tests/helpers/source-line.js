@@ -53,6 +53,7 @@ export const SOURCE = {
     ),
   drivers: () => sourceLine("js/booking.js", "const DRIVER_COUNT = 2;"),
   group: () => sourceLine("js/booking.js", "function updateTripLayout()"),
+  pricing: () => sourceLine("index.html", 'id="group-pricing-note"'),
   escape: () => sourceLine("js/booking.js", "function escapeHtml(value)"),
   review: () => sourceLine("index.html", "Leave a review on Google"),
   manifest: () => sourceLine("manifest.webmanifest", '"start_url"'),

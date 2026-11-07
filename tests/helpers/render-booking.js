@@ -110,6 +110,7 @@ export async function renderBooking(script, options = {}) {
     censusZip: options.censusZip ?? "28037",
     lat: options.lat ?? 35.53,
     lon: options.lon ?? -81.03,
+    places: options.places ?? null,
     censusMode: options.censusMode ?? "ok",
     routeMode: options.routeMode ?? "ok",
     failPost: options.failPost ?? false,
@@ -121,8 +122,18 @@ export async function renderBooking(script, options = {}) {
     const url = settings.url || "";
     const host = hostnameOf(url);
     const method = (settings.method || settings.type || "GET").toUpperCase();
-    state.requests.push({ via: "ajax", method, url, mocked: true });
+    state.requests.push({
+      via: "ajax",
+      method,
+      url,
+      address: settings.data && settings.data.address,
+      mocked: true,
+    });
     if (host === "geocoding.geo.census.gov") {
+      const place =
+        state.places && settings.data
+          ? state.places[settings.data.address]
+          : null;
       if (state.censusMode === "error") {
         settings.error && settings.error({}, "error", "mocked");
       } else if (state.censusMode === "miss") {
@@ -134,11 +145,14 @@ export async function renderBooking(script, options = {}) {
             result: {
               addressMatches: [
                 {
-                  coordinates: { x: state.lon, y: state.lat },
+                  coordinates: {
+                    x: place ? place.lon : state.lon,
+                    y: place ? place.lat : state.lat,
+                  },
                   addressComponents: {
-                    city: state.censusCity,
-                    state: state.censusState,
-                    zip: state.censusZip,
+                    city: place ? place.city : state.censusCity,
+                    state: place ? place.state : state.censusState,
+                    zip: place ? place.zip : state.censusZip,
                   },
                 },
               ],
@@ -163,9 +177,25 @@ export async function renderBooking(script, options = {}) {
     }
     if (host === "router.project-osrm.org") {
       if (state.routeMode === "error") return jsonResponse({ code: "NoRoute" });
+      let miles = state.miles;
+      if (state.places) {
+        const match = href.match(/driving\/([-\d.]+),([-\d.]+);/);
+        if (match) {
+          const lon = Number(match[1]);
+          const lat = Number(match[2]);
+          for (const place of Object.values(state.places)) {
+            if (
+              Math.abs(place.lon - lon) < 0.00001 &&
+              Math.abs(place.lat - lat) < 0.00001
+            ) {
+              miles = place.miles;
+            }
+          }
+        }
+      }
       return jsonResponse({
         code: "Ok",
-        routes: [{ distance: state.miles * 1609.344 }],
+        routes: [{ distance: miles * 1609.344 }],
       });
     }
     if (host === "nominatim.openstreetmap.org") {

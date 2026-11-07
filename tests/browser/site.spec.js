@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { hostnameOf } from "../helpers/hostname.js";
 
-async function installMocks(page, { miles = 10 } = {}) {
+async function installMocks(page, { miles = 10, bookings = [] } = {}) {
   const posts = [];
   await page.route("**/*", async (route) => {
     const request = route.request();
@@ -62,7 +62,7 @@ async function installMocks(page, { miles = 10 } = {}) {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: "[]",
+        body: JSON.stringify(bookings),
       });
       return;
     }
@@ -108,6 +108,14 @@ test.describe("booking page", () => {
     await page.locator("#trip-type").selectOption("group");
     await expect(page.locator("#group-call-note")).toBeVisible();
     await expect(page.locator("#group-call-note")).not.toContainText("$");
+    const pricing = page.locator("#group-pricing-note");
+    await expect(pricing).toBeVisible();
+    await expect(pricing).toHaveText("Call for pricing: (980) 422-9125");
+    await expect(pricing.getByRole("link")).toHaveAttribute(
+      "href",
+      "tel:+19804229125",
+    );
+    await expect(page.locator("#group-fields")).not.toContainText(/\$\d/);
     await expect(page.locator("#booking-quote")).toBeHidden();
     await expect(
       page.getByRole("button", { name: /request booking/i }),
@@ -142,6 +150,68 @@ test.describe("booking page", () => {
     await expect(result).toHaveText("Sorry, we don't service that area.");
     await expect(result).not.toContainText("980");
     await expect(result).not.toContainText(/call/i);
+    expect(posts).toEqual([]);
+  });
+
+  test("accepts one overlapping ride and refuses the third", async ({
+    page,
+  }) => {
+    const at = new Date(2026, 11, 15, 10, 0, 0, 0).toISOString();
+    const posts = await installMocks(page, {
+      bookings: [{ datetime: at }],
+    });
+    await page.goto("/");
+    await page.locator("#trip-type").selectOption("airport");
+    await page.locator("#booking-name").fill("TEST, DO NOT BOOK");
+    await page.locator("#booking-phone").fill("9804229125");
+    await page.locator("#booking-passengers").fill("2");
+    await page
+      .getByPlaceholder("123 Main Street, Denver NC 28037")
+      .fill("123 Main Street, Denver NC 28037");
+    await page.getByPlaceholder("CLT Airport").fill("CLT");
+    await page.locator("#booking-date").evaluate((el) => {
+      el._flatpickr.setDate("2026-12-15", true);
+      el.value = "2026-12-15";
+    });
+    await page.locator("#booking-time").evaluate((el) => {
+      el._flatpickr.setDate("10:00:00", true);
+      el.value = "10:00:00";
+    });
+    await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
+    await expect(page.locator("#booking-success")).toContainText(
+      "Request received",
+    );
+    expect(posts.length).toBeGreaterThan(0);
+  });
+
+  test("refuses a third ride when both drivers are already busy", async ({
+    page,
+  }) => {
+    const at = new Date(2026, 11, 15, 10, 0, 0, 0).toISOString();
+    const posts = await installMocks(page, {
+      bookings: [{ datetime: at }, { datetime: at }],
+    });
+    await page.goto("/");
+    await page.locator("#trip-type").selectOption("airport");
+    await page.locator("#booking-name").fill("TEST, DO NOT BOOK");
+    await page.locator("#booking-phone").fill("9804229125");
+    await page.locator("#booking-passengers").fill("2");
+    await page
+      .getByPlaceholder("123 Main Street, Denver NC 28037")
+      .fill("123 Main Street, Denver NC 28037");
+    await page.getByPlaceholder("CLT Airport").fill("CLT");
+    await page.locator("#booking-date").evaluate((el) => {
+      el._flatpickr.setDate("2026-12-15", true);
+      el.value = "2026-12-15";
+    });
+    await page.locator("#booking-time").evaluate((el) => {
+      el._flatpickr.setDate("10:00:00", true);
+      el.value = "10:00:00";
+    });
+    await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
+    await expect(page.locator("#booking-success")).toContainText(
+      "That time is booked",
+    );
     expect(posts).toEqual([]);
   });
 
