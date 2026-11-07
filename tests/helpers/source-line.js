@@ -52,7 +52,7 @@ export const SOURCE = {
       "return Math.abs(proposedMinutes - existingMinutes) < RIDE_DURATION_MINUTES;",
     ),
   drivers: () => sourceLine("js/booking.js", "const DRIVER_COUNT = 2;"),
-  group: () => sourceLine("js/booking.js", "function updateGroupEventUI()"),
+  group: () => sourceLine("js/booking.js", "function updateTripLayout()"),
   escape: () => sourceLine("js/booking.js", "function escapeHtml(value)"),
   review: () => sourceLine("index.html", "Leave a review on Google"),
   manifest: () => sourceLine("manifest.webmanifest", '"start_url"'),
