@@ -1,4 +1,5 @@
 import { afterEach, describe, it } from "vitest";
+import { waitFor } from "@testing-library/dom";
 import { SOURCE } from "./helpers/source-line.js";
 import { check, role, roles } from "./helpers/failure.js";
 import {
@@ -37,6 +38,18 @@ function quoteTotal(document) {
 function quoteLabel(document) {
   return document.querySelector(".quote-label")?.textContent?.trim() || "";
 }
+
+function milesCalls(state) {
+  return state.requests.filter(
+    (request) => request.data && request.data.action === "miles",
+  );
+}
+
+function sawHost(state, host) {
+  return state.requests.some((request) => String(request.url).includes(host));
+}
+
+const marlette = "7740 Marlette Ln, Sherrills Ford, NC 28673";
 
 describe("booking", () => {
   describe.each(scripts)("%s", (script) => {
@@ -231,6 +244,384 @@ describe("booking", () => {
           source: SOURCE.serviceArea,
           loaded: script,
         });
+        check(milesCalls(view.state).length, 0, {
+          label: "excluded town does not ask Google for miles",
+          source: SOURCE.serviceArea,
+          loaded: script,
+        });
+      });
+    });
+
+    describe("google driving distance", () => {
+      it("prices 7740 Marlette Ln from Google's meters for 29.0 miles", async () => {
+        const view = await renderBooking(script, { miles: 29 });
+        const text = await showQuote(view, {
+          pickup: marlette,
+          destination: "CLT",
+        });
+        check(
+          totals(29),
+          { cash: "79.75", card: "82.14" },
+          {
+            label: "29.0-mile fare",
+            source: SOURCE.quote,
+            loaded: script,
+          },
+        );
+        check(quoteTotal(view.document), "Cash $79.75 · Card $82.14", {
+          label: "Marlette to CLT uses Google's 29.0 miles",
+          source: SOURCE.quote,
+          loaded: script,
+        });
+        check(
+          quoteLabel(view.document),
+          "One way to Charlotte Douglas Airport (CLT)",
+          {
+            label: "Marlette quote names CLT",
+            source: SOURCE.airport,
+            loaded: script,
+          },
+        );
+        check(/2\.75|per[\s-]?mile|\$\s*\/\s*mi|\bmiles\b/i.test(text), false, {
+          label: "Google quote shows no rate or mile count",
+          source: SOURCE.quote,
+          loaded: script,
+        });
+        const calls = milesCalls(view.state);
+        check(calls.length > 0, true, {
+          label: "quote asks the Apps Script for driving meters",
+          source: SOURCE.quote,
+          loaded: script,
+        });
+        check(
+          calls.every(
+            (call) =>
+              call.data.origin === marlette && call.data.airport === "CLT",
+          ),
+          true,
+          {
+            label: "Google origin is the typed address, not the airfield pin",
+            source: SOURCE.quote,
+            loaded: script,
+          },
+        );
+        check(sawHost(view.state, "router.project-osrm.org"), false, {
+          label: "quote does not use the OSRM demo router",
+          source: SOURCE.quote,
+          loaded: script,
+        });
+        check(sawHost(view.state, "nominatim.openstreetmap.org"), false, {
+          label: "a full NC address is not sent to Nominatim",
+          source: SOURCE.quote,
+          loaded: script,
+        });
+      });
+
+      it("doubles the Google fare for a round trip", async () => {
+        const view = await renderBooking(script, { miles: 29 });
+        await showQuote(view, {
+          pickup: marlette,
+          destination: "Charlotte Douglas",
+          roundTrip: true,
+        });
+        check(quoteTotal(view.document), "Cash $159.50 · Card $164.29", {
+          label: "round trip doubles the Google fare before the card fee",
+          source: SOURCE.quote,
+          loaded: script,
+        });
+      });
+
+      it("ignores a shorter miles hint and keeps Google's meters", async () => {
+        const view = await renderBooking(script, {
+          miles: 29,
+          routeMode: "hint",
+        });
+        await showQuote(view, { pickup: marlette, destination: "CLT" });
+        check(quoteTotal(view.document), "Cash $79.75 · Card $82.14", {
+          label: "a smaller miles field cannot undercut Google",
+          source: SOURCE.quote,
+          loaded: script,
+        });
+      });
+
+      it.each(["error", "bad", "legacy", "zero"])(
+        "shows no fare when Google distance is %s",
+        async (routeMode) => {
+          const view = await renderBooking(script, { miles: 10, routeMode });
+          const text = await showQuote(view, {
+            pickup: marlette,
+            destination: "CLT",
+          });
+          check(text, "We'll confirm your price when we call.", {
+            label: `${routeMode} does not invent a fare`,
+            source: SOURCE.quote,
+            loaded: script,
+          });
+          check(text.includes("$"), false, {
+            label: `${routeMode} shows no dollar amount`,
+            source: SOURCE.quote,
+            loaded: script,
+          });
+          check(sawHost(view.state, "router.project-osrm.org"), false, {
+            label: `${routeMode} does not fall back to a shorter OSRM trip`,
+            source: SOURCE.quote,
+            loaded: script,
+          });
+        },
+      );
+
+      it("still quotes a full address when the census geocoder is down", async () => {
+        const view = await renderBooking(script, {
+          miles: 29,
+          censusMode: "error",
+        });
+        await showQuote(view, { pickup: marlette, destination: "CLT" });
+        check(quoteTotal(view.document), "Cash $79.75 · Card $82.14", {
+          label: "served address does not need Census to price",
+          source: SOURCE.quote,
+          loaded: script,
+        });
+      });
+
+      it("sends census coordinates when the typed town is ambiguous", async () => {
+        const view = await renderBooking(script, {
+          miles: 12,
+          lat: 35.5312,
+          lon: -81.0294,
+          censusCity: "Denver",
+          censusState: "NC",
+          censusZip: "28037",
+        });
+        await showQuote(view, {
+          pickup: "123 Main Street, Denver",
+          destination: "CLT",
+        });
+        check(
+          quoteTotal(view.document),
+          `Cash $${totals(12).cash} · Card $${totals(12).card}`,
+          {
+            label: "ambiguous Denver NC still gets a Google fare",
+            source: SOURCE.quote,
+            loaded: script,
+          },
+        );
+        check(
+          milesCalls(view.state).some(
+            (call) => call.data.origin === "35.531200,-81.029400",
+          ),
+          true,
+          {
+            label: "ambiguous pickup is sent as the census point",
+            source: SOURCE.quote,
+            loaded: script,
+          },
+        );
+      });
+
+      it("refuses a geocoded Charlotte pickup before asking for miles", async () => {
+        const view = await renderBooking(script, {
+          miles: 10,
+          censusCity: "Charlotte",
+          censusState: "NC",
+          censusZip: "28262",
+        });
+        const text = await showQuote(view, {
+          pickup: "8109 Pike Road",
+          destination: "CLT",
+        });
+        check(text, "Sorry, we don't service that area.", {
+          label: "geocoded Charlotte quote is refused",
+          source: SOURCE.serviceArea,
+          loaded: script,
+        });
+        check(milesCalls(view.state).length, 0, {
+          label: "geocoded Charlotte does not ask for miles",
+          source: SOURCE.serviceArea,
+          loaded: script,
+        });
+      });
+
+      it("asks for the town when the geocoder errors", async () => {
+        const view = await renderBooking(script, { censusMode: "error" });
+        const text = await showQuote(view, {
+          pickup: "100 Mystery Road",
+          destination: "CLT",
+        });
+        check(
+          text,
+          "Please include the town and state, for example Denver, NC.",
+          {
+            label: "geocoder error asks for the town",
+            source: SOURCE.serviceArea,
+            loaded: script,
+          },
+        );
+      });
+
+      it("asks for the town when the geocoder returns no city", async () => {
+        const view = await renderBooking(script, {
+          censusCity: "",
+          censusState: "",
+          censusZip: "",
+        });
+        const text = await showQuote(view, {
+          pickup: "100 Mystery Road",
+          destination: "CLT",
+        });
+        check(
+          text,
+          "Please include the town and state, for example Denver, NC.",
+          {
+            label: "geocoder with no city asks for the town",
+            source: SOURCE.serviceArea,
+            loaded: script,
+          },
+        );
+        check(milesCalls(view.state).length, 0, {
+          label: "geocoder with no city does not ask for miles",
+          source: SOURCE.quote,
+          loaded: script,
+        });
+      });
+
+      it("asks for the town when the geocoder misses", async () => {
+        const view = await renderBooking(script, { censusMode: "miss" });
+        const text = await showQuote(view, {
+          pickup: "100 Mystery Road",
+          destination: "CLT",
+        });
+        check(
+          text,
+          "Please include the town and state, for example Denver, NC.",
+          {
+            label: "unresolved pickup asks for the town",
+            source: SOURCE.serviceArea,
+            loaded: script,
+          },
+        );
+        check(text.includes("$"), false, {
+          label: "unresolved pickup has no fare",
+          source: SOURCE.quote,
+          loaded: script,
+        });
+      });
+
+      it("does not price a point outside the driving box", async () => {
+        const view = await renderBooking(script, {
+          miles: 5,
+          lat: 10,
+          lon: 10,
+          censusCity: "Denver",
+          censusState: "NC",
+          censusZip: "28037",
+        });
+        const text = await showQuote(view, {
+          pickup: "100 Mystery Road",
+          destination: "CLT",
+        });
+        check(text, "We'll confirm your price when we call.", {
+          label: "out-of-box point has no computed fare",
+          source: SOURCE.quote,
+          loaded: script,
+        });
+        check(milesCalls(view.state).length, 0, {
+          label: "out-of-box point does not ask for miles",
+          source: SOURCE.quote,
+          loaded: script,
+        });
+      });
+
+      it("reuses a census result for the same pickup", async () => {
+        const view = await renderBooking(script, {
+          miles: 12,
+          lat: 35.5312,
+          lon: -81.0294,
+          censusCity: "Denver",
+          censusState: "NC",
+          censusZip: "28037",
+        });
+        await showQuote(view, {
+          pickup: "123 Main Street, Denver",
+          destination: "CLT",
+        });
+        const census = view.state.requests.filter((request) =>
+          request.url.includes("geocoding.geo.census.gov"),
+        ).length;
+        window.jQuery("#booking-destination").trigger("blur");
+        await waitFor(() => {
+          if (!quoteTotal(view.document).includes("Cash")) {
+            throw new Error("quote not priced");
+          }
+        });
+        check(
+          view.state.requests.filter((request) =>
+            request.url.includes("geocoding.geo.census.gov"),
+          ).length,
+          census,
+          {
+            label: "second lookup uses the census cache",
+            source: SOURCE.quote,
+            loaded: script,
+          },
+        );
+      });
+
+      it("reuses the Google distance when the trip becomes a round trip", async () => {
+        const view = await renderBooking(script, { miles: 29 });
+        await showQuote(view, { pickup: marlette, destination: "CLT" });
+        const before = milesCalls(view.state).length;
+        const box = role(view.document, "checkbox", { name: /round trip/i });
+        box.checked = true;
+        window.jQuery(box).trigger("change");
+        await waitFor(() => {
+          const text = quoteTotal(view.document);
+          if (text !== "Cash $159.50 · Card $164.29") {
+            throw new Error(`waiting for round trip total, saw ${text}`);
+          }
+        });
+        check(milesCalls(view.state).length, before, {
+          label: "round trip toggle does not ask Google again",
+          source: SOURCE.quote,
+          loaded: script,
+        });
+      });
+
+      it("confirms the price when the distance helper is missing", async () => {
+        const view = await renderBooking(script, { miles: 29 });
+        const saved = globalThis.MidnightQuoteMiles;
+        delete globalThis.MidnightQuoteMiles;
+        try {
+          const text = await showQuote(view, {
+            pickup: marlette,
+            destination: "CLT",
+          });
+          check(text, "We'll confirm your price when we call.", {
+            label: "missing distance helper shows no fare",
+            source: SOURCE.quote,
+            loaded: script,
+          });
+        } finally {
+          globalThis.MidnightQuoteMiles = saved;
+        }
+      });
+
+      it("confirms the price when the Apps Script URL is missing", async () => {
+        const view = await renderBooking(script, { miles: 29 });
+        const saved = globalThis.MIDNIGHT_BOOKING_SCRIPT_URL;
+        delete globalThis.MIDNIGHT_BOOKING_SCRIPT_URL;
+        try {
+          const text = await showQuote(view, {
+            pickup: marlette,
+            destination: "CLT",
+          });
+          check(text, "We'll confirm your price when we call.", {
+            label: "missing script URL shows no fare",
+            source: SOURCE.quote,
+            loaded: script,
+          });
+        } finally {
+          globalThis.MIDNIGHT_BOOKING_SCRIPT_URL = saved;
+        }
       });
     });
 

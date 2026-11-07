@@ -3,12 +3,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --check js/service-area.js && node --check js/booking.js && node --check js/booking.min.js && vitest run --coverage && playwright test",
+    "test": "node --check js/service-area.js && node --check js/quote-miles.js && node --check js/booking.js && node --check js/booking.min.js && vitest run --coverage && playwright test",
     "verify": "node scripts/ci.mjs",
     "prepare": "node scripts/install-git-hooks.mjs",
     "test:unit": "vitest run --coverage",
     "test:browser": "playwright test",
-    "lint": "eslint js/booking.js",
+    "lint": "eslint js/booking.js js/quote-miles.js",
     "html": "html-validate index.html",
     "audit": "npm audit --audit-level=high",
     "check": "node scripts/ci.mjs"

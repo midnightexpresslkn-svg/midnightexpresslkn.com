@@ -29,6 +29,17 @@ export default [
   },
   js.configs.recommended,
   {
+    files: ["js/quote-miles.js"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "script",
+      globals: {
+        globalThis: "readonly",
+        isFinite: "readonly",
+      },
+    },
+  },
+  {
     files: ["js/booking.js"],
     languageOptions: {
       ecmaVersion: 2022,

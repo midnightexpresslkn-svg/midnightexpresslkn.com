@@ -18,6 +18,10 @@ const serviceAreaSource = fs.readFileSync(
   path.join(root, "js/service-area.js"),
   "utf8",
 );
+const quoteMilesSource = fs.readFileSync(
+  path.join(root, "js/quote-miles.js"),
+  "utf8",
+);
 const scriptSource = {
   "js/booking.js": fs.readFileSync(path.join(root, "js/booking.js"), "utf8"),
   "js/booking.min.js": fs.readFileSync(
@@ -121,7 +125,13 @@ export async function renderBooking(script, options = {}) {
     const url = settings.url || "";
     const host = hostnameOf(url);
     const method = (settings.method || settings.type || "GET").toUpperCase();
-    state.requests.push({ via: "ajax", method, url, mocked: true });
+    state.requests.push({
+      via: "ajax",
+      method,
+      url,
+      data: settings.data || null,
+      mocked: true,
+    });
     if (host === "geocoding.geo.census.gov") {
       if (state.censusMode === "error") {
         settings.error && settings.error({}, "error", "mocked");
@@ -146,7 +156,26 @@ export async function renderBooking(script, options = {}) {
           });
       }
     } else if (host === "script.google.com") {
-      settings.success && settings.success(state.bookings);
+      const action = settings.data && settings.data.action;
+      if (action === "miles") {
+        const meters = state.miles * 1609.344;
+        if (state.routeMode === "error") {
+          settings.error && settings.error({}, "error", "mocked");
+        } else if (state.routeMode === "bad") {
+          settings.success && settings.success({ ok: false });
+        } else if (state.routeMode === "legacy") {
+          settings.success &&
+            settings.success([{ datetime: "2026-12-15T15:00:00.000Z" }]);
+        } else if (state.routeMode === "zero") {
+          settings.success && settings.success({ ok: true, meters: 0 });
+        } else if (state.routeMode === "hint") {
+          settings.success && settings.success({ ok: true, meters, miles: 1 });
+        } else {
+          settings.success && settings.success({ ok: true, meters });
+        }
+      } else {
+        settings.success && settings.success(state.bookings);
+      }
     } else if (settings.error) {
       settings.error({}, "error", "blocked");
     }
@@ -162,10 +191,9 @@ export async function renderBooking(script, options = {}) {
       throw new Error("mocked network failure");
     }
     if (host === "router.project-osrm.org") {
-      if (state.routeMode === "error") return jsonResponse({ code: "NoRoute" });
       return jsonResponse({
         code: "Ok",
-        routes: [{ distance: state.miles * 1609.344 }],
+        routes: [{ distance: 1609.344 }],
       });
     }
     if (host === "nominatim.openstreetmap.org") {
@@ -200,6 +228,7 @@ export async function renderBooking(script, options = {}) {
   console.warn = quiet;
 
   run(serviceAreaSource, "js/service-area.js");
+  run(quoteMilesSource, "js/quote-miles.js");
   run(scriptSource[script], script);
   await new Promise((resolve) => nativeSetTimeout(resolve, 0));
   return { script, document, window, state, $: window.jQuery };

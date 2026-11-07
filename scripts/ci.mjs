@@ -54,6 +54,7 @@ console.log("\n== syntax ==");
 let syntaxOk = true;
 for (const file of [
   "js/service-area.js",
+  "js/quote-miles.js",
   "js/booking.js",
   "js/booking.min.js",
 ]) {
@@ -68,7 +69,15 @@ checks.syntax = { status: syntaxOk ? "pass" : "fail" };
 console.log("\n== eslint ==");
 const eslint = run(
   "npx",
-  ["eslint", "js/booking.js", "-f", "json", "-o", "test-results/eslint.json"],
+  [
+    "eslint",
+    "js/booking.js",
+    "js/quote-miles.js",
+    "-f",
+    "json",
+    "-o",
+    "test-results/eslint.json",
+  ],
   {
     stdio: "inherit",
   },

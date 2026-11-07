@@ -6,6 +6,7 @@ describe("scripts", () => {
   it("booking scripts pass node --check", () => {
     for (const file of [
       "js/service-area.js",
+      "js/quote-miles.js",
       "js/booking.js",
       "js/booking.min.js",
     ]) {

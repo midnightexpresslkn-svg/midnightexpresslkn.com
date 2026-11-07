@@ -14,8 +14,8 @@
  *
  * The live calendar is created in the browser by posting to Google Forms and
  * the calendar Apps Script. Both of those posts call evaluateTrip first.
- * The Apps Script project is not in this repository, so a request built by
- * hand against that URL is not covered until the same check is pasted there.
+ * The script source is apps-script/Code.gs. A request built by hand against
+ * the deployed URL is not covered until the same check is pasted there.
  */
 (function (root) {
   "use strict";
