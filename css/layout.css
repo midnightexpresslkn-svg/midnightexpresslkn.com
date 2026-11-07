@@ -93,18 +93,18 @@ header.hero img.header-logo,
     width: 100%;
     margin: 0;
     position: relative;
-    text-align: center;
+    text-align: left;
   }
 
   .navbar-fixed-top .navbar-brand {
-    float: none;
+    float: left;
     display: inline-flex;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     gap: 8px;
     height: auto;
     max-width: calc(100% - 96px);
-    margin: 8px auto;
+    margin: 8px 0;
     padding: 4px 0;
     font-size: 12px;
     line-height: 1.2;
