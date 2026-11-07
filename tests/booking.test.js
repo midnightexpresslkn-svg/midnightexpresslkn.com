@@ -172,7 +172,6 @@ describe("booking", () => {
         "Airport Road, Denver NC",
         "Concord Mills",
         "RDU Airport",
-        "Charlotte Motor Speedway",
         "not CLT",
         "CLT and Concord Regional",
       ])("shows no price for lookalike destination %s", async (destination) => {
@@ -193,15 +192,43 @@ describe("booking", () => {
         });
       });
 
+      it("refuses Charlotte Motor Speedway instead of pricing it", async () => {
+        const view = await renderBooking(script, { miles: 40 });
+        const text = await showQuote(view, {
+          pickup: "123 Main Street, Denver NC 28037",
+          destination: "Charlotte Motor Speedway",
+        });
+        check(text, "Sorry, we don't service that area.", {
+          label: "Charlotte Motor Speedway is outside the service area",
+          source: SOURCE.serviceArea,
+          loaded: script,
+        });
+        check(text.includes("$"), false, {
+          label: "Charlotte Motor Speedway shows no fare",
+          source: SOURCE.quote,
+          loaded: script,
+        });
+      });
+
       it("shows no price when the pickup is an excluded town", async () => {
         const view = await renderBooking(script, { miles: 40 });
         const text = await showQuote(view, {
           pickup: "100 Main St, Mooresville NC 28115",
           destination: "CLT",
         });
-        check(text, "We'll confirm your price when we call.", {
+        check(text, "Sorry, we don't service that area.", {
           label: "excluded town quote",
-          source: SOURCE.excluded,
+          source: SOURCE.serviceArea,
+          loaded: script,
+        });
+        check(text.includes("$"), false, {
+          label: "excluded town quote has no fare",
+          source: SOURCE.serviceArea,
+          loaded: script,
+        });
+        check(/call|980|422-9125/i.test(text), false, {
+          label: "excluded town quote does not ask for a call",
+          source: SOURCE.serviceArea,
           loaded: script,
         });
       });
@@ -234,17 +261,16 @@ describe("booking", () => {
         const view = await renderBooking(script);
         await fillValid(view, { pickup: `100 Main St, ${town} NC` });
         await submitForm(view);
-        check(
-          resultText(view.document).includes(`We do not serve ${town}`),
-          true,
-          {
-            label: `refuse ${town}`,
-            expected: `We do not serve ${town}`,
-            actual: resultText(view.document),
-            source: SOURCE.excluded,
-            loaded: script,
-          },
-        );
+        check(resultText(view.document), "Sorry, we don't service that area.", {
+          label: `refuse ${town}`,
+          source: SOURCE.serviceArea,
+          loaded: script,
+        });
+        check(/call|980|422-9125/i.test(resultText(view.document)), false, {
+          label: `${town} refusal does not ask for a call`,
+          source: SOURCE.serviceArea,
+          loaded: script,
+        });
         check(bookingPosts(view.state).length, 0, {
           label: `${town} sends no booking`,
           source: SOURCE.excluded,
@@ -256,17 +282,11 @@ describe("booking", () => {
         const view = await renderBooking(script);
         await fillValid(view, { pickup: `100 Main St ${zip}` });
         await submitForm(view);
-        check(
-          resultText(view.document).includes(`We do not serve ${town}`),
-          true,
-          {
-            label: `refuse ZIP ${zip}`,
-            expected: `We do not serve ${town}`,
-            actual: resultText(view.document),
-            source: SOURCE.excluded,
-            loaded: script,
-          },
-        );
+        check(resultText(view.document), "Sorry, we don't service that area.", {
+          label: `refuse ZIP ${zip}`,
+          source: SOURCE.serviceArea,
+          loaded: script,
+        });
         check(bookingPosts(view.state).length, 0, {
           label: `ZIP ${zip} sends no booking`,
           source: SOURCE.excluded,
@@ -280,20 +300,297 @@ describe("booking", () => {
           destination: "200 Center St, Statesville NC 28625",
         });
         await submitForm(view);
-        check(
-          resultText(view.document).includes("We do not serve Statesville"),
-          true,
-          {
-            label: "refuse Statesville destination",
-            source: SOURCE.excluded,
-            loaded: script,
-          },
-        );
+        check(resultText(view.document), "Sorry, we don't service that area.", {
+          label: "refuse Statesville destination",
+          source: SOURCE.serviceArea,
+          loaded: script,
+        });
         check(bookingPosts(view.state).length, 0, {
           label: "excluded destination sends no booking",
           source: SOURCE.excluded,
           loaded: script,
         });
+      });
+    });
+
+    describe("service area", () => {
+      const outside = "Sorry, we don't service that area.";
+      const unclear =
+        "Please include the town and state, for example Denver, NC.";
+
+      function refusal(view, label) {
+        check(resultText(view.document), outside, {
+          label,
+          source: SOURCE.serviceArea,
+          loaded: script,
+        });
+        check(/call|980|422-9125/i.test(resultText(view.document)), false, {
+          label: `${label} does not ask for a call`,
+          source: SOURCE.serviceArea,
+          loaded: script,
+        });
+        check(bookingPosts(view.state).length, 0, {
+          label: `${label} sends no booking`,
+          source: SOURCE.serviceArea,
+          loaded: script,
+        });
+      }
+
+      it("rejects a Charlotte pickup with the exact message", async () => {
+        const view = await renderBooking(script);
+        await fillValid(view, {
+          name: "TEST, DO NOT BOOK",
+          pickup: "8109 pike road charlotte",
+          destination: "Suya king restaurant",
+          airport: "No",
+        });
+        await submitForm(view);
+        refusal(view, "Charlotte pickup");
+      });
+
+      it("rejects a Charlotte pickup going to CLT", async () => {
+        const view = await renderBooking(script);
+        await fillValid(view, {
+          name: "TEST, DO NOT BOOK",
+          pickup: "8109 Pike Rd, Charlotte NC 28262",
+          destination: "CLT",
+        });
+        await submitForm(view);
+        refusal(view, "Charlotte to CLT");
+      });
+
+      it("rejects Mooresville", async () => {
+        const view = await renderBooking(script);
+        await fillValid(view, {
+          name: "TEST, DO NOT BOOK",
+          pickup: "100 Main St, Mooresville NC",
+          destination: "CLT",
+        });
+        await submitForm(view);
+        refusal(view, "Mooresville pickup");
+      });
+
+      it("accepts a Denver NC pickup to CLT", async () => {
+        const view = await renderBooking(script, { miles: 10 });
+        await fillValid(view, {
+          name: "TEST, DO NOT BOOK",
+          pickup: "123 Main Street, Denver NC 28037",
+          destination: "CLT",
+        });
+        await submitForm(view);
+        check(resultText(view.document).includes("Request received"), true, {
+          label: "Denver NC to CLT is accepted",
+          expected: "Request received",
+          actual: resultText(view.document),
+          source: SOURCE.serviceArea,
+          loaded: script,
+        });
+        check(resultText(view.document).includes("TEST, DO NOT BOOK"), true, {
+          label: "accepted request uses the test name",
+          source: SOURCE.serviceArea,
+          loaded: script,
+        });
+        check(bookingPosts(view.state).length > 0, true, {
+          label: "Denver NC to CLT sends a mocked request",
+          source: SOURCE.serviceArea,
+          loaded: script,
+        });
+        check(
+          view.state.requests.every((request) => request.mocked),
+          true,
+          {
+            label: "Denver NC to CLT never leaves the test",
+            source: SOURCE.serviceArea,
+            loaded: script,
+          },
+        );
+      });
+
+      it("accepts a CLT pickup with a Sherrills Ford drop-off", async () => {
+        const view = await renderBooking(script);
+        await fillValid(view, {
+          name: "TEST, DO NOT BOOK",
+          pickup: "Charlotte Douglas Airport (CLT)",
+          destination: "100 Lake Shore Drive, Sherrills Ford NC 28673",
+        });
+        await submitForm(view);
+        check(resultText(view.document).includes("Request received"), true, {
+          label: "CLT to Sherrills Ford is accepted",
+          expected: "Request received",
+          actual: resultText(view.document),
+          source: SOURCE.serviceArea,
+          loaded: script,
+        });
+        check(bookingPosts(view.state).length > 0, true, {
+          label: "CLT to Sherrills Ford sends a mocked request",
+          source: SOURCE.serviceArea,
+          loaded: script,
+        });
+      });
+
+      it("accepts a ride between two served towns", async () => {
+        const view = await renderBooking(script);
+        await fillValid(view, {
+          name: "TEST, DO NOT BOOK",
+          pickup: "123 Main Street, Denver NC 28037",
+          destination: "50 School Street, Sherrills Ford NC 28673",
+          airport: "No",
+        });
+        await submitForm(view);
+        check(resultText(view.document).includes("Request received"), true, {
+          label: "Denver to Sherrills Ford is accepted",
+          source: SOURCE.serviceArea,
+          loaded: script,
+        });
+      });
+
+      it("rejects a served pickup when the other end is Charlotte", async () => {
+        const view = await renderBooking(script);
+        await fillValid(view, {
+          name: "TEST, DO NOT BOOK",
+          pickup: "123 Main Street, Denver NC 28037",
+          destination: "100 Trade Street, Charlotte NC",
+          airport: "No",
+        });
+        await submitForm(view);
+        refusal(view, "Denver to Charlotte");
+      });
+
+      it("asks for the town when the place cannot be resolved", async () => {
+        const view = await renderBooking(script, { censusMode: "miss" });
+        await fillValid(view, {
+          name: "TEST, DO NOT BOOK",
+          pickup: "100 Main Street",
+          destination: "200 Second Street",
+          airport: "No",
+        });
+        await submitForm(view);
+        check(resultText(view.document), unclear, {
+          label: "missing town asks for the town and state",
+          source: SOURCE.serviceArea,
+          loaded: script,
+        });
+        check(/call|980|422-9125/i.test(resultText(view.document)), false, {
+          label: "missing town does not ask for a call",
+          source: SOURCE.serviceArea,
+          loaded: script,
+        });
+        check(bookingPosts(view.state).length, 0, {
+          label: "missing town sends no booking",
+          source: SOURCE.serviceArea,
+          loaded: script,
+        });
+      });
+
+      it("rejects a street with no town when geocoding returns Charlotte", async () => {
+        const view = await renderBooking(script, {
+          censusCity: "Charlotte",
+          censusState: "NC",
+          censusZip: "28262",
+        });
+        await fillValid(view, {
+          name: "TEST, DO NOT BOOK",
+          pickup: "8109 Pike Road",
+          destination: "CLT",
+        });
+        await submitForm(view);
+        refusal(view, "geocoded Charlotte");
+      });
+
+      it("rejects Denver when the state is Colorado", async () => {
+        const view = await renderBooking(script);
+        await fillValid(view, {
+          name: "TEST, DO NOT BOOK",
+          pickup: "123 Main Street, Denver CO 80202",
+          destination: "CLT",
+        });
+        await submitForm(view);
+        refusal(view, "Denver CO");
+      });
+
+      it("uses the geocoder to tell Denver NC from Denver with no state", async () => {
+        const confirmed = await renderBooking(script, {
+          censusCity: "Denver",
+          censusState: "NC",
+          censusZip: "28037",
+        });
+        await fillValid(confirmed, {
+          name: "TEST, DO NOT BOOK",
+          pickup: "123 Main Street, Denver",
+          destination: "CLT",
+        });
+        await submitForm(confirmed);
+        check(
+          resultText(confirmed.document).includes("Request received"),
+          true,
+          {
+            label: "geocoded Denver NC is accepted",
+            source: SOURCE.serviceArea,
+            loaded: script,
+          },
+        );
+
+        const colorado = await renderBooking(script, {
+          censusCity: "Denver",
+          censusState: "CO",
+          censusZip: "80202",
+        });
+        await fillValid(colorado, {
+          name: "TEST, DO NOT BOOK",
+          pickup: "123 Main Street, Denver",
+          destination: "CLT",
+        });
+        await submitForm(colorado);
+        refusal(colorado, "geocoded Denver CO");
+      });
+
+      it("accepts a private airfield in Mooresville when the other end is Denver", async () => {
+        const view = await renderBooking(script);
+        await fillValid(view, {
+          name: "TEST, DO NOT BOOK",
+          pickup: "Lake Norman Airpark, Mooresville NC",
+          destination: "123 Main Street, Denver NC 28037",
+          airport: "Yes",
+        });
+        await submitForm(view);
+        check(resultText(view.document).includes("Request received"), true, {
+          label: "Lake Norman Airpark to Denver is accepted",
+          source: SOURCE.serviceArea,
+          loaded: script,
+        });
+      });
+
+      it("rejects a Mooresville house on a street named Airpark", async () => {
+        const view = await renderBooking(script);
+        await fillValid(view, {
+          name: "TEST, DO NOT BOOK",
+          pickup: "123 Airpark Drive, Mooresville NC",
+          destination: "CLT",
+        });
+        await submitForm(view);
+        refusal(view, "Airpark Drive in Mooresville");
+      });
+
+      it("does not book when the service-area checker is missing", async () => {
+        const view = await renderBooking(script);
+        const saved = globalThis.MidnightServiceArea;
+        delete globalThis.MidnightServiceArea;
+        try {
+          await fillValid(view, { name: "TEST, DO NOT BOOK" });
+          await submitForm(view);
+          check(resultText(view.document), unclear, {
+            label: "missing checker does not book",
+            source: SOURCE.serviceArea,
+            loaded: script,
+          });
+          check(bookingPosts(view.state).length, 0, {
+            label: "missing checker sends no booking",
+            source: SOURCE.serviceArea,
+            loaded: script,
+          });
+        } finally {
+          globalThis.MidnightServiceArea = saved;
+        }
       });
     });
 

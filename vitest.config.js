@@ -15,7 +15,7 @@ export default defineConfig({
     },
     coverage: {
       provider: "v8",
-      include: ["js/booking.js"],
+      include: ["js/booking.js", "js/service-area.js"],
       reporter: ["text", "json-summary", "lcov"],
       reportsDirectory: "coverage",
       thresholds: {
@@ -23,6 +23,13 @@ export default defineConfig({
         statements: 58,
         functions: 70,
         branches: 45,
+        "js/service-area.js": {
+          lines: 100,
+          statements: 100,
+          functions: 100,
+          branches: 100,
+          perFile: true,
+        },
       },
     },
   },

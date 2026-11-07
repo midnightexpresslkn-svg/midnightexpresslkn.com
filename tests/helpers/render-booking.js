@@ -14,6 +14,10 @@ const flatpickrSource = fs.readFileSync(
   path.join(root, "js/flatpickr.min.js"),
   "utf8",
 );
+const serviceAreaSource = fs.readFileSync(
+  path.join(root, "js/service-area.js"),
+  "utf8",
+);
 const scriptSource = {
   "js/booking.js": fs.readFileSync(path.join(root, "js/booking.js"), "utf8"),
   "js/booking.min.js": fs.readFileSync(
@@ -102,6 +106,7 @@ export async function renderBooking(script, options = {}) {
     miles: options.miles ?? 10,
     bookings: options.bookings ?? [],
     censusCity: options.censusCity ?? "Denver",
+    censusState: options.censusState ?? "NC",
     censusZip: options.censusZip ?? "28037",
     lat: options.lat ?? 35.53,
     lon: options.lon ?? -81.03,
@@ -132,6 +137,7 @@ export async function renderBooking(script, options = {}) {
                   coordinates: { x: state.lon, y: state.lat },
                   addressComponents: {
                     city: state.censusCity,
+                    state: state.censusState,
                     zip: state.censusZip,
                   },
                 },
@@ -193,6 +199,7 @@ export async function renderBooking(script, options = {}) {
   console.info = quiet;
   console.warn = quiet;
 
+  run(serviceAreaSource, "js/service-area.js");
   run(scriptSource[script], script);
   await new Promise((resolve) => nativeSetTimeout(resolve, 0));
   return { script, document, window, state, $: window.jQuery };
@@ -255,7 +262,10 @@ export function setWhen(document, date, time, prefix = "") {
 
 export async function fillValid(view, overrides = {}) {
   const doc = view.document;
-  setControl(placeholder(doc, "Jane Smith"), overrides.name ?? "Jane Smith");
+  setControl(
+    placeholder(doc, "Jane Smith"),
+    overrides.name ?? "TEST, DO NOT BOOK",
+  );
   setControl(placeholder(doc, "5555551234"), overrides.phone ?? "9804229125");
   setControl(
     placeholder(doc, "email@example.com"),
