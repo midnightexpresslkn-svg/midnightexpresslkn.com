@@ -217,6 +217,14 @@ function setControl(el, value) {
     .trigger("blur");
 }
 
+export function chooseTrip(document, value) {
+  const el = document.querySelector("#trip-type");
+  if (!el) throw new Error("Trip type dropdown is missing");
+  el.value = value;
+  window.jQuery(el).trigger("change");
+  return el;
+}
+
 export function chooseRadio(document, inputName, value, meta = {}) {
   const matches = roles(
     document,
@@ -262,6 +270,9 @@ export function setWhen(document, date, time, prefix = "") {
 
 export async function fillValid(view, overrides = {}) {
   const doc = view.document;
+  const trip =
+    overrides.trip || (overrides.group === "Yes" ? "group" : "airport");
+  chooseTrip(doc, trip);
   setControl(
     placeholder(doc, "Jane Smith"),
     overrides.name ?? "TEST, DO NOT BOOK",
@@ -279,9 +290,24 @@ export async function fillValid(view, overrides = {}) {
     placeholder(doc, "123 Main Street, Denver NC 28037"),
     overrides.pickup ?? "123 Main Street, Denver NC 28037",
   );
-  setControl(placeholder(doc, "CLT Airport"), overrides.destination ?? "CLT");
-  chooseRadio(doc, "airport-trip", overrides.airport ?? "Yes");
-  chooseRadio(doc, "group-event", overrides.group ?? "No");
+  if (trip !== "group") {
+    setControl(placeholder(doc, "CLT Airport"), overrides.destination ?? "CLT");
+  }
+  if (trip === "group") {
+    setControl(
+      doc.querySelector("#group-pickup"),
+      overrides.groupPickup ?? "100 Main St, Denver NC",
+    );
+    setControl(
+      doc.querySelector("#group-dropoff"),
+      overrides.groupDropoff ?? "200 Oak St, Sherrills Ford NC",
+    );
+    setControl(
+      doc.querySelector("#group-description"),
+      overrides.description ?? "Family reunion",
+    );
+    setControl(doc.querySelector("#group-hours"), overrides.hours ?? "3");
+  }
   if (overrides.bags) {
     const bags = role(doc, "checkbox", {
       name: /checking bags/i,
@@ -321,7 +347,7 @@ export async function showQuote(
   view,
   { pickup, destination, roundTrip = false, airport = "Yes" },
 ) {
-  if (airport) chooseRadio(view.document, "airport-trip", airport);
+  chooseTrip(view.document, airport === "No" ? "group" : "airport");
   if (roundTrip) {
     const box = role(view.document, "checkbox", { name: /round trip/i });
     box.checked = true;
