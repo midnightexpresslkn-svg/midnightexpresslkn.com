@@ -171,7 +171,13 @@ export async function renderBooking(script, options = {}) {
     const href = String(url);
     const host = hostnameOf(href);
     const method = (init.method || "GET").toUpperCase();
-    state.requests.push({ via: "fetch", method, url: href, mocked: true });
+    state.requests.push({
+      via: "fetch",
+      method,
+      url: href,
+      body: typeof init.body === "string" ? init.body : "",
+      mocked: true,
+    });
     if (state.failPost && method === "POST") {
       throw new Error("mocked network failure");
     }
@@ -229,6 +235,7 @@ export async function renderBooking(script, options = {}) {
   console.info = quiet;
   console.warn = quiet;
 
+  window.history.replaceState(null, "", options.url || "/");
   run(serviceAreaSource, "js/service-area.js");
   run(scriptSource[script], script);
   await new Promise((resolve) => nativeSetTimeout(resolve, 0));
@@ -320,23 +327,38 @@ export async function fillValid(view, overrides = {}) {
     placeholder(doc, "123 Main Street, Denver NC 28037"),
     overrides.pickup ?? "123 Main Street, Denver NC 28037",
   );
-  if (trip !== "group") {
-    setControl(placeholder(doc, "CLT Airport"), overrides.destination ?? "CLT");
-  }
+  setControl(
+    placeholder(doc, "CLT Airport"),
+    overrides.destination ??
+      (trip === "group" ? "200 Oak St, Sherrills Ford NC" : "CLT"),
+  );
   if (trip === "group") {
-    setControl(
-      doc.querySelector("#group-pickup"),
-      overrides.groupPickup ?? "100 Main St, Denver NC",
-    );
-    setControl(
-      doc.querySelector("#group-dropoff"),
-      overrides.groupDropoff ?? "200 Oak St, Sherrills Ford NC",
-    );
-    setControl(
-      doc.querySelector("#group-description"),
-      overrides.description ?? "Family reunion",
-    );
-    setControl(doc.querySelector("#group-hours"), overrides.hours ?? "3");
+    const groupPickup = doc.querySelector("#group-pickup");
+    const groupDropoff = doc.querySelector("#group-dropoff");
+    const groupDescription = doc.querySelector("#group-description");
+    const groupHours = doc.querySelector("#group-hours");
+    if (groupPickup) {
+      setControl(
+        groupPickup,
+        overrides.groupPickup ?? "100 Main St, Denver NC",
+      );
+    }
+    if (groupDropoff) {
+      setControl(
+        groupDropoff,
+        overrides.groupDropoff ?? "200 Oak St, Sherrills Ford NC",
+      );
+    }
+    if (groupDescription) {
+      setControl(groupDescription, overrides.description ?? "Family reunion");
+    }
+    if (groupHours) setControl(groupHours, overrides.hours ?? "3");
+  }
+  if (overrides.flight) {
+    setControl(doc.querySelector("#booking-flight"), overrides.flight);
+  }
+  if (overrides.notes) {
+    setControl(doc.querySelector("#booking-notes"), overrides.notes);
   }
   if (overrides.bags) {
     const bags = role(doc, "checkbox", {

@@ -56,6 +56,8 @@ for (const file of [
   "js/service-area.js",
   "js/booking.js",
   "js/booking.min.js",
+  "js/install.js",
+  "sw.js",
 ]) {
   const result = run(process.execPath, ["--check", file], { stdio: "inherit" });
   if (result.status !== 0) {
@@ -187,7 +189,7 @@ try {
     statements: summary.statements.pct,
     functions: summary.functions.pct,
     branches: summary.branches.pct,
-    thresholds: { lines: 70, statements: 71, functions: 79, branches: 64 },
+    thresholds: { lines: 72, statements: 72, functions: 79, branches: 65 },
   };
 } catch {
   addFailure(

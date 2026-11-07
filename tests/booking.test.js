@@ -54,6 +54,36 @@ function quotedAddresses(view) {
     .map((request) => request.address);
 }
 
+function shown(element) {
+  let node = element;
+  while (node && node.nodeType === 1) {
+    if (node.hidden) return false;
+    if (node.style && node.style.display === "none") return false;
+    node = node.parentElement;
+  }
+  return Boolean(element);
+}
+
+function visibleFormText(document) {
+  const root = document.querySelector("#bookingForm");
+  const parts = [];
+  const walker = document.createTreeWalker(root, 4);
+  while (walker.nextNode()) {
+    const text = walker.currentNode.textContent || "";
+    if (!text.trim()) continue;
+    if (!shown(walker.currentNode.parentElement)) continue;
+    parts.push(text);
+  }
+  return parts.join(" ").replace(/\s+/g, " ");
+}
+
+function calendarPayload(view) {
+  const post = bookingPosts(view.state).find((request) =>
+    request.url.includes("script.google.com"),
+  );
+  return post && post.body ? JSON.parse(post.body) : null;
+}
+
 describe("booking", () => {
   describe.each(scripts)("%s", (script) => {
     describe("quote", () => {
@@ -863,52 +893,215 @@ describe("booking", () => {
             loaded: script,
           },
         );
-        check(
-          /\$\d/.test(view.document.querySelector("#group-fields").textContent),
-          false,
-          {
-            label: "group form shows no price",
-            source: SOURCE.group,
-            loaded: script,
-          },
-        );
-        check(
-          view.document
-            .querySelector("#group-fields")
-            .textContent.includes("We'll call you to confirm"),
-          true,
-          {
-            label: "group form says we will call",
-            source: SOURCE.group,
-            loaded: script,
-          },
-        );
-        const pricing = view.document.querySelector("#group-pricing-note");
-        const link = pricing?.querySelector("a");
-        check(
-          pricing?.textContent?.replace(/\s+/g, " ").trim(),
-          "Call for pricing: (980) 422-9125",
-          {
-            label: "group form says to call for pricing",
-            actual: pricing?.textContent,
-            source: SOURCE.pricing,
-            loaded: script,
-          },
-        );
-        check(link?.getAttribute("href"), "tel:+19804229125", {
-          label: "pricing number is a phone link",
-          actual: link?.getAttribute("href"),
-          source: SOURCE.pricing,
+        const formText = visibleFormText(view.document);
+        check(/\$\d|price|pricing|fare|\bcost\b/i.test(formText), false, {
+          label: "group form shows no price or cost wording",
+          actual: formText,
+          source: SOURCE.group,
           loaded: script,
         });
-        const groupText =
-          view.document.querySelector("#group-fields").textContent;
-        const pricingAt = groupText.indexOf("Call for pricing");
-        const pickupAt = groupText.indexOf("Pickup location");
-        check(pricingAt >= 0 && pricingAt < pickupAt, true, {
-          label: "call for pricing sits above the group fields",
-          actual: { pricingAt, pickupAt },
-          source: SOURCE.pricing,
+        check(view.document.querySelector("#group-pricing-note"), null, {
+          label: "call for pricing line is gone",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(shown(view.document.querySelector("#booking-name")), true, {
+          label: "group form asks for a name",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(shown(view.document.querySelector("#booking-phone")), true, {
+          label: "group form asks for a phone",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(shown(view.document.querySelector("#booking-email")), true, {
+          label: "group form asks for an email",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(shown(view.document.querySelector("#booking-pickup")), true, {
+          label: "group form asks for a pickup address",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(
+          shown(view.document.querySelector("#booking-destination")),
+          true,
+          {
+            label: "group form asks for a drop-off",
+            source: SOURCE.group,
+            loaded: script,
+          },
+        );
+        check(
+          view.document.querySelector("#destination-label")?.textContent.trim(),
+          "Drop-off / venue *",
+          {
+            label: "drop-off is labeled as the venue",
+            source: SOURCE.group,
+            loaded: script,
+          },
+        );
+        check(shown(view.document.querySelector("#booking-date")), true, {
+          label: "group form asks for a date",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(shown(view.document.querySelector("#booking-time")), true, {
+          label: "group form asks for a pickup time",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(shown(view.document.querySelector("#booking-passengers")), true, {
+          label: "group form asks for passengers",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(
+          shown(view.document.querySelector("#booking-checking-bags")),
+          true,
+          {
+            label: "group form asks about bags",
+            source: SOURCE.group,
+            loaded: script,
+          },
+        );
+        check(shown(view.document.querySelector("#booking-flight")), true, {
+          label: "group form asks for an optional flight number",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(shown(view.document.querySelector("#booking-round-trip")), true, {
+          label: "group form asks about a return trip",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(shown(view.document.querySelector("#booking-notes")), true, {
+          label: "group form asks for notes",
+          source: SOURCE.group,
+          loaded: script,
+        });
+      });
+
+      it("opens the group form from the home page link", async () => {
+        const view = await renderBooking(script, {
+          url: "/?type=group#booking",
+        });
+        const link = view.document.querySelector("#book-group-ride");
+        check(link?.textContent.trim(), "Book a Group Ride", {
+          label: "home page has Book a Group Ride",
+          actual: link?.textContent,
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(link?.getAttribute("href"), "/?type=group#booking", {
+          label: "group link opens the booking form with group selected",
+          actual: link?.getAttribute("href"),
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(view.document.querySelector("#trip-type").value, "group", {
+          label: "type=group preselects Group",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(
+          shown(view.document.querySelector("#booking-destination")),
+          true,
+          {
+            label: "preselected group form is the booking form",
+            source: SOURCE.group,
+            loaded: script,
+          },
+        );
+      });
+
+      it("sends a group booking to the calendar as an unconfirmed group request", async () => {
+        const view = await renderBooking(script);
+        await fillValid(view, {
+          trip: "group",
+          passengers: "4",
+          destination: "200 Oak St, Sherrills Ford NC",
+          bags: true,
+          flight: "AA1234",
+          notes: "reunion",
+          roundTrip: true,
+          returnDate: "2026-12-16",
+          returnTime: "15:00:00",
+          time: "10:00:00",
+        });
+        await submitForm(view);
+        check(resultText(view.document).includes("Request received"), true, {
+          label: "group booking is accepted",
+          actual: resultText(view.document),
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(/\$\d|price|fare/i.test(resultText(view.document)), false, {
+          label: "group confirmation has no price",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        const payload = calendarPayload(view);
+        check(Boolean(payload), true, {
+          label: "group booking posts to the calendar script",
+          actual: payload,
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(payload.groupEvent, "Yes", {
+          label: "calendar post is labeled as a group event",
+          actual: payload.groupEvent,
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(String(payload.specialNotes).includes("Group event"), true, {
+          label: "calendar notes say it is a group event",
+          actual: payload.specialNotes,
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(payload.pickupAddress, "123 Main Street, Denver NC 28037", {
+          label: "group pickup is the address the customer typed",
+          actual: payload.pickupAddress,
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(payload.destinationAddress, "200 Oak St, Sherrills Ford NC", {
+          label: "group drop-off is the venue",
+          actual: payload.destinationAddress,
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(payload.checkingBags, "Yes", {
+          label: "group bags are sent",
+          actual: payload.checkingBags,
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(payload.flightNumber, "AA1234", {
+          label: "group flight number is sent",
+          actual: payload.flightNumber,
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(payload.roundTrip, "Yes", {
+          label: "group return trip is sent",
+          actual: payload.roundTrip,
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(payload.returnTime, "15:00:00", {
+          label: "group return time is sent",
+          actual: payload.returnTime,
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(String(payload.specialNotes).includes("reunion"), true, {
+          label: "group notes are sent",
+          actual: payload.specialNotes,
+          source: SOURCE.group,
           loaded: script,
         });
       });

@@ -8,6 +8,8 @@ describe("scripts", () => {
       "js/service-area.js",
       "js/booking.js",
       "js/booking.min.js",
+      "js/install.js",
+      "sw.js",
     ]) {
       let status = 0;
       let stderr = "";
