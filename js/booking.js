@@ -2152,7 +2152,7 @@
             return driveMiles(g,ap);
         }).then(function(mi){
             if(my!==seq||groupEventYes()){if(groupEventYes())hideGroupQuote();return;}
-            var oneCents=Math.round(Math.max(q([58,61]),mi*q([63,35,58,56]))*100);
+            var oneCents=Math.round(Math.max(q([59,56]),mi*q([63,35,58,56]))*100);
             var cashCents=nearestFive(rt?oneCents*2:oneCents);
             var cardCents=nearestFive(Math.round(cashCents*(1+q([61,35,61,62]))));
             var cash=cashCents/100, card=cardCents/100;
