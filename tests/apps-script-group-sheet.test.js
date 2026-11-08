@@ -162,9 +162,14 @@ describe("group booking sheet", () => {
     });
     check(
       spreadsheets[0].rows[1],
-      ["123 Main Street, Denver NC 28037", "Ada Rider", "9804229125"],
+      [
+        "123 Main Street, Denver NC 28037",
+        "Ada Rider",
+        "9804229125",
+        "ada@example.com",
+      ],
       {
-        label: "the row is only pickup address, name, and phone",
+        label: "the row is pickup address, name, phone, and email",
         actual: spreadsheets[0].rows[1],
         source: "apps-script/Code.gs:1",
       },

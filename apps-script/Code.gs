@@ -162,6 +162,7 @@ function doPost(e) {
         appendGroupBooking_({
           name: name,
           phone: phone,
+          email: email,
           pickup: pickup,
         });
       } catch (sheetErr) {
@@ -380,7 +381,7 @@ function quoteDrivingMeters_(origin, airport) {
 
 var GROUP_BOOKINGS_NAME = "Midnight Express LKN Group Bookings";
 var GROUP_BOOKINGS_PROPERTY = "GROUP_BOOKINGS_SPREADSHEET_ID";
-var GROUP_BOOKINGS_HEADERS = ["Pickup address", "Name", "Phone"];
+var GROUP_BOOKINGS_HEADERS = ["Pickup address", "Name", "Phone", "Email"];
 
 /**
  * Spreadsheet owned by the account that runs this script.
@@ -411,7 +412,7 @@ function groupBookingsSheet_() {
 
 function appendGroupBooking_(row) {
   var sheet = groupBookingsSheet_();
-  sheet.appendRow([row.pickup, row.name, row.phone]);
+  sheet.appendRow([row.pickup, row.name, row.phone, row.email]);
 }
 
 function respond_(obj, callback) {
