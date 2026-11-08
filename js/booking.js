@@ -2061,6 +2061,11 @@
     function q(a){var s='',i=0;while(i<a.length){s+=String.fromCharCode(a[i]^13);i++;}return +s;}
     function esc(s){return String(s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
     function money(n){return '$'+n.toFixed(2);}
+    function nearestFive(cents){
+        var step=500, units=Math.floor(cents/step), rem=cents%step;
+        if(rem>250) units+=1;
+        return units*step;
+    }
     function whichAirport(raw){
         var api=globalThis.MidnightServiceArea;
         return api?api.whichAirport(raw):null;
@@ -2095,9 +2100,17 @@
         var k=g.lat.toFixed(5)+','+g.lon.toFixed(5)+'>'+ap;
         if(routeCache[k])return routeCache[k];
         var A=hubs[ap];
-        var p=fetch('https://router.project-osrm.org/route/v1/driving/'+g.lon+','+g.lat+';'+A.lon+','+A.lat+'?overview=false')
+        var p=fetch('https://router.project-osrm.org/route/v1/driving/'+g.lon+','+g.lat+';'+A.lon+','+A.lat+'?overview=false&alternatives=3')
             .then(function(r){return r.json();}).then(function(j){
-                if(j&&j.code==='Ok'&&j.routes&&j.routes.length)return j.routes[0].distance/1609.344;throw 'noroute';});
+                if(!(j&&j.code==='Ok'&&j.routes&&j.routes.length))throw 'noroute';
+                var best=null;
+                for(var i=0;i<j.routes.length;i++){
+                    var meters=j.routes[i]&&j.routes[i].distance;
+                    if(typeof meters!=='number'||!(meters>0))continue;
+                    if(best===null||meters<best)best=meters;
+                }
+                if(best===null)throw 'noroute';
+                return best/1609.344;});
         routeCache[k]=p; p.catch(function(){delete routeCache[k];});
         return p;
     }
@@ -2147,9 +2160,10 @@
             return driveMiles(g,ap);
         }).then(function(mi){
             if(my!==seq||groupEventYes()){if(groupEventYes())hideGroupQuote();return;}
-            var one=Math.round(Math.max(q([58,61]),mi*q([63,35,58,56]))*100)/100;
-            var cash=rt?one*2:one;
-            var card=Math.round(cash*(1+q([61,35,61,62]))*100)/100;
+            var oneCents=Math.round(Math.max(q([59,56]),mi*q([63,35,58,56]))*100);
+            var cashCents=nearestFive(rt?oneCents*2:oneCents);
+            var cardCents=nearestFive(Math.round(cashCents*(1+q([61,35,61,62]))));
+            var cash=cashCents/100, card=cardCents/100;
             var label=rt?'Round trip, '+esc(hubs[ap].name)+' and back':'One way to '+esc(hubs[ap].name);
             show('<span class="quote-label">'+label+'</span><br><strong class="quote-total">Cash '+money(cash)+' &middot; Card '+money(card)+'</strong>');
         }).catch(function(err){

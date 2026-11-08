@@ -113,6 +113,7 @@ export async function renderBooking(script, options = {}) {
     places: options.places ?? null,
     censusMode: options.censusMode ?? "ok",
     routeMode: options.routeMode ?? "ok",
+    routesMiles: options.routesMiles ?? null,
     failPost: options.failPost ?? false,
     requests: [],
   };
@@ -199,9 +200,12 @@ export async function renderBooking(script, options = {}) {
           }
         }
       }
+      const distances = state.routesMiles || [miles];
       return jsonResponse({
         code: "Ok",
-        routes: [{ distance: miles * 1609.344 }],
+        routes: distances.map((routeMiles) => ({
+          distance: routeMiles * 1609.344,
+        })),
       });
     }
     if (host === "nominatim.openstreetmap.org") {
