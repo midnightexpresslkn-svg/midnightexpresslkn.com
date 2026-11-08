@@ -272,6 +272,9 @@ test.describe("booking page", () => {
     const posts = await installMocks(page, { miles: 12 });
     await page.goto("/");
     await page.locator("#trip-type").selectOption("airport");
+    await expect(page.locator("#address-label")).toHaveText("Home address *");
+    await expect(page.locator("#airport-choice")).toBeVisible();
+    await expect(page.locator("#a-places")).toContainText("Airport");
     await expect(page.locator("#booking-destination")).toBeHidden();
     await expect(page.locator("#airport-choice option")).toHaveText([
       "Select an airport",
@@ -325,6 +328,10 @@ test.describe("booking page", () => {
     await installMocks(page);
     await page.goto("/");
     await page.locator("#trip-type").selectOption("group");
+    await expect(page.locator("#address-label")).toHaveText("Pickup Address *");
+    await expect(page.locator("#destination-label")).toHaveText(
+      "Drop-off / venue *",
+    );
     await expect(page.locator("#airport-choice-row")).toBeHidden();
     await expect(page.locator("#booking-quote")).toBeHidden();
   });
