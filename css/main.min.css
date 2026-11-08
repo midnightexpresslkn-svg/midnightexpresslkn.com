@@ -35,7 +35,7 @@ a:hover,
 a:focus,
 a:active,
 a.active {
-  color: #00BFA6;
+  color: #db3040;
   outline: none;
 }
 h1,
@@ -71,7 +71,7 @@ hr.star-light {
   border-color: white;
 }
 hr.star-light:after {
-  background-color: #00BFA6;
+  background-color: #db3040;
   color: white;
 }
 hr.star-primary {
@@ -230,7 +230,7 @@ section.success {
   margin: 0 auto;
 }
 #portfolio .portfolio-item .portfolio-link .caption {
-  background: rgba(0, 191, 166, 0.9);
+  background: rgba(219, 48, 64, 0.9);
   position: absolute;
   width: 100%;
   height: 100%;
@@ -305,7 +305,7 @@ section.success {
 .floating-label-form-group input:focus,
 .floating-label-form-group textarea:focus,
 .floating-label-form-group select:focus {
-  border-color: #00BFA6;
+  border-color: #db3040;
   outline: none;
   background: #fff;
 }
@@ -334,7 +334,7 @@ section.success {
   opacity: 1;
 }
 .floating-label-form-group-with-focus label {
-  color: #00BFA6;
+  color: #db3040;
 }
 form .row:first-child .floating-label-form-group {
   border-top: none;
@@ -488,7 +488,7 @@ footer .footer-below {
   margin-right: 10px;
 }
 .service-icon {
-  color: #00BFA6;
+  color: #db3040;
   margin-bottom: 20px;
 }
 .service-description {
@@ -530,7 +530,7 @@ footer .footer-below {
   font-size: 20px;
 }
 .about-cta a {
-  color: #00BFA6;
+  color: #db3040;
 }
 #booking-quote {
   display: block;
@@ -556,23 +556,23 @@ footer .footer-below {
 }
 .booking-alternate {
   margin-top: 15px;
-  color: #00BFA6;
+  color: #db3040;
 }
 .booking-alternate a {
   font-weight: bold;
   font-size: 18px;
-  color: #00BFA6;
+  color: #db3040;
 }
 #bookingForm button[type="submit"] {
-  background-color: #00BFA6;
-  border-color: #00BFA6;
+  background-color: #db3040;
+  border-color: #db3040;
   color: #FFFFFF;
 }
 #bookingForm button[type="submit"]:hover,
 #bookingForm button[type="submit"]:focus,
 #bookingForm button[type="submit"]:active {
-  background-color: #008c7a;
-  border-color: #008c7a;
+  background-color: #db3040;
+  border-color: #db3040;
 }
 .contact-info {
   margin-bottom: 30px;
@@ -620,26 +620,26 @@ footer .footer-contact a {
   color: #999;
 }
 .error-page-content a {
-  color: #00BFA6;
+  color: #db3040;
   font-weight: bold;
 }
 .text-white {
   color: #FFFFFF;
 }
 .text-accent {
-  color: #00BFA6;
+  color: #db3040;
 }
 .bg-light {
   background: #f8f8f8;
 }
 .form-control:focus {
-  border-color: #00BFA6;
+  border-color: #db3040;
   outline: none;
-  box-shadow: 0 0 0 0.2rem rgba(0, 191, 166, 0.25);
+  box-shadow: 0 0 0 0.2rem rgba(219, 48, 64, 0.25);
 }
 .btn-success {
-  background-color: #00BFA6;
-  border-color: #00BFA6;
+  background-color: #db3040;
+  border-color: #db3040;
 }
 .btn-success:hover,
 .btn-success:focus,
@@ -647,27 +647,27 @@ footer .footer-contact a {
 .btn-success:active,
 .btn-success.active,
 .open > .dropdown-toggle.btn-success {
-  background-color: #008c7a;
-  border-color: #008271;
+  background-color: #db3040;
+  border-color: #db3040;
 }
 .navbar-default .navbar-brand:hover,
 .navbar-default .navbar-brand:focus {
-  color: #00BFA6;
+  color: #db3040;
 }
 .navbar-default .navbar-nav > li > a:hover,
 .navbar-default .navbar-nav > li > a:focus {
-  color: #00BFA6;
+  color: #db3040;
 }
 #contactForm button[type="submit"] {
-  background-color: #00BFA6;
-  border-color: #00BFA6;
+  background-color: #db3040;
+  border-color: #db3040;
   color: #FFFFFF;
 }
 #contactForm button[type="submit"]:hover,
 #contactForm button[type="submit"]:focus,
 #contactForm button[type="submit"]:active {
-  background-color: #008c7a;
-  border-color: #008c7a;
+  background-color: #db3040;
+  border-color: #db3040;
   color: #FFFFFF;
 }
 .has-error .form-control {
@@ -706,7 +706,7 @@ footer .footer-legal a {
 }
 footer .footer-legal a:hover,
 footer .footer-legal a:focus {
-  color: #00BFA6;
+  color: #db3040;
 }
 section.legal-hero {
   background: #2C2F33;
@@ -757,7 +757,7 @@ section.legal-body {
 }
 .legal-note {
   background: #f8f8f8;
-  border-left: 4px solid #00BFA6;
+  border-left: 4px solid #db3040;
   padding: 14px 16px;
   margin: 16px 0;
 }

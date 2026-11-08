@@ -488,7 +488,7 @@ header.hero img.header-logo,
 /* Surfaces without a photograph: black background, red text.
    #db3040 is the logo red #d4081c lifted just enough to stay readable
    on black (the logo red alone is 3.85:1). Hero photos are not restyled.
-   This also removes the teal #00bfa6 accent. */
+   This also removes the old teal accent. */
 body,
 section,
 section.success,
@@ -623,6 +623,10 @@ a.booking-alternate,
 .alert-success {
   background-color: #000;
   border-color: #db3040;
+  color: #db3040;
+}
+
+.service-icon {
   color: #db3040;
 }
 
