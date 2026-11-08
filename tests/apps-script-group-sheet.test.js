@@ -156,10 +156,14 @@ describe("group booking sheet", () => {
       actual: properties.GROUP_BOOKINGS_SPREADSHEET_ID,
       source: "apps-script/Code.gs:1",
     });
-    check(spreadsheets[0].rows[0], ["Pickup address", "Name", "Phone"], {
-      label: "the headings come from the column list",
-      source: "apps-script/Code.gs:1",
-    });
+    check(
+      spreadsheets[0].rows[0],
+      ["Pickup address", "Name", "Phone", "Email"],
+      {
+        label: "the headings come from the column list",
+        source: "apps-script/Code.gs:1",
+      },
+    );
     check(
       spreadsheets[0].rows[0].length,
       context.GROUP_BOOKINGS_COLUMNS.length,
@@ -170,15 +174,20 @@ describe("group booking sheet", () => {
     );
     check(
       spreadsheets[0].rows[1],
-      ["123 Main Street, Denver NC 28037", "Ada Rider", "9804229125"],
+      [
+        "123 Main Street, Denver NC 28037",
+        "Ada Rider",
+        "9804229125",
+        "ada@example.com",
+      ],
       {
-        label: "the row is pickup address, name, and phone",
+        label: "the row is pickup address, name, phone, and email",
         actual: spreadsheets[0].rows[1],
         source: "apps-script/Code.gs:1",
       },
     );
-    check(spreadsheets[0].rows[1].indexOf("ada@example.com"), -1, {
-      label: "email is not a column",
+    check(spreadsheets[0].rows[1].indexOf("AA1234"), -1, {
+      label: "flight number is not a column",
       source: "apps-script/Code.gs:1",
     });
     check(events.length, 2, {

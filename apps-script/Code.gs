@@ -395,6 +395,7 @@ var GROUP_BOOKINGS_COLUMNS = [
   ["Pickup address", "pickup"],
   ["Name", "name"],
   ["Phone", "phone"],
+  ["Email", "email"],
 ];
 
 /**
