@@ -888,7 +888,8 @@ header.hero a.btn-outline[href="#booking"]:active {
 }
 
 #about-us h2,
-#reviews h2 {
+#reviews h2,
+#reviews p.text-muted {
   color: #be0b25 !important;
 }
 
@@ -896,8 +897,7 @@ header.hero a.btn-outline[href="#booking"]:active {
 #about-us .about-text a,
 #about-us .about-cta,
 #about-us .about-cta a,
-#about-us .about-cta strong,
-#reviews p.text-muted {
+#about-us .about-cta strong {
   color: #ffffff !important;
 }
 
@@ -974,4 +974,38 @@ footer .btn-social .fa {
   color: #ffffff !important;
   border-color: #be0b25 !important;
   background: transparent !important;
+}
+
+#reviews a.btn,
+#reviews a.btn:hover,
+#reviews a.btn:focus,
+#reviews a.btn:active {
+  border-color: #ffffff !important;
+}
+
+#bookingForm input[type="checkbox"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  margin: 0 8px 0 0;
+  vertical-align: -3px;
+  border: 2px solid #ffffff;
+  border-radius: 3px;
+  background-color: transparent;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 12px 12px;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+
+#bookingForm input[type="checkbox"]:checked {
+  background-color: transparent;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23ffffff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round' d='M3.2 8.4 6.4 11.6 12.8 4.4'/%3E%3C/svg%3E");
+}
+
+#bookingForm input[type="checkbox"]:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
 }
