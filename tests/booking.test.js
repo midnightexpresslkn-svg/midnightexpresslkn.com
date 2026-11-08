@@ -279,6 +279,31 @@ describe("booking", () => {
         });
       });
 
+      it("prices the shortest alternative route, not the fastest", async () => {
+        const view = await renderBooking(script, {
+          routesMiles: [32.7, 27.2],
+        });
+        await showQuote(view, {
+          pickup: "2169 NC 73 Hwy, Iron Station NC",
+          destination: "CLT",
+        });
+        const routes = view.state.requests.filter((request) =>
+          request.url.includes("router.project-osrm.org"),
+        );
+        check(routes[routes.length - 1].url.includes("alternatives=3"), true, {
+          label: "the route request asks for three alternatives",
+          actual: routes[routes.length - 1].url,
+          source: SOURCE.quote,
+          loaded: script,
+        });
+        check(quoteTotal(view.document), "Cash $75.00 · Card $75.00", {
+          label: "27.2 miles is used instead of the 32.7-mile fastest route",
+          actual: quoteTotal(view.document),
+          source: SOURCE.quote,
+          loaded: script,
+        });
+      });
+
       it("rounds cash and card to the nearest $5, and an exact .50 goes down", async () => {
         const cases = [
           [7250 / 275, "Cash $70.00 · Card $70.00"],

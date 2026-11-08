@@ -2100,9 +2100,17 @@
         var k=g.lat.toFixed(5)+','+g.lon.toFixed(5)+'>'+ap;
         if(routeCache[k])return routeCache[k];
         var A=hubs[ap];
-        var p=fetch('https://router.project-osrm.org/route/v1/driving/'+g.lon+','+g.lat+';'+A.lon+','+A.lat+'?overview=false')
+        var p=fetch('https://router.project-osrm.org/route/v1/driving/'+g.lon+','+g.lat+';'+A.lon+','+A.lat+'?overview=false&alternatives=3')
             .then(function(r){return r.json();}).then(function(j){
-                if(j&&j.code==='Ok'&&j.routes&&j.routes.length)return j.routes[0].distance/1609.344;throw 'noroute';});
+                if(!(j&&j.code==='Ok'&&j.routes&&j.routes.length))throw 'noroute';
+                var best=null;
+                for(var i=0;i<j.routes.length;i++){
+                    var meters=j.routes[i]&&j.routes[i].distance;
+                    if(typeof meters!=='number'||!(meters>0))continue;
+                    if(best===null||meters<best)best=meters;
+                }
+                if(best===null)throw 'noroute';
+                return best/1609.344;});
         routeCache[k]=p; p.catch(function(){delete routeCache[k];});
         return p;
     }
