@@ -160,32 +160,12 @@ describe("group booking sheet", () => {
       label: "the first row is the column headings",
       source: "apps-script/Code.gs:1",
     });
-    const row = spreadsheets[0].rows[1];
-    check(row[0] instanceof Date, true, {
-      label: "the row records when the request was received",
-      source: "apps-script/Code.gs:1",
-    });
     check(
-      row.slice(1),
-      [
-        "Ada Rider",
-        "9804229125",
-        "ada@example.com",
-        "123 Main Street, Denver NC 28037",
-        "200 Oak St, Sherrills Ford NC",
-        "2026-12-15",
-        "10:00",
-        4,
-        "Yes",
-        "AA1234",
-        "Yes",
-        "15:00",
-        "Group event. reunion",
-        "evt-1, evt-2",
-      ],
+      spreadsheets[0].rows[1],
+      ["123 Main Street, Denver NC 28037", "Ada Rider", "9804229125"],
       {
-        label: "the row has the group booking and both calendar event ids",
-        actual: row.slice(1),
+        label: "the row is only pickup address, name, and phone",
+        actual: spreadsheets[0].rows[1],
         source: "apps-script/Code.gs:1",
       },
     );

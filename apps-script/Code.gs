@@ -127,11 +127,10 @@ function doPost(e) {
     });
 
     var cal = getBusinessCalendar_();
-    var event = cal.createEvent(title, start, end, {
+    cal.createEvent(title, start, end, {
       description: description,
       location: pickup,
     });
-    var eventIds = event && event.getId ? [event.getId()] : [];
 
     if (/^yes$/i.test(roundTrip) && returnDate && returnTime) {
       var rStart = parseLocalDateTime_(returnDate, returnTime);
@@ -151,13 +150,10 @@ function doPost(e) {
           notes: notes,
           roundTrip: "Yes (return)",
         });
-        var returnEvent = cal.createEvent(rTitle, rStart, rEnd, {
+        cal.createEvent(rTitle, rStart, rEnd, {
           description: rDesc,
           location: destination,
         });
-        if (returnEvent && returnEvent.getId) {
-          eventIds.push(returnEvent.getId());
-        }
       }
     }
 
@@ -166,18 +162,7 @@ function doPost(e) {
         appendGroupBooking_({
           name: name,
           phone: phone,
-          email: email,
           pickup: pickup,
-          destination: destination,
-          date: pickupDate,
-          time: pickupTime,
-          passengers: passengers,
-          bags: bags,
-          flight: flight,
-          roundTrip: roundTrip,
-          returnTime: returnTime,
-          notes: notes,
-          eventId: eventIds.join(", "),
         });
       } catch (sheetErr) {
         // The request is already on the calendar. A sheet problem must not erase it.
@@ -395,23 +380,7 @@ function quoteDrivingMeters_(origin, airport) {
 
 var GROUP_BOOKINGS_NAME = "Midnight Express LKN Group Bookings";
 var GROUP_BOOKINGS_PROPERTY = "GROUP_BOOKINGS_SPREADSHEET_ID";
-var GROUP_BOOKINGS_HEADERS = [
-  "Timestamp received",
-  "Name",
-  "Phone",
-  "Email",
-  "Pickup",
-  "Drop-off/venue",
-  "Date",
-  "Pickup time",
-  "Passengers",
-  "Bags",
-  "Flight",
-  "Return trip",
-  "Return time",
-  "Notes",
-  "Calendar event id",
-];
+var GROUP_BOOKINGS_HEADERS = ["Pickup address", "Name", "Phone"];
 
 /**
  * Spreadsheet owned by the account that runs this script.
@@ -442,23 +411,7 @@ function groupBookingsSheet_() {
 
 function appendGroupBooking_(row) {
   var sheet = groupBookingsSheet_();
-  sheet.appendRow([
-    new Date(),
-    row.name,
-    row.phone,
-    row.email,
-    row.pickup,
-    row.destination,
-    row.date,
-    row.time,
-    row.passengers,
-    row.bags,
-    row.flight,
-    row.roundTrip,
-    row.returnTime,
-    row.notes,
-    row.eventId,
-  ]);
+  sheet.appendRow([row.pickup, row.name, row.phone]);
 }
 
 function respond_(obj, callback) {
