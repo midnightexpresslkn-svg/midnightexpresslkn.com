@@ -1,4 +1,5 @@
 import { afterEach, describe, it } from "vitest";
+import { hostnameOf } from "./helpers/hostname.js";
 import { SOURCE } from "./helpers/source-line.js";
 import { check, role, roles } from "./helpers/failure.js";
 import {
@@ -419,8 +420,8 @@ describe("booking", () => {
             pickup: "123 Main Street, Denver NC 28037",
             destination: airport.typed,
           });
-          const routes = view.state.requests.filter((request) =>
-            request.url.includes("router.project-osrm.org"),
+          const routes = view.state.requests.filter(
+            (request) => hostnameOf(request.url) === "router.project-osrm.org",
           );
           const route = routes[routes.length - 1];
           check(route.url.includes(`${airport.lon},${airport.lat}`), true, {
