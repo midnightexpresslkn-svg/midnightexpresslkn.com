@@ -40,7 +40,7 @@ header.hero .container {
 }
 
 .hero-carousel:focus-visible {
-  outline: 3px solid #00bfa6;
+  outline: 3px solid #db3040;
   outline-offset: -3px;
 }
 

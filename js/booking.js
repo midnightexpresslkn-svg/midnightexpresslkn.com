@@ -797,7 +797,11 @@
                 setCols($('#address-group, #dest-group'), false);
                 $('#airport-choice-row, #airfield-choice-row').hide();
                 $('#dest-group').removeClass('col-md-12').addClass('col-md-6').show();
-                $('#booking-destination').attr('placeholder', 'CLT Airport');
+                $('#booking-destination').attr('placeholder', 'Bank of America Stadium');
+                setFieldLabel('notes-label', 'Trip Description');
+                $('#booking-notes').attr('placeholder', 'Examples: how many pickup and drop-off locations, any extra stops, special requests');
+                $('#special-requirements-section').hide();
+                $('#booking-wheelchair, #booking-carseat').prop('checked', false);
                 $('#booking-quote').hide();
                 $('#quote-details').empty();
             } else {
@@ -805,6 +809,10 @@
                 setFieldLabel('destination-label', 'Private airfield *');
                 setCols($('#address-group, #airport-choice-row'), false);
                 $('#airport-choice-row, #airfield-choice-row').show();
+                $('#booking-destination').attr('placeholder', 'CLT Airport');
+                setFieldLabel('notes-label', 'Special Notes');
+                $('#booking-notes').attr('placeholder', '');
+                $('#special-requirements-section').show();
                 $('#booking-quote').show();
                 showOtherAirfieldBox();
             }
@@ -838,30 +846,31 @@
      */
     function placeFlightField() {
         var $flight = $('#flight-group');
-        if (!$flight.length) return;
         if (isGroupEvent()) {
-            $flight.removeClass('col-md-4').addClass('col-md-12');
-            $('#flight-label').text('Flight number');
-            $('#flight-slot').append($flight).show();
-        } else {
-            $flight.removeClass('col-md-12').addClass('col-md-4');
-            $('#flight-label').text('Return Flight Number');
-            $('#return-flight-section').append($flight);
+            $flight.hide();
             $('#flight-slot').hide();
+            $('#booking-flight').val('');
+            return;
         }
+        $flight.show();
+        $flight.removeClass('col-md-12').addClass('col-md-4');
+        $('#flight-label').text('Return Flight Number');
+        $('#return-flight-section').append($flight);
+        $('#flight-slot').hide();
     }
 
     function updateConditionalFields() {
         const roundTrip = $('#booking-round-trip').is(':checked');
 
-        // Bags are collected for airport and group bookings.
-        if (isAirportTrip() || isGroupEvent()) {
+        // Bags and a return trip are airport fields. The group form does not ask.
+        if (isAirportTrip()) {
             $('#checking-bags-section').slideDown();
+            $('#round-trip-section').show();
         } else {
-            $('#checking-bags-section').slideUp();
-            $('#booking-checking-bags').prop('checked', false);
+            $('#checking-bags-section').hide();
+            $('#round-trip-section').hide();
+            $('#booking-checking-bags, #booking-round-trip').prop('checked', false);
         }
-        $('#round-trip-section').show();
 
         // Return date and time whenever a round trip is requested.
         if (roundTrip) {
@@ -1637,7 +1646,7 @@
             if (trip === 'group') {
                 notes = notes ? 'Group event. ' + notes : 'Group event.';
             }
-            const asksTripDetails = trip === 'airport' || trip === 'group';
+            const asksTripDetails = trip === 'airport';
             const formData = {
                 name: $('#booking-name').val().trim(),
                 phone: $('#booking-phone').data('raw-value') || $('#booking-phone').val().replace(/\D/g, ''),

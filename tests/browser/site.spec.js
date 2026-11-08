@@ -111,9 +111,16 @@ test.describe("booking page", () => {
     await expect(page.locator("#destination-label")).toHaveText(
       "Drop-off / venue *",
     );
-    await expect(page.locator("#booking-checking-bags")).toBeVisible();
-    await expect(page.locator("#booking-flight")).toBeVisible();
-    await expect(page.locator("#booking-round-trip")).toBeVisible();
+    await expect(page.locator("#booking-checking-bags")).toBeHidden();
+    await expect(page.locator("#booking-flight")).toBeHidden();
+    await expect(page.locator("#booking-round-trip")).toBeHidden();
+    await expect(page.locator("#booking-wheelchair")).toBeHidden();
+    await expect(page.locator("#booking-carseat")).toBeHidden();
+    await expect(page.locator("#notes-label")).toHaveText("Trip Description");
+    await expect(page.locator("#booking-destination")).toHaveAttribute(
+      "placeholder",
+      "Bank of America Stadium",
+    );
     await expect(page.locator("#booking-notes")).toBeVisible();
     const visible = await page.locator("#bookingForm").innerText();
     expect(visible).not.toMatch(/price|pricing|fare|\$\d/i);
