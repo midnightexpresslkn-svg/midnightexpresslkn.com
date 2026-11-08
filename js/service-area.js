@@ -313,31 +313,170 @@
     return named;
   }
 
-  function whichAirport(raw) {
+  // Passenger door or FBO door, not the middle of the runway.
+  // CLT main is the airline curb. CLT private is Wilson Air Center at
+  // 5400 Airport Drive, also used for Signature and "Charlotte private airport".
+  // Concord airline passengers use the Allegiant terminal at 7435 Zephyr Place NW.
+  // Concord private flights use the FBO at 9000 Aviation Blvd.
+  var AIRPORTS = [
+    {
+      id: "CLT",
+      kind: "airline",
+      name: "Charlotte Douglas Airport (CLT)",
+      menu: "CLT main terminal",
+      typed: "CLT",
+      lat: 35.2224,
+      lon: -80.9423,
+      aliases: [
+        "clt",
+        "charlotte douglas",
+        "douglas international",
+        "douglas intl",
+        "charlotte airport",
+        "charlotte international",
+      ],
+    },
+    {
+      id: "JQF-PAX",
+      kind: "airline",
+      name: "Concord Regional passenger terminal (Allegiant)",
+      menu: "Concord passenger terminal",
+      typed: "Allegiant",
+      lat: 35.38044,
+      lon: -80.71382,
+      aliases: [
+        "allegiant",
+        "concord allegiant",
+        "7435 zephyr",
+        "zephyr place",
+        "concord passenger terminal",
+        "concord regional passenger",
+      ],
+    },
+    {
+      id: "CLT-PRIVATE",
+      kind: "private",
+      name: "CLT private terminal (Wilson Air Center)",
+      menu: "Charlotte private (Wilson/Signature)",
+      typed: "Wilson Air Center",
+      lat: 35.20975,
+      lon: -80.93157,
+      aliases: [
+        "wilson air center",
+        "5400 airport drive",
+        "5400 airport dr",
+        "signature flight support",
+        "signature at clt",
+        "charlotte private airport",
+        "clt private",
+      ],
+    },
+    {
+      id: "JQF",
+      kind: "private",
+      name: "Concord Regional Airport",
+      menu: "Concord private FBO",
+      typed: "Concord Regional",
+      lat: 35.3856,
+      lon: -80.71246,
+      aliases: [
+        "kjqf",
+        "jqf",
+        "concord padgett",
+        "concord regional",
+        "concord airport",
+        "9000 aviation",
+      ],
+    },
+    {
+      id: "KIPJ",
+      kind: "private",
+      name: "Lincolnton-Lincoln County Regional (KIPJ)",
+      menu: "Lincolnton KIPJ",
+      typed: "KIPJ",
+      lat: 35.48424,
+      lon: -81.16304,
+      aliases: [
+        "kipj",
+        "lincolnton lincoln county",
+        "lincolnton regional",
+        "lincolnton airport",
+      ],
+    },
+    {
+      id: "KRUQ",
+      kind: "private",
+      name: "Mid-Carolina Regional, Salisbury (KRUQ)",
+      menu: "Salisbury KRUQ",
+      typed: "KRUQ",
+      lat: 35.64653,
+      lon: -80.52062,
+      aliases: ["kruq", "mid carolina regional", "salisbury airport"],
+    },
+    {
+      id: "KHKY",
+      kind: "private",
+      name: "Hickory Regional (KHKY)",
+      menu: "Hickory KHKY",
+      typed: "KHKY",
+      lat: 35.74222,
+      lon: -81.38939,
+      aliases: ["khky", "hickory regional", "hickory airport"],
+    },
+    {
+      id: "LITTLE-MOUNTAIN",
+      kind: "private",
+      name: "Little Mountain Airport",
+      menu: "Little Mountain (Airport Rd, Maiden)",
+      typed: "Little Mountain Airport",
+      lat: 35.5918,
+      lon: -81.07952,
+      aliases: ["little mountain airport"],
+    },
+  ];
+
+  function lookupAirport(raw) {
     var text = airportNorm(raw);
     if (!text) return null;
-    var cltWords = [
-      "clt",
-      "charlotte douglas",
-      "douglas international",
-      "douglas intl",
-      "charlotte airport",
-      "charlotte international",
-    ];
-    var jqfWords = ["jqf", "concord airport", "concord regional"];
-    function hit(list) {
-      for (var i = 0; i < list.length; i++) {
-        if (has(text, list[i]) && !blocked(text, list[i])) return true;
+    var found = [];
+    var seen = {};
+    for (var i = 0; i < AIRPORTS.length; i++) {
+      var airport = AIRPORTS[i];
+      var best = 0;
+      for (var a = 0; a < airport.aliases.length; a++) {
+        var alias = airport.aliases[a];
+        if (has(text, alias) && !blocked(text, alias) && alias.length > best) {
+          best = alias.length;
+        }
       }
-      return false;
+      if (best > 0 && !seen[airport.id]) {
+        seen[airport.id] = true;
+        found.push(airport);
+      }
     }
-    var clt = hit(cltWords);
-    var jqf = hit(jqfWords);
-    if (text === "airport" || text === "the airport") clt = true;
-    if (clt && jqf) return null;
-    if (clt) return "CLT";
-    if (jqf) return "JQF";
-    return null;
+    if (
+      (text === "airport" || text === "the airport") &&
+      !seen.CLT
+    ) {
+      found.push(AIRPORTS[0]);
+    }
+    if (!found.length) return null;
+    var specific = [];
+    var generic = [];
+    for (var j = 0; j < found.length; j++) {
+      var id = found[j].id;
+      if (id === "CLT" || id === "JQF") generic.push(found[j]);
+      else specific.push(found[j]);
+    }
+    if (specific.length > 1) return null;
+    if (specific.length === 1) return specific[0];
+    if (generic.length > 1) return null;
+    return generic[0];
+  }
+
+  function whichAirport(raw) {
+    var found = lookupAirport(raw);
+    return found ? found.id : null;
   }
 
   function isPrivateAirfield(raw) {
@@ -357,7 +496,8 @@
         continue;
       }
       var next = tokens[i + 1] || "";
-      if (!STREET_SUFFIX[next]) return true;
+      if (STREET_SUFFIX[next]) continue;
+      return true;
     }
     return false;
   }
@@ -368,7 +508,9 @@
 
   function classifyAddress(raw) {
     var text = normalize(raw);
-    if (!text) return { status: "unclear" };
+    if (text.length === 0) {
+      return { status: "unclear" };
+    }
     var state = findState(text);
     var zips = findZips(text).map(zipClass);
     var unservedTown = matchTown(text, UNSERVED_TOWNS);
@@ -384,14 +526,23 @@
     var border = false;
     for (var j = 0; j < zips.length; j++) {
       if (!goodZip && zips[j].kind === "served") goodZip = zips[j];
-      if (zips[j].kind === "border") border = true;
+      if (zips[j].kind === "border") {
+        border = true;
+      }
     }
     if (servedTown && (state === "NC" || goodZip || border)) {
       return { status: "served", town: servedTown };
     }
-    if (goodZip) return { status: "served", town: goodZip.town };
-    if (servedTown) return { status: "unclear", town: servedTown };
-    return { status: "unclear" };
+    var zipTown = goodZip ? goodZip.town : "";
+    var result = { status: "unclear" };
+    if (zipTown) {
+      result = { status: "served", town: zipTown };
+    } else if (servedTown) {
+      result = { status: "unclear", town: servedTown };
+    } else {
+      result = { status: "unclear" };
+    }
+    return result;
   }
 
   function classifyEnd(text, geo) {
@@ -408,8 +559,12 @@
 
   function evaluateTrip(input) {
     var data = input || {};
-    var pickup = classifyEnd(data.pickup, data.pickupGeo);
-    var destination = classifyEnd(data.destination, data.destinationGeo);
+    var pickup = data.pickupIsAirfield
+      ? { status: "airport" }
+      : classifyEnd(data.pickup, data.pickupGeo);
+    var destination = data.destinationIsAirfield
+      ? { status: "airport" }
+      : classifyEnd(data.destination, data.destinationGeo);
     var required = [pickup, destination].filter(function (end) {
       return end.status !== "airport";
     });
@@ -433,6 +588,8 @@
     UNSERVED_ZIPS: UNSERVED_ZIPS,
     BORDER_ZIPS: BORDER_ZIPS,
     UNCERTAIN_NOTES: UNCERTAIN_NOTES,
+    AIRPORTS: AIRPORTS,
+    lookupAirport: lookupAirport,
     whichAirport: whichAirport,
     isAirportEnd: isAirportEnd,
     isPrivateAirfield: isPrivateAirfield,

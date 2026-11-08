@@ -638,13 +638,12 @@ a.booking-alternate,
 }
 
 /* Sample: Services and Why Choose Us only.
-   Body copy is white. Headings, the plane/clock/group icons, and the
-   check marks use the van decal red. Underline bars and buttons stay
-   the existing accent red. */
+   Body copy is white. Headings and the check marks use the van decal red.
+   The plane, clock, and group icons stay white. Underline bars and the
+   group button stay the existing accent red. */
 #services h2,
 #services h3,
 #why-choose-us h2,
-#services .service-icon,
 #why-choose-us .fa-check {
   color: #be0b25 !important;
 }
@@ -865,4 +864,148 @@ a.booking-alternate,
   #booking .form-group {
     margin-bottom: 20px;
   }
+}
+
+/* Owner color pass. The header (navbar brand, menu, and logo) is not in
+   these selectors. Red headings use the van decal #be0b25. */
+header.hero h1,
+header.hero .name {
+  color: #be0b25 !important;
+}
+
+header.hero a.btn-outline[href="#booking"],
+header.hero a.btn-outline[href="#booking"]:hover,
+header.hero a.btn-outline[href="#booking"]:focus,
+header.hero a.btn-outline[href="#booking"]:active {
+  color: #be0b25 !important;
+  border: solid 2px #ffffff !important;
+  background: transparent !important;
+}
+
+#services .service-icon,
+#services .service-icon.fa {
+  color: #ffffff !important;
+}
+
+#about-us h2,
+#reviews h2,
+#reviews p.text-muted {
+  color: #be0b25 !important;
+}
+
+#about-us .about-text,
+#about-us .about-text a,
+#about-us .about-cta,
+#about-us .about-cta a,
+#about-us .about-cta strong {
+  color: #ffffff !important;
+}
+
+#booking .form-control,
+#booking select,
+#booking textarea,
+#booking .flatpickr-input,
+#contact .form-control,
+#contact select,
+#contact textarea,
+#contactForm .form-control,
+#contactForm select,
+#contactForm textarea,
+#about-us .form-control,
+#about-us select,
+#about-us textarea {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff;
+  border: 1px solid #ffffff !important;
+  box-shadow: none !important;
+  color-scheme: dark;
+}
+
+#booking .form-control::placeholder,
+#booking textarea::placeholder,
+#contact .form-control::placeholder,
+#contact textarea::placeholder,
+#contactForm .form-control::placeholder,
+#about-us .form-control::placeholder {
+  color: #ffffff;
+  opacity: 0.8;
+  -webkit-text-fill-color: #ffffff;
+}
+
+#booking select option,
+#contact select option,
+#about-us select option {
+  background-color: #000;
+  color: #ffffff;
+}
+
+#booking .form-control:-webkit-autofill,
+#booking select:-webkit-autofill,
+#booking textarea:-webkit-autofill,
+#contact .form-control:-webkit-autofill,
+#contactForm .form-control:-webkit-autofill {
+  -webkit-text-fill-color: #ffffff !important;
+  box-shadow: 0 0 0 1000px #000 inset !important;
+  caret-color: #ffffff;
+}
+
+footer h3 {
+  color: #be0b25 !important;
+}
+
+footer .footer-above p,
+footer .footer-contact,
+footer .footer-contact a,
+footer .footer-contact .fa,
+footer .footer-below,
+footer .footer-below p,
+footer .footer-legal,
+footer .footer-legal a {
+  color: #ffffff !important;
+}
+
+footer .btn-social,
+footer .btn-social:hover,
+footer .btn-social:focus,
+footer .btn-social:active,
+footer .btn-social .fa {
+  color: #ffffff !important;
+  border-color: #be0b25 !important;
+  background: transparent !important;
+}
+
+#reviews a.btn,
+#reviews a.btn:hover,
+#reviews a.btn:focus,
+#reviews a.btn:active {
+  border-color: #ffffff !important;
+}
+
+#bookingForm input[type="checkbox"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  margin: 0 8px 0 0;
+  vertical-align: -3px;
+  border: 2px solid #ffffff;
+  border-radius: 3px;
+  background-color: transparent;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 12px 12px;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+
+#bookingForm input[type="checkbox"]:checked {
+  background-color: transparent;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23ffffff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round' d='M3.2 8.4 6.4 11.6 12.8 4.4'/%3E%3C/svg%3E");
+}
+
+#bookingForm input[type="checkbox"]:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
 }

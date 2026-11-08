@@ -331,11 +331,39 @@ export async function fillValid(view, overrides = {}) {
     placeholder(doc, "123 Main Street, Denver NC 28037"),
     overrides.pickup ?? "123 Main Street, Denver NC 28037",
   );
-  setControl(
-    doc.querySelector("#booking-destination"),
+  const destination =
     overrides.destination ??
-      (trip === "group" ? "200 Oak St, Sherrills Ford NC" : "CLT"),
-  );
+    (trip === "group" ? "200 Oak St, Sherrills Ford NC" : "CLT");
+  if (trip === "group") {
+    setControl(doc.querySelector("#booking-destination"), destination);
+  } else {
+    const api = view.window.MidnightServiceArea;
+    const found =
+      api && api.lookupAirport ? api.lookupAirport(destination) : null;
+    const airline = doc.querySelector("#airport-choice");
+    const airfield = doc.querySelector("#airfield-choice");
+    const useOther =
+      airfield &&
+      !found &&
+      (airfield.value === "other" || overrides.airfield === "other");
+    if (useOther) {
+      airline.value = "";
+      airfield.value = "other";
+      view.window.jQuery(airfield).trigger("change");
+      setControl(doc.querySelector("#booking-destination"), destination);
+    } else if (found && airline && airfield) {
+      const select = found.kind === "airline" ? airline : airfield;
+      const other = found.kind === "airline" ? airfield : airline;
+      other.value = "";
+      select.value = found.id;
+      view.window.jQuery(select).trigger("change");
+    } else {
+      setControl(doc.querySelector("#booking-destination"), destination);
+      if (airline && airfield && !airline.value && !airfield.value) {
+        airline.value = "CLT";
+      }
+    }
+  }
   if (trip === "group") {
     const groupPickup = doc.querySelector("#group-pickup");
     const groupDropoff = doc.querySelector("#group-dropoff");
@@ -413,7 +441,7 @@ export async function showQuote(
     placeholder(view.document, "123 Main Street, Denver NC 28037"),
     pickup,
   );
-  setControl(placeholder(view.document, "CLT Airport"), destination);
+  setControl(view.document.querySelector("#booking-destination"), destination);
   window.jQuery("#booking-destination").trigger("blur");
   let text = "";
   await waitFor(

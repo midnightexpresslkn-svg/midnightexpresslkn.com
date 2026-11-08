@@ -1,4 +1,5 @@
 import { afterEach, describe, it } from "vitest";
+import { hostnameOf } from "./helpers/hostname.js";
 import { SOURCE } from "./helpers/source-line.js";
 import { check, role, roles } from "./helpers/failure.js";
 import {
@@ -195,7 +196,7 @@ describe("booking", () => {
         chooseTrip(view.document, "airport");
         check(
           view.document.querySelector("#quote-details").textContent,
-          "Enter your pickup address and airport to see your price.",
+          "Enter your home address and airport to see your price.",
           {
             label: "airport quote starts blank",
             source: SOURCE.quote,
@@ -257,7 +258,7 @@ describe("booking", () => {
         view.window.jQuery("#booking-pickup").val("12").trigger("blur");
         check(
           view.document.querySelector("#quote-details").textContent,
-          "Enter your pickup address and airport to see your price.",
+          "Enter your home address and airport to see your price.",
           {
             label: "clearing the pickup drops the previous fare",
             source: SOURCE.quote,
@@ -407,6 +408,355 @@ describe("booking", () => {
         check(text.includes("$"), false, {
           label: "Charlotte Motor Speedway shows no fare",
           source: SOURCE.quote,
+          loaded: script,
+        });
+      });
+
+      it("prices each known airfield from its own door", async () => {
+        const view = await renderBooking(script, { miles: 12 });
+        const airports = view.window.MidnightServiceArea.AIRPORTS;
+        for (const airport of airports) {
+          await showQuote(view, {
+            pickup: "123 Main Street, Denver NC 28037",
+            destination: airport.typed,
+          });
+          const routes = view.state.requests.filter(
+            (request) => hostnameOf(request.url) === "router.project-osrm.org",
+          );
+          const route = routes[routes.length - 1];
+          check(route.url.includes(`${airport.lon},${airport.lat}`), true, {
+            label: `${airport.id} quote uses its door`,
+            actual: route.url,
+            source: SOURCE.quote,
+            loaded: script,
+          });
+          check(quoteLabel(view.document), `One way to ${airport.name}`, {
+            label: `${airport.id} quote names the airfield`,
+            actual: quoteLabel(view.document),
+            source: SOURCE.quote,
+            loaded: script,
+          });
+        }
+      });
+
+      it("confirms an other private airfield and still sends the request", async () => {
+        const view = await renderBooking(script);
+        view.document.querySelector("#airfield-choice").value = "other";
+        await fillValid(view, {
+          trip: "airport",
+          destination: "Smith Field, Charlotte NC",
+        });
+        check(
+          await showQuote(view, {
+            pickup: "123 Main Street, Denver NC 28037",
+            destination: "Smith Field, Charlotte NC",
+          }),
+          "We'll confirm your price when we call.",
+          {
+            label: "unknown private airfield has no computed price",
+            source: SOURCE.quote,
+            loaded: script,
+          },
+        );
+        view.document.querySelector("#airfield-choice").value = "other";
+        await submitForm(view);
+        check(resultText(view.document).includes("Request received"), true, {
+          label: "unknown private airfield is still booked",
+          actual: resultText(view.document),
+          source: SOURCE.serviceArea,
+          loaded: script,
+        });
+        check(bookingPosts(view.state).length > 0, true, {
+          label: "unknown private airfield is sent",
+          source: SOURCE.serviceArea,
+          loaded: script,
+        });
+      });
+
+      it("keeps home address, airline airports, and private airfields separate", async () => {
+        const view = await renderBooking(script);
+        chooseTrip(view.document, "airport");
+        const airline = view.document.querySelector("#airport-choice");
+        const airfield = view.document.querySelector("#airfield-choice");
+        const destination = view.document.querySelector("#booking-destination");
+        const tripSelect = view.document.querySelector("#trip-type");
+        check(
+          view.document.querySelector("#address-label").textContent.trim(),
+          "Home address *",
+          {
+            label: "airport trip asks for the home address",
+            source: SOURCE.airport,
+            loaded: script,
+          },
+        );
+        check(
+          view.document
+            .querySelector("#airport-choice-row label")
+            .textContent.trim(),
+          "Airport",
+          {
+            label: "airline menu is its own field",
+            source: SOURCE.airport,
+            loaded: script,
+          },
+        );
+        check(
+          view.document
+            .querySelector("#airfield-choice-row label")
+            .textContent.trim(),
+          "Private airfield",
+          {
+            label: "private airfield menu is its own field",
+            source: SOURCE.airport,
+            loaded: script,
+          },
+        );
+        check(airline.className, tripSelect.className, {
+          label: "airline menu uses the trip type drop-down style",
+          actual: airline.className,
+          source: SOURCE.airport,
+          loaded: script,
+        });
+        check(airfield.className, tripSelect.className, {
+          label: "private airfield menu uses the trip type drop-down style",
+          actual: airfield.className,
+          source: SOURCE.airport,
+          loaded: script,
+        });
+        check(
+          view.document.querySelector("#trip-type-group").nextElementSibling.id,
+          "airfield-choice-row",
+          {
+            label: "private airfield menu sits under the trip type",
+            source: SOURCE.airport,
+            loaded: script,
+          },
+        );
+        check(airfield.closest("#a-places"), null, {
+          label: "private airfield menu is not in the address row",
+          source: SOURCE.airport,
+          loaded: script,
+        });
+        check(airline.closest("#a-places") != null, true, {
+          label: "airline menu sits with the home address",
+          source: SOURCE.airport,
+          loaded: script,
+        });
+        check(airline.closest("#address-group"), null, {
+          label: "home address and airport stay separate controls",
+          source: SOURCE.airport,
+          loaded: script,
+        });
+        check(shown(airline) && shown(airfield), true, {
+          label: "both menus are visible",
+          source: SOURCE.airport,
+          loaded: script,
+        });
+        check(shown(destination), false, {
+          label: "destination box stays hidden until Other",
+          source: SOURCE.airport,
+          loaded: script,
+        });
+        check(
+          [...airline.options].map((option) => option.textContent),
+          [
+            "Select an airport",
+            "CLT main terminal",
+            "Concord passenger terminal",
+          ],
+          {
+            label: "airline menu lists only passenger terminals",
+            source: SOURCE.airport,
+            loaded: script,
+          },
+        );
+        check(
+          [...airfield.options].map((option) => option.textContent),
+          [
+            "Select a private airfield",
+            "Charlotte private (Wilson/Signature)",
+            "Concord private FBO",
+            "Lincolnton KIPJ",
+            "Salisbury KRUQ",
+            "Hickory KHKY",
+            "Little Mountain (Airport Rd, Maiden)",
+            "Other private airfield",
+          ],
+          {
+            label: "private airfield menu lists the fields",
+            source: SOURCE.airport,
+            loaded: script,
+          },
+        );
+        airline.value = "CLT";
+        view.window.jQuery(airline).trigger("change");
+        airfield.value = "KHKY";
+        view.window.jQuery(airfield).trigger("change");
+        check(airline.value, "", {
+          label: "choosing a private airfield clears the airline menu",
+          actual: airline.value,
+          source: SOURCE.airport,
+          loaded: script,
+        });
+        check(destination.value, "KHKY", {
+          label: "the private airfield fills the destination",
+          source: SOURCE.airport,
+          loaded: script,
+        });
+        airline.value = "JQF-PAX";
+        view.window.jQuery(airline).trigger("change");
+        check(airfield.value, "", {
+          label: "choosing an airline airport clears the private airfield",
+          actual: airfield.value,
+          source: SOURCE.airport,
+          loaded: script,
+        });
+        check(destination.value, "Allegiant", {
+          label: "the airline airport fills the destination",
+          source: SOURCE.airport,
+          loaded: script,
+        });
+        check(shown(destination), false, {
+          label: "a listed choice keeps the text box hidden",
+          source: SOURCE.airport,
+          loaded: script,
+        });
+        airfield.value = "other";
+        view.window.jQuery(airfield).trigger("change");
+        check(airline.value, "", {
+          label: "Other private airfield clears the airline menu",
+          actual: airline.value,
+          source: SOURCE.airport,
+          loaded: script,
+        });
+        check(shown(destination), true, {
+          label: "Other private airfield reveals the text box",
+          source: SOURCE.airport,
+          loaded: script,
+        });
+        check(
+          destination.getAttribute("placeholder"),
+          "Name the private airfield",
+          {
+            label: "Other private airfield asks for the field name",
+            source: SOURCE.airport,
+            loaded: script,
+          },
+        );
+        chooseTrip(view.document, "group");
+        check(
+          view.document.querySelector("#address-label").textContent.trim(),
+          "Pickup Address *",
+          {
+            label: "group form still asks for a pickup address",
+            source: SOURCE.group,
+            loaded: script,
+          },
+        );
+        check(shown(airline), false, {
+          label: "group form hides the airline menu",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(shown(airfield), false, {
+          label: "group form hides the private airfield menu",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(shown(destination), true, {
+          label: "group form keeps the typed drop-off",
+          source: SOURCE.group,
+          loaded: script,
+        });
+      });
+
+      it("refuses an airport trip until one menu is chosen", async () => {
+        const view = await renderBooking(script);
+        await fillValid(view, { trip: "airport" });
+        view.document.querySelector("#airport-choice").value = "";
+        view.document.querySelector("#airfield-choice").value = "";
+        await submitForm(view);
+        check(
+          resultText(view.document).includes(
+            "Please choose an airport or a private airfield",
+          ),
+          true,
+          {
+            label: "submit requires an airline airport or a private airfield",
+            actual: resultText(view.document),
+            source: SOURCE.airport,
+            loaded: script,
+          },
+        );
+        check(resultText(view.document).includes("Request received"), false, {
+          label: "a filled destination alone does not book",
+          actual: resultText(view.document),
+          source: SOURCE.airport,
+          loaded: script,
+        });
+      });
+
+      it("sends the home address and airport on the calendar, including a return", async () => {
+        const view = await renderBooking(script, { miles: 12 });
+        await fillValid(view, {
+          trip: "airport",
+          pickup: "123 Main Street, Denver NC 28037",
+          roundTrip: true,
+          returnDate: "2026-12-16",
+          returnTime: "15:00:00",
+        });
+        const choice = view.document.querySelector("#airport-choice");
+        choice.value = "CLT";
+        view.window.jQuery(choice).trigger("change");
+        await submitForm(view);
+        const payload = calendarPayload(view);
+        check(payload.pickupAddress, "123 Main Street, Denver NC 28037", {
+          label: "calendar pickup is the home address",
+          actual: payload.pickupAddress,
+          source: SOURCE.airport,
+          loaded: script,
+        });
+        check(payload.destinationAddress, "CLT", {
+          label: "calendar destination is the airport",
+          actual: payload.destinationAddress,
+          source: SOURCE.airport,
+          loaded: script,
+        });
+        check(payload.airportTrip, "Yes", {
+          label: "calendar post is an airport trip",
+          actual: payload.airportTrip,
+          source: SOURCE.airport,
+          loaded: script,
+        });
+        check(payload.roundTrip, "Yes", {
+          label: "return trip is still marked on the calendar post",
+          actual: payload.roundTrip,
+          source: SOURCE.airport,
+          loaded: script,
+        });
+        check(payload.returnDate, "2026-12-16", {
+          label: "return date is still sent",
+          actual: payload.returnDate,
+          source: SOURCE.airport,
+          loaded: script,
+        });
+        check(payload.returnTime, "15:00:00", {
+          label: "return time is still sent",
+          actual: payload.returnTime,
+          source: SOURCE.airport,
+          loaded: script,
+        });
+        const alert = resultText(view.document);
+        check(alert.includes("Outbound"), true, {
+          label: "confirmation names the outbound leg",
+          actual: alert,
+          source: SOURCE.airport,
+          loaded: script,
+        });
+        check(alert.includes("Return"), true, {
+          label: "confirmation names the return leg",
+          actual: alert,
+          source: SOURCE.airport,
           loaded: script,
         });
       });
