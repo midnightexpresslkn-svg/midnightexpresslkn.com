@@ -332,7 +332,7 @@ export async function fillValid(view, overrides = {}) {
     overrides.pickup ?? "123 Main Street, Denver NC 28037",
   );
   setControl(
-    placeholder(doc, "CLT Airport"),
+    doc.querySelector("#booking-destination"),
     overrides.destination ??
       (trip === "group" ? "200 Oak St, Sherrills Ford NC" : "CLT"),
   );
