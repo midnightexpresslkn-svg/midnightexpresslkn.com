@@ -156,24 +156,31 @@ describe("group booking sheet", () => {
       actual: properties.GROUP_BOOKINGS_SPREADSHEET_ID,
       source: "apps-script/Code.gs:1",
     });
-    check(spreadsheets[0].rows[0], context.GROUP_BOOKINGS_HEADERS, {
-      label: "the first row is the column headings",
+    check(spreadsheets[0].rows[0], ["Pickup address", "Name", "Phone"], {
+      label: "the headings come from the column list",
       source: "apps-script/Code.gs:1",
     });
     check(
-      spreadsheets[0].rows[1],
-      [
-        "123 Main Street, Denver NC 28037",
-        "Ada Rider",
-        "9804229125",
-        "ada@example.com",
-      ],
+      spreadsheets[0].rows[0].length,
+      context.GROUP_BOOKINGS_COLUMNS.length,
       {
-        label: "the row is pickup address, name, phone, and email",
+        label: "the sheet has one column per entry in the column list",
+        source: "apps-script/Code.gs:1",
+      },
+    );
+    check(
+      spreadsheets[0].rows[1],
+      ["123 Main Street, Denver NC 28037", "Ada Rider", "9804229125"],
+      {
+        label: "the row is pickup address, name, and phone",
         actual: spreadsheets[0].rows[1],
         source: "apps-script/Code.gs:1",
       },
     );
+    check(spreadsheets[0].rows[1].indexOf("ada@example.com"), -1, {
+      label: "email is not a column",
+      source: "apps-script/Code.gs:1",
+    });
     check(events.length, 2, {
       label: "the outbound and return events are on the calendar",
       source: "apps-script/Code.gs:1",

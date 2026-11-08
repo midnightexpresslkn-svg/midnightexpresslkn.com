@@ -160,10 +160,19 @@ function doPost(e) {
     if (/^yes$/i.test(String(data.groupEvent || ""))) {
       try {
         appendGroupBooking_({
+          pickup: pickup,
           name: name,
           phone: phone,
           email: email,
-          pickup: pickup,
+          destination: destination,
+          date: pickupDate,
+          time: pickupTime,
+          passengers: passengers,
+          bags: bags,
+          flight: flight,
+          roundTrip: roundTrip,
+          returnTime: returnTime,
+          notes: notes,
         });
       } catch (sheetErr) {
         // The request is already on the calendar. A sheet problem must not erase it.
@@ -381,7 +390,12 @@ function quoteDrivingMeters_(origin, airport) {
 
 var GROUP_BOOKINGS_NAME = "Midnight Express LKN Group Bookings";
 var GROUP_BOOKINGS_PROPERTY = "GROUP_BOOKINGS_SPREADSHEET_ID";
-var GROUP_BOOKINGS_HEADERS = ["Pickup address", "Name", "Phone", "Email"];
+// One list decides the sheet. Add or remove a line here to change the columns.
+var GROUP_BOOKINGS_COLUMNS = [
+  ["Pickup address", "pickup"],
+  ["Name", "name"],
+  ["Phone", "phone"],
+];
 
 /**
  * Spreadsheet owned by the account that runs this script.
@@ -405,14 +419,27 @@ function groupBookingsSheet_() {
   }
   var sheet = ss.getSheets()[0];
   if (sheet.getLastRow() === 0) {
-    sheet.appendRow(GROUP_BOOKINGS_HEADERS);
+    sheet.appendRow(groupBookingsHeaders_());
   }
   return sheet;
 }
 
+function groupBookingsHeaders_() {
+  var headers = [];
+  for (var i = 0; i < GROUP_BOOKINGS_COLUMNS.length; i++) {
+    headers.push(GROUP_BOOKINGS_COLUMNS[i][0]);
+  }
+  return headers;
+}
+
 function appendGroupBooking_(row) {
   var sheet = groupBookingsSheet_();
-  sheet.appendRow([row.pickup, row.name, row.phone, row.email]);
+  var values = [];
+  for (var i = 0; i < GROUP_BOOKINGS_COLUMNS.length; i++) {
+    var field = GROUP_BOOKINGS_COLUMNS[i][1];
+    values.push(row[field] == null ? "" : row[field]);
+  }
+  sheet.appendRow(values);
 }
 
 function respond_(obj, callback) {
