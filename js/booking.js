@@ -2061,6 +2061,11 @@
     function q(a){var s='',i=0;while(i<a.length){s+=String.fromCharCode(a[i]^13);i++;}return +s;}
     function esc(s){return String(s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
     function money(n){return '$'+n.toFixed(2);}
+    function nearestFive(cents){
+        var step=500, units=Math.floor(cents/step), rem=cents%step;
+        if(rem>250) units+=1;
+        return units*step;
+    }
     function whichAirport(raw){
         var api=globalThis.MidnightServiceArea;
         return api?api.whichAirport(raw):null;
@@ -2147,9 +2152,10 @@
             return driveMiles(g,ap);
         }).then(function(mi){
             if(my!==seq||groupEventYes()){if(groupEventYes())hideGroupQuote();return;}
-            var one=Math.round(Math.max(q([58,61]),mi*q([63,35,58,56]))*100)/100;
-            var cash=rt?one*2:one;
-            var card=Math.round(cash*(1+q([61,35,61,62]))*100)/100;
+            var oneCents=Math.round(Math.max(q([58,61]),mi*q([63,35,58,56]))*100);
+            var cashCents=nearestFive(rt?oneCents*2:oneCents);
+            var cardCents=nearestFive(Math.round(cashCents*(1+q([61,35,61,62]))));
+            var cash=cashCents/100, card=cardCents/100;
             var label=rt?'Round trip, '+esc(hubs[ap].name)+' and back':'One way to '+esc(hubs[ap].name);
             show('<span class="quote-label">'+label+'</span><br><strong class="quote-total">Cash '+money(cash)+' &middot; Card '+money(card)+'</strong>');
         }).catch(function(err){

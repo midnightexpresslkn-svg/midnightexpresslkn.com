@@ -96,7 +96,7 @@ test.describe("booking page", () => {
     await page.getByPlaceholder("CLT Airport").fill("airport");
     const quote = page.locator("#quote-details");
     await expect(quote).toContainText("Cash $70.00");
-    await expect(quote).toContainText("Card $72.10");
+    await expect(quote).toContainText("Card $70.00");
     await expect(quote).not.toContainText("2.75");
     await expect(quote).not.toContainText(/per mile/i);
     expect(posts).toEqual([]);
