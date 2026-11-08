@@ -181,13 +181,13 @@ header.hero img.header-logo,
   }
 
   #services .service-description {
-    font-size: 15px;
-    line-height: 1.4;
-    margin-bottom: 8px;
+    font-size: 18.75px;
+    line-height: 1.45;
+    margin-bottom: 14px;
   }
 
   #services .col-md-4 {
-    margin-bottom: 8px;
+    margin-bottom: 16px;
   }
 
   #why-choose-us {
@@ -202,13 +202,13 @@ header.hero img.header-logo,
   }
 
   #why-choose-us .feature-list {
-    font-size: 15px;
-    line-height: 1.4;
+    font-size: 18.75px;
+    line-height: 1.45;
     margin-bottom: 0;
   }
 
   #why-choose-us .feature-list li {
-    margin-bottom: 8px;
+    margin-bottom: 14px;
   }
 
   #about-us {
@@ -617,7 +617,9 @@ a.booking-alternate,
 
 #reviews [style*="background"] {
   background: #000 !important;
-  border-color: #db3040 !important;
+  border: 2px solid #ffffff !important;
+  border-radius: 8px;
+  padding: 22px 20px;
   box-shadow: none !important;
 }
 
@@ -633,6 +635,53 @@ a.booking-alternate,
 
 .service-icon {
   color: #ffffff;
+}
+
+/* Sample: Services and Why Choose Us only.
+   Body copy is white. Headings, the plane/clock/group icons, and the
+   check marks use the van decal red. Underline bars and buttons stay
+   the existing accent red. */
+#services h2,
+#services h3,
+#why-choose-us h2,
+#services .service-icon,
+#why-choose-us .fa-check {
+  color: #be0b25 !important;
+}
+
+#services p,
+#services .service-description,
+#why-choose-us .feature-list,
+#why-choose-us .feature-list li {
+  color: #ffffff !important;
+}
+
+#services .btn,
+#services .btn:hover,
+#services .btn:focus,
+#services .btn:active {
+  color: #db3040 !important;
+  background-color: #000;
+  border-color: #db3040;
+}
+
+@media (min-width: 768px) {
+  #services .service-description {
+    font-size: 20px;
+    margin-bottom: 12px;
+  }
+
+  #services .col-md-4 {
+    margin-bottom: 16px;
+  }
+
+  #why-choose-us .feature-list {
+    font-size: 22.5px;
+  }
+
+  #why-choose-us .feature-list li {
+    margin-bottom: 22px;
+  }
 }
 
 .footer-logo {
