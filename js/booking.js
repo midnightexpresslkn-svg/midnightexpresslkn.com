@@ -785,7 +785,7 @@
             $('#a-name-phone').append($('#name-group'), $('#phone-group'));
             $('#a-email-people').append($('#email-group'), $('#passengers-group'));
             $('#a-when').append($('#date-group'), $('#time-group'));
-            $('#a-places').append($('#address-group'), $('#airport-choice-row'), $('#airfield-choice-row'), $('#dest-group'));
+            $('#a-places').append($('#address-group'), $('#airport-choice-row'), $('#dest-group'));
             setFieldLabel('date-label', 'Pickup Date *');
             setFieldLabel('time-label', 'Pickup Time *');
             setFieldLabel('passengers-label', 'Number of Passengers *');
@@ -803,7 +803,7 @@
             } else {
                 setFieldLabel('address-label', 'Home address *');
                 setFieldLabel('destination-label', 'Private airfield *');
-                setCols($('#address-group, #airport-choice-row, #airfield-choice-row'), true);
+                setCols($('#address-group, #airport-choice-row'), false);
                 $('#airport-choice-row, #airfield-choice-row').show();
                 $('#booking-quote').show();
                 showOtherAirfieldBox();
@@ -820,6 +820,7 @@
     function showOtherAirfieldBox() {
         if (tripKind() !== 'airport') return;
         if (($('#airfield-choice').val() || '') === 'other') {
+            $('#airfield-choice-row').after($('#dest-group'));
             $('#dest-group').removeClass('col-md-6').addClass('col-md-12').show();
             $('#booking-destination').attr('placeholder', 'Name the private airfield');
         } else {
@@ -2270,6 +2271,7 @@
             if(id)$('#airport-choice').val('');
             if(($('#trip-type').val()||'')==='airport'){
                 if(id==='other'){
+                    $('#airfield-choice-row').after($('#dest-group'));
                     $('#dest-group').removeClass('col-md-6').addClass('col-md-12').show();
                     $('#booking-destination').attr('placeholder','Name the private airfield');
                 }else{

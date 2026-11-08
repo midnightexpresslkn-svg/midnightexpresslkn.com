@@ -464,6 +464,30 @@ describe("booking", () => {
           source: SOURCE.airport,
           loaded: script,
         });
+        check(
+          view.document.querySelector("#trip-type-group").nextElementSibling.id,
+          "airfield-choice-row",
+          {
+            label: "private airfield menu sits under the trip type",
+            source: SOURCE.airport,
+            loaded: script,
+          },
+        );
+        check(airfield.closest("#a-places"), null, {
+          label: "private airfield menu is not in the address row",
+          source: SOURCE.airport,
+          loaded: script,
+        });
+        check(airline.closest("#a-places") != null, true, {
+          label: "airline menu sits with the home address",
+          source: SOURCE.airport,
+          loaded: script,
+        });
+        check(airline.closest("#address-group"), null, {
+          label: "home address and airport stay separate controls",
+          source: SOURCE.airport,
+          loaded: script,
+        });
         check(shown(airline) && shown(airfield), true, {
           label: "both menus are visible",
           source: SOURCE.airport,
@@ -478,8 +502,8 @@ describe("booking", () => {
           [...airline.options].map((option) => option.textContent),
           [
             "Select an airport",
-            "CLT Charlotte Douglas main terminal",
-            "Concord Regional passenger terminal (Allegiant)",
+            "CLT main terminal",
+            "Concord passenger terminal",
           ],
           {
             label: "airline menu lists only passenger terminals",
@@ -491,8 +515,8 @@ describe("booking", () => {
           [...airfield.options].map((option) => option.textContent),
           [
             "Select a private airfield",
-            "Charlotte private (Wilson Air Center / Signature at CLT)",
-            "Concord private FBO (JQF)",
+            "Charlotte private (Wilson/Signature)",
+            "Concord private FBO",
             "Lincolnton KIPJ",
             "Salisbury KRUQ",
             "Hickory KHKY",

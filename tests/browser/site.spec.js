@@ -276,15 +276,20 @@ test.describe("booking page", () => {
     await expect(page.locator("#airport-choice")).toBeVisible();
     await expect(page.locator("#airfield-choice")).toBeVisible();
     await expect(page.locator("#booking-destination")).toBeHidden();
+    const tripBox = await page.locator("#trip-type").boundingBox();
+    const airfieldBox = await page.locator("#airfield-choice").boundingBox();
+    const airportBox = await page.locator("#airport-choice").boundingBox();
+    expect(airfieldBox.y).toBeGreaterThan(tripBox.y);
+    expect(airfieldBox.y).toBeLessThan(airportBox.y);
     await expect(page.locator("#airport-choice option")).toHaveText([
       "Select an airport",
-      "CLT Charlotte Douglas main terminal",
-      "Concord Regional passenger terminal (Allegiant)",
+      "CLT main terminal",
+      "Concord passenger terminal",
     ]);
     await expect(page.locator("#airfield-choice option")).toHaveText([
       "Select a private airfield",
-      "Charlotte private (Wilson Air Center / Signature at CLT)",
-      "Concord private FBO (JQF)",
+      "Charlotte private (Wilson/Signature)",
+      "Concord private FBO",
       "Lincolnton KIPJ",
       "Salisbury KRUQ",
       "Hickory KHKY",
