@@ -482,7 +482,155 @@ header.hero img.header-logo,
   font-size: 13px;
   line-height: 1.4;
   text-align: center;
-  color: #5c6570;
+  color: #db3040;
+}
+
+/* Surfaces without a photograph: black background, red text.
+   #db3040 is the logo red #d4081c lifted just enough to stay readable
+   on black (the logo red alone is 3.85:1). Hero photos are not restyled.
+   This also removes the teal #00bfa6 accent. */
+body,
+section,
+section.success,
+footer,
+footer .footer-above,
+footer .footer-below,
+.navbar-default,
+.navbar-inverse,
+#booking-quote,
+.bg-light {
+  background-color: #000;
+  color: #db3040;
+}
+
+header.hero,
+header.hero .hero-carousel,
+header.hero .hero-slide {
+  background-color: transparent;
+  color: #fff;
+}
+
+body,
+section,
+section h1,
+section h2,
+section h3,
+section h4,
+section p,
+section li,
+section label,
+footer,
+footer h3,
+footer p,
+footer li,
+.navbar-default .navbar-brand,
+.navbar-default .navbar-nav > li > a,
+.navbar-default .navbar-brand:hover,
+.navbar-default .navbar-brand:focus,
+.navbar-default .navbar-nav > li > a:hover,
+.navbar-default .navbar-nav > li > a:focus,
+a,
+a:hover,
+a:focus,
+a:active,
+a.active,
+.about-cta a,
+.text-accent,
+.text-muted,
+.add-home-tip,
+.floating-label-form-group-with-focus label,
+#reviews [style*="color"] {
+  color: #db3040 !important;
+}
+
+header.hero,
+header.hero a.btn-outline,
+header.hero .btn-outline {
+  color: #fff;
+}
+
+hr.star-primary,
+hr.star-light {
+  border-color: #db3040;
+}
+
+hr.star-primary:after,
+hr.star-light:after {
+  background-color: #000;
+  color: #db3040;
+}
+
+.btn-success,
+.btn-success:hover,
+.btn-success:focus,
+.btn-success:active,
+.btn-success.active,
+.open > .dropdown-toggle.btn-success,
+.btn-primary,
+.btn-primary:hover,
+.btn-primary:focus,
+.scroll-top .btn,
+#bookingForm button[type="submit"],
+#bookingForm button[type="submit"]:hover,
+#bookingForm button[type="submit"]:focus,
+#bookingForm button[type="submit"]:active {
+  background-color: #000;
+  border-color: #db3040;
+  color: #db3040;
+}
+
+a.booking-alternate,
+.booking-alternate,
+.booking-alternate a,
+#booking .booking-legal,
+#booking-quote .quote-disclaimer {
+  color: #db3040;
+}
+
+.form-control,
+.floating-label-form-group input,
+.floating-label-form-group textarea,
+.floating-label-form-group select,
+.form-control:focus,
+.floating-label-form-group input:focus,
+.floating-label-form-group textarea:focus,
+.floating-label-form-group select:focus {
+  background: #000;
+  color: #db3040;
+  border-color: #db3040;
+  box-shadow: none;
+}
+
+.form-control::placeholder {
+  color: #db3040;
+  opacity: 0.75;
+}
+
+#booking-quote {
+  border: 1px solid #db3040;
+}
+
+#reviews [style*="background"] {
+  background: #000 !important;
+  border-color: #db3040 !important;
+  box-shadow: none !important;
+}
+
+.hero-carousel:focus-visible {
+  outline-color: #db3040;
+}
+
+.alert-success {
+  background-color: #000;
+  border-color: #db3040;
+  color: #db3040;
+}
+
+.footer-logo {
+  display: block;
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 12px;
 }
 
 .add-home-tip button {

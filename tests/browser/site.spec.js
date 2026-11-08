@@ -95,8 +95,8 @@ test.describe("booking page", () => {
       .getByPlaceholder("123 Main Street, Denver NC 28037")
       .fill("123 Main Street, Denver NC 28037");
     const quote = page.locator("#quote-details");
-    await expect(quote).toContainText("Cash $70.00");
-    await expect(quote).toContainText("Card $72.10");
+    await expect(quote).toContainText("Cash $65.00");
+    await expect(quote).toContainText("Card $65.00");
     await expect(quote).not.toContainText("2.75");
     await expect(quote).not.toContainText(/per mile/i);
     expect(posts).toEqual([]);
