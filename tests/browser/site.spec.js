@@ -236,7 +236,7 @@ test.describe("booking page", () => {
     await page.goto("/");
     const sentence = page.locator("#about-us .about-text").last();
     await expect(sentence).toHaveText(
-      "We also handle group events, from weddings and parties to nights out, and you can book a group ride right here on our site.",
+      "Traveling with a group? We also provide reliable transportation for weddings, parties, and special events, so you can book a group ride online in minutes.",
     );
     await expect(sentence.getByRole("link")).toHaveAttribute(
       "href",
