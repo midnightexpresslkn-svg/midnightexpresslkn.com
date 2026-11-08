@@ -219,7 +219,8 @@ test.describe("booking page", () => {
   }) => {
     await installMocks(page);
     await page.goto("/");
-    const link = page.getByRole("link", { name: "Book a Group Ride" });
+    const link = page.locator("#book-group-ride");
+    await expect(link).toHaveText("Book a Group Ride");
     await expect(link).toHaveAttribute("href", "/?type=group#booking");
     await page.goto("/?type=group#booking");
     await expect(page.locator("#trip-type")).toHaveValue("group");
@@ -228,6 +229,24 @@ test.describe("booking page", () => {
       "Drop-off / venue *",
     );
     await expect(page.locator("#booking-quote")).toBeHidden();
+  });
+
+  test("about section links a group ride with no price", async ({ page }) => {
+    await installMocks(page);
+    await page.goto("/");
+    const sentence = page.locator("#about-us .about-text").last();
+    await expect(sentence).toHaveText(
+      "We also handle group events, from weddings and parties to nights out, and you can book a group ride right here on our site.",
+    );
+    await expect(sentence.getByRole("link")).toHaveAttribute(
+      "href",
+      "/?type=group#booking",
+    );
+    await expect(sentence.getByRole("link")).toHaveText("book a group ride");
+    await expect(sentence).not.toContainText(/\$|price|fare/i);
+    await expect(sentence.locator("xpath=following-sibling::p[1]")).toHaveClass(
+      /about-cta/,
+    );
   });
 
   test("iPhone shows how to add the booking page to the home screen", async ({
