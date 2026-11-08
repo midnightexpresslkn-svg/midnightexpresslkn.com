@@ -78,7 +78,7 @@
         if (!api) return false;
         if (api.lookupAirport && api.lookupAirport(text)) return true;
         if (api.isPrivateAirfield && api.isPrivateAirfield(text)) return true;
-        var choice = $('#airport-choice').val() || '';
+        var choice = $('#airfield-choice').val() || '';
         var typed = $.trim($('#booking-destination').val() || '');
         return tripKind() === 'airport' && choice === 'other' && text === typed && typed.length > 0;
     }
@@ -785,7 +785,7 @@
             $('#a-name-phone').append($('#name-group'), $('#phone-group'));
             $('#a-email-people').append($('#email-group'), $('#passengers-group'));
             $('#a-when').append($('#date-group'), $('#time-group'));
-            $('#a-places').append($('#address-group'), $('#airport-choice-row'), $('#dest-group'));
+            $('#a-places').append($('#address-group'), $('#airport-choice-row'), $('#airfield-choice-row'), $('#dest-group'));
             setFieldLabel('date-label', 'Pickup Date *');
             setFieldLabel('time-label', 'Pickup Time *');
             setFieldLabel('passengers-label', 'Number of Passengers *');
@@ -794,7 +794,8 @@
             if (kind === 'group') {
                 setFieldLabel('address-label', 'Pickup Address *');
                 setFieldLabel('destination-label', 'Drop-off / venue *');
-                $('#airport-choice-row').hide();
+                setCols($('#address-group, #dest-group'), false);
+                $('#airport-choice-row, #airfield-choice-row').hide();
                 $('#dest-group').removeClass('col-md-12').addClass('col-md-6').show();
                 $('#booking-destination').attr('placeholder', 'CLT Airport');
                 $('#booking-quote').hide();
@@ -802,13 +803,14 @@
             } else {
                 setFieldLabel('address-label', 'Home address *');
                 setFieldLabel('destination-label', 'Private airfield *');
-                $('#airport-choice-row').show();
+                setCols($('#address-group, #airport-choice-row, #airfield-choice-row'), true);
+                $('#airport-choice-row, #airfield-choice-row').show();
                 $('#booking-quote').show();
                 showOtherAirfieldBox();
             }
         } else {
             $('#airport-fields, #group-fields').attr('hidden', 'hidden').hide();
-            $('#airport-choice-row').hide();
+            $('#airport-choice-row, #airfield-choice-row').hide();
             $('#booking-quote').hide();
         }
         updateConditionalFields();
@@ -817,7 +819,7 @@
 
     function showOtherAirfieldBox() {
         if (tripKind() !== 'airport') return;
-        if (($('#airport-choice').val() || '') === 'other') {
+        if (($('#airfield-choice').val() || '') === 'other') {
             $('#dest-group').removeClass('col-md-6').addClass('col-md-12').show();
             $('#booking-destination').attr('placeholder', 'Name the private airfield');
         } else {
@@ -1722,20 +1724,28 @@
             }
 
             // Destination address validation
-            if (!formData.destinationAddress) {
-                if (trip === 'airport' && ($('#airport-choice').val() || '') === 'other') {
+            if (trip === 'airport') {
+                var airlineChoice = $('#airport-choice').val() || '';
+                var airfieldChoice = $('#airfield-choice').val() || '';
+                if (!airlineChoice && !airfieldChoice) {
+                    errors.push('Please choose an airport or a private airfield');
+                    $('#airport-choice, #airfield-choice').closest('.form-group').addClass('has-error');
+                    $('#airport-choice-error, #airfield-choice-error').text('Please choose an airport or a private airfield').show();
+                    isValid = false;
+                } else if (airfieldChoice === 'other' && !formData.destinationAddress) {
                     errors.push('Please name the private airfield');
                     $('#booking-destination').closest('.form-group').addClass('has-error');
                     $('#destination-error').text('Please name the private airfield').show();
-                } else if (trip === 'airport') {
-                    errors.push('Please choose an airport');
-                    $('#airport-choice').closest('.form-group').addClass('has-error');
-                    $('#airport-choice-error').text('Please choose an airport').show();
-                } else {
-                    errors.push('Destination address is required');
-                    $('#booking-destination').closest('.form-group').addClass('has-error');
-                    $('#destination-error').text('Destination address is required').show();
+                    isValid = false;
+                } else if (!formData.destinationAddress) {
+                    errors.push('Please choose an airport or a private airfield');
+                    $('#airport-choice-error, #airfield-choice-error').text('Please choose an airport or a private airfield').show();
+                    isValid = false;
                 }
+            } else if (!formData.destinationAddress) {
+                errors.push('Destination address is required');
+                $('#booking-destination').closest('.form-group').addClass('has-error');
+                $('#destination-error').text('Destination address is required').show();
                 isValid = false;
             }
 
@@ -2167,11 +2177,13 @@
         $('#booking-quote').show();
         var pick=$.trim($('#booking-pickup').val()||'');
         var dest=$.trim($('#booking-destination').val()||'');
-        var choice=$('#airport-choice').val()||'';
-        var airport=airportFromChoice(choice)||lookupAirport(dest);
+        var airline=$('#airport-choice').val()||'';
+        var airfield=$('#airfield-choice').val()||'';
+        var choice=airline||airfield;
+        var airport=airportFromChoice(choice)||(choice?'':lookupAirport(dest));
         var rt=$('#booking-round-trip').is(':checked');
         if(pick.length<6||!/\d/.test(pick)){show(ask);return;}
-        if(choice==='other'){
+        if(airfield==='other'){
             show(dest?fb:ask);
             return;
         }
@@ -2213,25 +2225,49 @@
     function later(){clearTimeout(timer);timer=setTimeout(refresh,900);}
     function fillAirportChoices(){
         var api=globalThis.MidnightServiceArea;
-        var select=document.getElementById('airport-choice');
-        if(!select||!api||!api.AIRPORTS||select.getAttribute('data-ready')==='yes')return;
+        var airline=document.getElementById('airport-choice');
+        var airfield=document.getElementById('airfield-choice');
+        if(!airline||!airfield||!api||!api.AIRPORTS||airline.getAttribute('data-ready')==='yes')return;
         for(var i=0;i<api.AIRPORTS.length;i++){
+            var item=api.AIRPORTS[i];
             var opt=document.createElement('option');
-            opt.value=api.AIRPORTS[i].id;
-            opt.textContent=api.AIRPORTS[i].menu||api.AIRPORTS[i].name;
-            select.appendChild(opt);
+            opt.value=item.id;
+            opt.textContent=item.menu||item.name;
+            if(item.kind==='airline')airline.appendChild(opt);
+            else airfield.appendChild(opt);
         }
         var other=document.createElement('option');
         other.value='other';
         other.textContent='Other private airfield';
-        select.appendChild(other);
-        select.setAttribute('data-ready','yes');
+        airfield.appendChild(other);
+        airline.setAttribute('data-ready','yes');
+        airfield.setAttribute('data-ready','yes');
+    }
+    function chosenAirport(id){
+        var api=globalThis.MidnightServiceArea;
+        if(!id||id==='other'||!api||!api.AIRPORTS)return null;
+        for(var i=0;i<api.AIRPORTS.length;i++){
+            if(api.AIRPORTS[i].id===id)return api.AIRPORTS[i];
+        }
+        return null;
     }
     $(function(){
         fillAirportChoices();
         $('#airport-choice').on('change', function(){
-            var id=$(this).val();
-            var api=globalThis.MidnightServiceArea;
+            var id=$(this).val()||'';
+            if(id)$('#airfield-choice').val('');
+            if(($('#trip-type').val()||'')==='airport')$('#dest-group').hide();
+            if(!id){
+                if(!($('#airfield-choice').val()||''))$('#booking-destination').val('').trigger('input');
+                return;
+            }
+            var found=chosenAirport(id);
+            if(!found)return;
+            $('#booking-destination').val(found.typed).trigger('input');
+        });
+        $('#airfield-choice').on('change', function(){
+            var id=$(this).val()||'';
+            if(id)$('#airport-choice').val('');
             if(($('#trip-type').val()||'')==='airport'){
                 if(id==='other'){
                     $('#dest-group').removeClass('col-md-6').addClass('col-md-12').show();
@@ -2244,11 +2280,11 @@
                 $('#booking-destination').val('').trigger('input');
                 return;
             }
-            if(!id||!api||!api.AIRPORTS)return;
-            var found=null;
-            for(var i=0;i<api.AIRPORTS.length;i++){
-                if(api.AIRPORTS[i].id===id)found=api.AIRPORTS[i];
+            if(!id){
+                if(!($('#airport-choice').val()||''))$('#booking-destination').val('').trigger('input');
+                return;
             }
+            var found=chosenAirport(id);
             if(!found)return;
             $('#booking-destination').val(found.typed).trigger('input');
         });

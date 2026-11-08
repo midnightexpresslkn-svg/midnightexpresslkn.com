@@ -382,7 +382,7 @@ describe("booking", () => {
 
       it("confirms an other private airfield and still sends the request", async () => {
         const view = await renderBooking(script);
-        view.document.querySelector("#airport-choice").value = "other";
+        view.document.querySelector("#airfield-choice").value = "other";
         await fillValid(view, {
           trip: "airport",
           destination: "Smith Field, Charlotte NC",
@@ -399,7 +399,7 @@ describe("booking", () => {
             loaded: script,
           },
         );
-        view.document.querySelector("#airport-choice").value = "other";
+        view.document.querySelector("#airfield-choice").value = "other";
         await submitForm(view);
         check(resultText(view.document).includes("Request received"), true, {
           label: "unknown private airfield is still booked",
@@ -414,11 +414,13 @@ describe("booking", () => {
         });
       });
 
-      it("replaces pickup and destination with home address and the airport menu", async () => {
+      it("keeps home address, airline airports, and private airfields separate", async () => {
         const view = await renderBooking(script);
         chooseTrip(view.document, "airport");
-        const choice = view.document.querySelector("#airport-choice");
+        const airline = view.document.querySelector("#airport-choice");
+        const airfield = view.document.querySelector("#airfield-choice");
         const destination = view.document.querySelector("#booking-destination");
+        const tripSelect = view.document.querySelector("#trip-type");
         check(
           view.document.querySelector("#address-label").textContent.trim(),
           "Home address *",
@@ -432,39 +434,38 @@ describe("booking", () => {
           view.document
             .querySelector("#airport-choice-row label")
             .textContent.trim(),
-          "Airport *",
+          "Airport",
           {
-            label: "airport menu uses the same kind of label as trip type",
+            label: "airline menu is its own field",
             source: SOURCE.airport,
             loaded: script,
           },
         );
         check(
-          choice.className,
-          view.document.querySelector("#trip-type").className,
+          view.document
+            .querySelector("#airfield-choice-row label")
+            .textContent.trim(),
+          "Private airfield",
           {
-            label: "airport menu uses the trip type drop-down style",
-            actual: choice.className,
+            label: "private airfield menu is its own field",
             source: SOURCE.airport,
             loaded: script,
           },
         );
-        check(choice.closest("#a-places") != null, true, {
-          label: "airport menu sits with the home address",
+        check(airline.className, tripSelect.className, {
+          label: "airline menu uses the trip type drop-down style",
+          actual: airline.className,
           source: SOURCE.airport,
           loaded: script,
         });
-        check(
-          view.document.querySelector("#trip-type-group").nextElementSibling.id,
-          "airport-fields",
-          {
-            label: "airport menu is not parked under the trip type",
-            source: SOURCE.airport,
-            loaded: script,
-          },
-        );
-        check(shown(choice), true, {
-          label: "airport menu is visible",
+        check(airfield.className, tripSelect.className, {
+          label: "private airfield menu uses the trip type drop-down style",
+          actual: airfield.className,
+          source: SOURCE.airport,
+          loaded: script,
+        });
+        check(shown(airline) && shown(airfield), true, {
+          label: "both menus are visible",
           source: SOURCE.airport,
           loaded: script,
         });
@@ -474,38 +475,77 @@ describe("booking", () => {
           loaded: script,
         });
         check(
-          [...choice.options].map((option) => option.textContent),
+          [...airline.options].map((option) => option.textContent),
           [
             "Select an airport",
-            "CLT Charlotte Douglas (main terminal)",
-            "Charlotte private (Wilson Air Center / Signature)",
-            "Concord Regional (JQF)",
-            "Lincolnton-Lincoln County Regional (KIPJ)",
-            "Salisbury Mid-Carolina Regional (KRUQ)",
-            "Hickory Regional (KHKY)",
-            "Little Mountain Airport (Airport Rd, Maiden/Catawba)",
-            "Other private airfield",
+            "CLT Charlotte Douglas main terminal",
+            "Concord Regional passenger terminal (Allegiant)",
           ],
           {
-            label: "airport menu lists the same fields",
+            label: "airline menu lists only passenger terminals",
             source: SOURCE.airport,
             loaded: script,
           },
         );
-        choice.value = "KHKY";
-        view.window.jQuery(choice).trigger("change");
+        check(
+          [...airfield.options].map((option) => option.textContent),
+          [
+            "Select a private airfield",
+            "Charlotte private (Wilson Air Center / Signature at CLT)",
+            "Concord private FBO (JQF)",
+            "Lincolnton KIPJ",
+            "Salisbury KRUQ",
+            "Hickory KHKY",
+            "Little Mountain (Airport Rd, Maiden)",
+            "Other private airfield",
+          ],
+          {
+            label: "private airfield menu lists the fields",
+            source: SOURCE.airport,
+            loaded: script,
+          },
+        );
+        airline.value = "CLT";
+        view.window.jQuery(airline).trigger("change");
+        airfield.value = "KHKY";
+        view.window.jQuery(airfield).trigger("change");
+        check(airline.value, "", {
+          label: "choosing a private airfield clears the airline menu",
+          actual: airline.value,
+          source: SOURCE.airport,
+          loaded: script,
+        });
         check(destination.value, "KHKY", {
-          label: "a listed airfield fills the destination",
+          label: "the private airfield fills the destination",
+          source: SOURCE.airport,
+          loaded: script,
+        });
+        airline.value = "JQF-PAX";
+        view.window.jQuery(airline).trigger("change");
+        check(airfield.value, "", {
+          label: "choosing an airline airport clears the private airfield",
+          actual: airfield.value,
+          source: SOURCE.airport,
+          loaded: script,
+        });
+        check(destination.value, "Allegiant", {
+          label: "the airline airport fills the destination",
           source: SOURCE.airport,
           loaded: script,
         });
         check(shown(destination), false, {
-          label: "a listed airfield keeps the text box hidden",
+          label: "a listed choice keeps the text box hidden",
           source: SOURCE.airport,
           loaded: script,
         });
-        choice.value = "other";
-        view.window.jQuery(choice).trigger("change");
+        airfield.value = "other";
+        view.window.jQuery(airfield).trigger("change");
+        check(airline.value, "", {
+          label: "Other private airfield clears the airline menu",
+          actual: airline.value,
+          source: SOURCE.airport,
+          loaded: script,
+        });
         check(shown(destination), true, {
           label: "Other private airfield reveals the text box",
           source: SOURCE.airport,
@@ -530,23 +570,45 @@ describe("booking", () => {
             loaded: script,
           },
         );
-        check(
-          view.document.querySelector("#destination-label").textContent.trim(),
-          "Drop-off / venue *",
-          {
-            label: "group form still asks for a drop-off",
-            source: SOURCE.group,
-            loaded: script,
-          },
-        );
-        check(shown(choice), false, {
-          label: "group form hides the airport menu",
+        check(shown(airline), false, {
+          label: "group form hides the airline menu",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(shown(airfield), false, {
+          label: "group form hides the private airfield menu",
           source: SOURCE.group,
           loaded: script,
         });
         check(shown(destination), true, {
           label: "group form keeps the typed drop-off",
           source: SOURCE.group,
+          loaded: script,
+        });
+      });
+
+      it("refuses an airport trip until one menu is chosen", async () => {
+        const view = await renderBooking(script);
+        await fillValid(view, { trip: "airport" });
+        view.document.querySelector("#airport-choice").value = "";
+        view.document.querySelector("#airfield-choice").value = "";
+        await submitForm(view);
+        check(
+          resultText(view.document).includes(
+            "Please choose an airport or a private airfield",
+          ),
+          true,
+          {
+            label: "submit requires an airline airport or a private airfield",
+            actual: resultText(view.document),
+            source: SOURCE.airport,
+            loaded: script,
+          },
+        );
+        check(resultText(view.document).includes("Request received"), false, {
+          label: "a filled destination alone does not book",
+          actual: resultText(view.document),
+          source: SOURCE.airport,
           loaded: script,
         });
       });

@@ -274,20 +274,25 @@ test.describe("booking page", () => {
     await page.locator("#trip-type").selectOption("airport");
     await expect(page.locator("#address-label")).toHaveText("Home address *");
     await expect(page.locator("#airport-choice")).toBeVisible();
-    await expect(page.locator("#a-places")).toContainText("Airport");
+    await expect(page.locator("#airfield-choice")).toBeVisible();
     await expect(page.locator("#booking-destination")).toBeHidden();
     await expect(page.locator("#airport-choice option")).toHaveText([
       "Select an airport",
-      "CLT Charlotte Douglas (main terminal)",
-      "Charlotte private (Wilson Air Center / Signature)",
-      "Concord Regional (JQF)",
-      "Lincolnton-Lincoln County Regional (KIPJ)",
-      "Salisbury Mid-Carolina Regional (KRUQ)",
-      "Hickory Regional (KHKY)",
-      "Little Mountain Airport (Airport Rd, Maiden/Catawba)",
+      "CLT Charlotte Douglas main terminal",
+      "Concord Regional passenger terminal (Allegiant)",
+    ]);
+    await expect(page.locator("#airfield-choice option")).toHaveText([
+      "Select a private airfield",
+      "Charlotte private (Wilson Air Center / Signature at CLT)",
+      "Concord private FBO (JQF)",
+      "Lincolnton KIPJ",
+      "Salisbury KRUQ",
+      "Hickory KHKY",
+      "Little Mountain (Airport Rd, Maiden)",
       "Other private airfield",
     ]);
-    await page.locator("#airport-choice").selectOption("KHKY");
+    await page.locator("#airfield-choice").selectOption("KHKY");
+    await expect(page.locator("#airport-choice")).toHaveValue("");
     await expect(page.locator("#booking-destination")).toHaveValue("KHKY");
     await page
       .getByPlaceholder("123 Main Street, Denver NC 28037")
@@ -296,7 +301,8 @@ test.describe("booking page", () => {
       "Hickory Regional",
     );
     await expect(page.locator("#quote-details")).toContainText("Cash");
-    await page.locator("#airport-choice").selectOption("other");
+    await page.locator("#airfield-choice").selectOption("other");
+    await expect(page.locator("#airport-choice")).toHaveValue("");
     await page
       .getByPlaceholder("Name the private airfield")
       .fill("Smith Field, Charlotte NC");
@@ -333,6 +339,7 @@ test.describe("booking page", () => {
       "Drop-off / venue *",
     );
     await expect(page.locator("#airport-choice-row")).toBeHidden();
+    await expect(page.locator("#airfield-choice-row")).toBeHidden();
     await expect(page.locator("#booking-quote")).toBeHidden();
   });
 

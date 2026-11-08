@@ -316,12 +316,14 @@
   // Passenger door or FBO door, not the middle of the runway.
   // CLT main is the airline curb. CLT private is Wilson Air Center at
   // 5400 Airport Drive, also used for Signature and "Charlotte private airport".
-  // Concord is the FBO at 9000 Aviation Blvd.
+  // Concord airline passengers use the Allegiant terminal at 7435 Zephyr Place NW.
+  // Concord private flights use the FBO at 9000 Aviation Blvd.
   var AIRPORTS = [
     {
       id: "CLT",
+      kind: "airline",
       name: "Charlotte Douglas Airport (CLT)",
-      menu: "CLT Charlotte Douglas (main terminal)",
+      menu: "CLT Charlotte Douglas main terminal",
       typed: "CLT",
       lat: 35.2224,
       lon: -80.9423,
@@ -335,9 +337,27 @@
       ],
     },
     {
+      id: "JQF-PAX",
+      kind: "airline",
+      name: "Concord Regional passenger terminal (Allegiant)",
+      menu: "Concord Regional passenger terminal (Allegiant)",
+      typed: "Allegiant",
+      lat: 35.38044,
+      lon: -80.71382,
+      aliases: [
+        "allegiant",
+        "concord allegiant",
+        "7435 zephyr",
+        "zephyr place",
+        "concord passenger terminal",
+        "concord regional passenger",
+      ],
+    },
+    {
       id: "CLT-PRIVATE",
+      kind: "private",
       name: "CLT private terminal (Wilson Air Center)",
-      menu: "Charlotte private (Wilson Air Center / Signature)",
+      menu: "Charlotte private (Wilson Air Center / Signature at CLT)",
       typed: "Wilson Air Center",
       lat: 35.20975,
       lon: -80.93157,
@@ -353,8 +373,9 @@
     },
     {
       id: "JQF",
+      kind: "private",
       name: "Concord Regional Airport",
-      menu: "Concord Regional (JQF)",
+      menu: "Concord private FBO (JQF)",
       typed: "Concord Regional",
       lat: 35.3856,
       lon: -80.71246,
@@ -369,8 +390,9 @@
     },
     {
       id: "KIPJ",
+      kind: "private",
       name: "Lincolnton-Lincoln County Regional (KIPJ)",
-      menu: "Lincolnton-Lincoln County Regional (KIPJ)",
+      menu: "Lincolnton KIPJ",
       typed: "KIPJ",
       lat: 35.48424,
       lon: -81.16304,
@@ -383,8 +405,9 @@
     },
     {
       id: "KRUQ",
+      kind: "private",
       name: "Mid-Carolina Regional, Salisbury (KRUQ)",
-      menu: "Salisbury Mid-Carolina Regional (KRUQ)",
+      menu: "Salisbury KRUQ",
       typed: "KRUQ",
       lat: 35.64653,
       lon: -80.52062,
@@ -392,8 +415,9 @@
     },
     {
       id: "KHKY",
+      kind: "private",
       name: "Hickory Regional (KHKY)",
-      menu: "Hickory Regional (KHKY)",
+      menu: "Hickory KHKY",
       typed: "KHKY",
       lat: 35.74222,
       lon: -81.38939,
@@ -401,8 +425,9 @@
     },
     {
       id: "LITTLE-MOUNTAIN",
+      kind: "private",
       name: "Little Mountain Airport",
-      menu: "Little Mountain Airport (Airport Rd, Maiden/Catawba)",
+      menu: "Little Mountain (Airport Rd, Maiden)",
       typed: "Little Mountain Airport",
       lat: 35.5918,
       lon: -81.07952,
