@@ -806,6 +806,7 @@
             }
         } else {
             $('#airport-fields, #group-fields').attr('hidden', 'hidden').hide();
+            $('#airport-choice-row').hide();
             $('#booking-quote').hide();
         }
         updateConditionalFields();
