@@ -695,3 +695,174 @@ a.booking-alternate,
   font-size: 13px;
   padding: 4px 10px;
 }
+
+/* Sample: Areas Served, Book Your Ride, and Contact only.
+   White headings become the van decal red. Red text, icons, and
+   form outlines become white. Underline bars stay the accent red.
+   Logo images are not styled. */
+#areas-served h2,
+#areas-served h3,
+#areas-served h4,
+#booking h2,
+#booking h4,
+#contact h2 {
+  color: #be0b25 !important;
+}
+
+#areas-served li,
+#areas-served p,
+#areas-served .service-area-list,
+#booking p,
+#booking label,
+#booking a,
+#booking .add-home-tip,
+#booking .booking-legal,
+#booking .booking-legal a,
+#booking .form-control,
+#booking select,
+#booking textarea,
+#booking .help-block,
+#booking-quote,
+#booking-quote .quote-disclaimer,
+#contact p,
+#contact a,
+#contact .fa {
+  color: #ffffff !important;
+}
+
+#booking .form-control,
+#booking select,
+#booking textarea,
+#booking .form-control:focus,
+#booking select:focus,
+#booking textarea:focus,
+#booking-quote {
+  border-color: #ffffff !important;
+  background-color: #000;
+}
+
+#booking .form-control::placeholder {
+  color: #ffffff;
+  opacity: 0.8;
+}
+
+#bookingForm button[type="submit"],
+#bookingForm button[type="submit"]:hover,
+#bookingForm button[type="submit"]:focus,
+#bookingForm button[type="submit"]:active {
+  color: #ffffff !important;
+  border-color: #ffffff !important;
+  background-color: #000 !important;
+}
+
+#areas-served hr,
+#booking hr,
+#contact hr {
+  border-color: #db3040;
+}
+
+@media (max-width: 767px) {
+  #areas-served .service-area-list {
+    font-size: 20px;
+    margin-bottom: 14px;
+  }
+
+  #areas-served .service-area-list h4 {
+    font-size: 22.5px;
+    margin-bottom: 10px;
+  }
+
+  #areas-served .service-area-column,
+  #areas-served li {
+    margin-bottom: 10px;
+  }
+
+  #booking h2,
+  #contact h2 {
+    font-size: 22.5px;
+  }
+
+  #contact .contact-info p,
+  .contact-lines p {
+    font-size: 18.75px;
+    margin: 8px 0;
+  }
+
+  #contact .contact-info p.contact-phone,
+  #contact .contact-info p.contact-phone a {
+    font-size: 21.25px;
+  }
+
+  #booking .add-home-tip {
+    font-size: 16.25px;
+    margin-bottom: 16px;
+  }
+
+  #bookingForm label,
+  #bookingForm .form-control,
+  #bookingForm select,
+  #bookingForm textarea,
+  #bookingForm button[type="submit"] {
+    font-size: 20px;
+  }
+
+  #booking .form-group,
+  #booking .trip-kind {
+    margin-bottom: 16px;
+  }
+
+  #booking .booking-legal {
+    font-size: 16.25px;
+    line-height: 1.5;
+    margin-top: 14px;
+  }
+
+  #booking p.text-center {
+    font-size: 18.75px;
+    margin-top: 14px !important;
+  }
+}
+
+@media (min-width: 768px) {
+  #areas-served .service-area-list {
+    font-size: 20px;
+  }
+
+  #areas-served .service-area-column {
+    margin-bottom: 28px;
+  }
+
+  #booking h2,
+  #contact h2 {
+    font-size: 35px;
+  }
+
+  #contact .contact-info p.contact-phone,
+  #contact .contact-info p.contact-phone a {
+    font-size: 25px;
+  }
+
+  #contact .contact-info p.contact-email,
+  #contact .contact-info p.contact-address {
+    font-size: 20px;
+    margin-top: 12px;
+  }
+
+  #bookingForm label,
+  #bookingForm .form-control,
+  #bookingForm select,
+  #bookingForm textarea,
+  #bookingForm button[type="submit"],
+  #booking p.text-center {
+    font-size: 20px;
+  }
+
+  #booking .booking-legal {
+    font-size: 16.25px;
+    line-height: 1.5;
+  }
+
+  #booking .form-group {
+    margin-bottom: 20px;
+  }
+}
