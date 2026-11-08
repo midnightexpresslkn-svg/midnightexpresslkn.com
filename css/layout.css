@@ -512,15 +512,10 @@ header.hero .hero-slide {
 
 body,
 section,
-section h1,
-section h2,
-section h3,
-section h4,
 section p,
 section li,
 section label,
 footer,
-footer h3,
 footer p,
 footer li,
 .navbar-default .navbar-brand,
@@ -543,7 +538,17 @@ a.active,
   color: #db3040 !important;
 }
 
+section h1,
+section h2,
+section h3,
+section h4,
+footer h3 {
+  color: #ffffff !important;
+}
+
 header.hero,
+header.hero h1,
+header.hero .name,
 header.hero a.btn-outline,
 header.hero .btn-outline {
   color: #fff;
