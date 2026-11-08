@@ -639,8 +639,8 @@ a.booking-alternate,
 
 /* Sample: Services and Why Choose Us only.
    Body copy is white. Headings and the check marks use the van decal red.
-   The plane, clock, and group icons stay white. Underline bars and the
-   group button stay the existing accent red. */
+   The plane, clock, and group icons stay white. Underline bars stay the
+   existing accent red. The group button text stays red and its outline is white. */
 #services h2,
 #services h3,
 #why-choose-us h2,
@@ -661,7 +661,7 @@ a.booking-alternate,
 #services .btn:active {
   color: #db3040 !important;
   background-color: #000;
-  border-color: #db3040;
+  border-color: #ffffff;
 }
 
 @media (min-width: 768px) {
