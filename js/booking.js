@@ -813,7 +813,6 @@
      */
     function placeFlightField() {
         var $flight = $('#flight-group');
-        if (!$flight.length) return;
         if (isGroupEvent()) {
             $flight.hide();
             $('#flight-slot').hide();

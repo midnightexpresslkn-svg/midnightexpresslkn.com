@@ -1636,6 +1636,7 @@ describe("booking", () => {
           roundTrip: true,
           returnDate: day,
           returnTime: "10:30:00",
+          flight: "AA1234",
         });
         await submitForm(view);
         check(resultText(view.document).includes("Request received"), true, {
