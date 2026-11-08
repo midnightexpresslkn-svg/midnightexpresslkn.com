@@ -14,6 +14,14 @@
  * Driving quotes: redeploy as a new version (Execute as Me, Anyone) and
  * re-authorize when Google asks for the Maps permission. Until that deploy
  * is live, the website will not show a computed fare.
+ *
+ * Group sheet: a groupEvent of Yes adds one row to the spreadsheet
+ * "Midnight Express LKN Group Bookings". The first group booking creates
+ * that file in this account (midnightexpresslkn@gmail.com) and saves its id.
+ * The calendar event is created first. If the sheet write fails, the event
+ * stays. After pasting this version: Deploy, Manage deployments, edit the
+ * existing deployment, choose New version, and Deploy. Keep the same web
+ * app URL. Approve the Sheets permission when Google asks.
  */
 
 var CALENDAR_ID = "midnightexpresslkn@gmail.com";
@@ -119,10 +127,11 @@ function doPost(e) {
     });
 
     var cal = getBusinessCalendar_();
-    cal.createEvent(title, start, end, {
+    var event = cal.createEvent(title, start, end, {
       description: description,
       location: pickup,
     });
+    var eventIds = event && event.getId ? [event.getId()] : [];
 
     if (/^yes$/i.test(roundTrip) && returnDate && returnTime) {
       var rStart = parseLocalDateTime_(returnDate, returnTime);
@@ -142,10 +151,36 @@ function doPost(e) {
           notes: notes,
           roundTrip: "Yes (return)",
         });
-        cal.createEvent(rTitle, rStart, rEnd, {
+        var returnEvent = cal.createEvent(rTitle, rStart, rEnd, {
           description: rDesc,
           location: destination,
         });
+        if (returnEvent && returnEvent.getId) {
+          eventIds.push(returnEvent.getId());
+        }
+      }
+    }
+
+    if (/^yes$/i.test(String(data.groupEvent || ""))) {
+      try {
+        appendGroupBooking_({
+          name: name,
+          phone: phone,
+          email: email,
+          pickup: pickup,
+          destination: destination,
+          date: pickupDate,
+          time: pickupTime,
+          passengers: passengers,
+          bags: bags,
+          flight: flight,
+          roundTrip: roundTrip,
+          returnTime: returnTime,
+          notes: notes,
+          eventId: eventIds.join(", "),
+        });
+      } catch (sheetErr) {
+        // The request is already on the calendar. A sheet problem must not erase it.
       }
     }
 
@@ -356,6 +391,74 @@ function quoteDrivingMeters_(origin, airport) {
   } catch (ignore) {
     return { ok: false };
   }
+}
+
+var GROUP_BOOKINGS_NAME = "Midnight Express LKN Group Bookings";
+var GROUP_BOOKINGS_PROPERTY = "GROUP_BOOKINGS_SPREADSHEET_ID";
+var GROUP_BOOKINGS_HEADERS = [
+  "Timestamp received",
+  "Name",
+  "Phone",
+  "Email",
+  "Pickup",
+  "Drop-off/venue",
+  "Date",
+  "Pickup time",
+  "Passengers",
+  "Bags",
+  "Flight",
+  "Return trip",
+  "Return time",
+  "Notes",
+  "Calendar event id",
+];
+
+/**
+ * Spreadsheet owned by the account that runs this script.
+ * Deployed as Me, that account is midnightexpresslkn@gmail.com.
+ * The id is kept in Script Properties so later bookings reuse the same file.
+ */
+function groupBookingsSheet_() {
+  var props = PropertiesService.getScriptProperties();
+  var id = props.getProperty(GROUP_BOOKINGS_PROPERTY);
+  var ss = null;
+  if (id) {
+    try {
+      ss = SpreadsheetApp.openById(id);
+    } catch (ignore) {
+      ss = null;
+    }
+  }
+  if (!ss) {
+    ss = SpreadsheetApp.create(GROUP_BOOKINGS_NAME);
+    props.setProperty(GROUP_BOOKINGS_PROPERTY, ss.getId());
+  }
+  var sheet = ss.getSheets()[0];
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(GROUP_BOOKINGS_HEADERS);
+  }
+  return sheet;
+}
+
+function appendGroupBooking_(row) {
+  var sheet = groupBookingsSheet_();
+  sheet.appendRow([
+    new Date(),
+    row.name,
+    row.phone,
+    row.email,
+    row.pickup,
+    row.destination,
+    row.date,
+    row.time,
+    row.passengers,
+    row.bags,
+    row.flight,
+    row.roundTrip,
+    row.returnTime,
+    row.notes,
+    row.eventId,
+  ]);
 }
 
 function respond_(obj, callback) {
