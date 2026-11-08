@@ -266,6 +266,57 @@ test.describe("booking page", () => {
     );
   });
 
+  test("known airfield is priced and an other private airfield still books", async ({
+    page,
+  }) => {
+    const posts = await installMocks(page, { miles: 12 });
+    await page.goto("/");
+    await page.locator("#trip-type").selectOption("airport");
+    await page.locator("#airport-choice").selectOption("KHKY");
+    await expect(page.locator("#booking-destination")).toHaveValue("KHKY");
+    await page
+      .getByPlaceholder("123 Main Street, Denver NC 28037")
+      .fill("123 Main Street, Denver NC 28037");
+    await expect(page.locator("#quote-details")).toContainText(
+      "Hickory Regional",
+    );
+    await expect(page.locator("#quote-details")).toContainText("Cash");
+    await page.locator("#airport-choice").selectOption("other");
+    await page
+      .getByPlaceholder("Name the private airfield")
+      .fill("Smith Field, Charlotte NC");
+    await expect(page.locator("#quote-details")).toContainText(
+      "We'll confirm your price when we call.",
+    );
+    await page.locator("#booking-name").fill("TEST, DO NOT BOOK");
+    await page.locator("#booking-phone").fill("9804229125");
+    await page.locator("#booking-passengers").fill("2");
+    await page.locator("#booking-date").evaluate((el) => {
+      el._flatpickr.setDate("2026-12-15", true);
+      el.value = "2026-12-15";
+    });
+    await page.locator("#booking-time").evaluate((el) => {
+      el._flatpickr.setDate("10:00:00", true);
+      el.value = "10:00:00";
+    });
+    await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
+    await expect(page.locator("#booking-success")).toContainText(
+      "Request received",
+    );
+    await expect(page.locator("#booking-success")).not.toContainText(
+      "don't service",
+    );
+    expect(posts.length).toBeGreaterThan(0);
+  });
+
+  test("group form still has no airport price", async ({ page }) => {
+    await installMocks(page);
+    await page.goto("/");
+    await page.locator("#trip-type").selectOption("group");
+    await expect(page.locator("#airport-choice-row")).toBeHidden();
+    await expect(page.locator("#booking-quote")).toBeHidden();
+  });
+
   test("manifest start url opens the booking section", async ({ page }) => {
     await installMocks(page);
     const response = await page.goto("/manifest.webmanifest");

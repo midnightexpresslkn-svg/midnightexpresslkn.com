@@ -418,6 +418,123 @@ describe("service area rules", () => {
       label: "blank is not an airfield",
       source: SOURCE.excluded,
     });
+    check(area.lookupAirport(""), null, {
+      label: "blank is not a known airport",
+      source: SOURCE.excluded,
+    });
+    check(area.lookupAirport("KIPJ and KRUQ"), null, {
+      label: "two named airfields is not one airport",
+      source: SOURCE.excluded,
+    });
+    const aliases = [
+      ["CLT", "CLT"],
+      ["Charlotte Douglas", "CLT"],
+      ["Wilson Air Center", "CLT-PRIVATE"],
+      ["Wilson Air Center, Charlotte NC", "CLT-PRIVATE"],
+      ["Signature at CLT", "CLT-PRIVATE"],
+      ["Signature Flight Support, Charlotte NC", "CLT-PRIVATE"],
+      ["Charlotte private airport", "CLT-PRIVATE"],
+      ["CLT private", "CLT-PRIVATE"],
+      ["5400 Airport Drive", "CLT-PRIVATE"],
+      ["Concord Regional", "JQF"],
+      ["Concord-Padgett Regional", "JQF"],
+      ["KJQF", "JQF"],
+      ["9000 Aviation Blvd", "JQF"],
+      ["KIPJ", "KIPJ"],
+      ["Lincolnton airport", "KIPJ"],
+      ["Lincolnton-Lincoln County Regional", "KIPJ"],
+      ["KRUQ", "KRUQ"],
+      ["Salisbury airport", "KRUQ"],
+      ["Mid-Carolina Regional", "KRUQ"],
+      ["KHKY", "KHKY"],
+      ["Hickory Regional", "KHKY"],
+      ["Hickory airport", "KHKY"],
+      ["Little Mountain Airport", "LITTLE-MOUNTAIN"],
+      ["Laneys Airport", "LANEYS"],
+      ["Laneys", "LANEYS"],
+      ["Long Island Airpark", "LONG-ISLAND"],
+    ];
+    for (const [input, id] of aliases) {
+      check(area.whichAirport(input), id, {
+        label: `known airfield ${input}`,
+        source: SOURCE.excluded,
+      });
+      const found = area.lookupAirport(input);
+      check(
+        found && typeof found.lat === "number" && typeof found.lon === "number",
+        true,
+        {
+          label: `${input} has a door coordinate`,
+          source: SOURCE.excluded,
+        },
+      );
+    }
+    check(
+      trip(
+        "123 Main Street, Denver NC 28037",
+        "Wilson Air Center, Charlotte NC",
+      ).ok,
+      true,
+      {
+        label:
+          "Wilson Air Center in Charlotte is an airport, not an outside town",
+        source: SOURCE.excluded,
+      },
+    );
+    check(
+      trip(
+        "123 Main Street, Denver NC 28037",
+        "Signature Flight Support, Charlotte NC",
+      ).ok,
+      true,
+      {
+        label: "Signature in Charlotte is an airport, not an outside town",
+        source: SOURCE.excluded,
+      },
+    );
+    check(
+      trip("123 Main Street, Denver NC 28037", "Concord-Padgett Regional").ok,
+      true,
+      {
+        label: "Concord-Padgett is the Concord airport",
+        source: SOURCE.excluded,
+      },
+    );
+    check(trip("100 Main St, Charlotte NC", "KIPJ").code, "outside", {
+      label: "a Charlotte pickup is still outside",
+      source: SOURCE.excluded,
+    });
+    check(
+      trip("Smith Field, Charlotte NC", "123 Main Street, Denver NC 28037", {
+        pickupIsAirfield: true,
+      }).ok,
+      true,
+      {
+        label:
+          "an unmarked private pickup is allowed when marked as an airfield",
+        source: SOURCE.excluded,
+      },
+    );
+    check(
+      trip("123 Main Street, Denver NC 28037", "Smith Field, Charlotte NC", {
+        destinationIsAirfield: true,
+      }).ok,
+      true,
+      {
+        label:
+          "an unmarked private destination is allowed when marked as an airfield",
+        source: SOURCE.excluded,
+      },
+    );
+    check(
+      trip("Smith Field, Charlotte NC", "123 Main Street, Denver NC 28037")
+        .code,
+      "outside",
+      {
+        label: "Charlotte text is still outside when it is not an airfield",
+        source: SOURCE.excluded,
+      },
+    );
     check(
       trip("Lake Norman Airpark, Mooresville NC", "123 Main, Denver NC").ok,
       true,
@@ -465,6 +582,26 @@ describe("service area rules", () => {
       label: "unknown ZIP is not a town",
       source: SOURCE.excluded,
     });
+    check(area.isPrivateAirfield("airpark road"), false, {
+      label: "airpark road is a street",
+      source: SOURCE.excluded,
+    });
+    check(area.classifyAddress("").status, "unclear", {
+      label: "blank address is unclear",
+      source: SOURCE.excluded,
+    });
+    check(area.classifyAddress("28037").status, "served", {
+      label: "served ZIP with no town name",
+      source: SOURCE.excluded,
+    });
+    check(
+      area.classifyAddress("100 Main St, Lowesville 28164").status,
+      "served",
+      {
+        label: "shared ZIP with the served town name",
+        source: SOURCE.excluded,
+      },
+    );
     check(area.classifyAddress("").status, "unclear", {
       label: "blank address",
       source: SOURCE.excluded,

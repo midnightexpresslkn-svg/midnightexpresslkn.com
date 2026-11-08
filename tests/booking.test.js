@@ -353,6 +353,67 @@ describe("booking", () => {
         });
       });
 
+      it("prices each known airfield from its own door", async () => {
+        const view = await renderBooking(script, { miles: 12 });
+        const airports = view.window.MidnightServiceArea.AIRPORTS;
+        for (const airport of airports) {
+          await showQuote(view, {
+            pickup: "123 Main Street, Denver NC 28037",
+            destination: airport.typed,
+          });
+          const routes = view.state.requests.filter((request) =>
+            request.url.includes("router.project-osrm.org"),
+          );
+          const route = routes[routes.length - 1];
+          check(route.url.includes(`${airport.lon},${airport.lat}`), true, {
+            label: `${airport.id} quote uses its door`,
+            actual: route.url,
+            source: SOURCE.quote,
+            loaded: script,
+          });
+          check(quoteLabel(view.document), `One way to ${airport.name}`, {
+            label: `${airport.id} quote names the airfield`,
+            actual: quoteLabel(view.document),
+            source: SOURCE.quote,
+            loaded: script,
+          });
+        }
+      });
+
+      it("confirms an other private airfield and still sends the request", async () => {
+        const view = await renderBooking(script);
+        view.document.querySelector("#airport-choice").value = "other";
+        await fillValid(view, {
+          trip: "airport",
+          destination: "Smith Field, Charlotte NC",
+        });
+        check(
+          await showQuote(view, {
+            pickup: "123 Main Street, Denver NC 28037",
+            destination: "Smith Field, Charlotte NC",
+          }),
+          "We'll confirm your price when we call.",
+          {
+            label: "unknown private airfield has no computed price",
+            source: SOURCE.quote,
+            loaded: script,
+          },
+        );
+        view.document.querySelector("#airport-choice").value = "other";
+        await submitForm(view);
+        check(resultText(view.document).includes("Request received"), true, {
+          label: "unknown private airfield is still booked",
+          actual: resultText(view.document),
+          source: SOURCE.serviceArea,
+          loaded: script,
+        });
+        check(bookingPosts(view.state).length > 0, true, {
+          label: "unknown private airfield is sent",
+          source: SOURCE.serviceArea,
+          loaded: script,
+        });
+      });
+
       it("shows no price when the pickup is an excluded town", async () => {
         const view = await renderBooking(script, { miles: 40 });
         const text = await showQuote(view, {

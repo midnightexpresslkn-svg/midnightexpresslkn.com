@@ -73,6 +73,16 @@
      * Refuse a ride before any booking request is created.
      * Text that already names a served or unserved place is not sent to the geocoder.
      */
+    function endIsAirfield(text) {
+        var api = globalThis.MidnightServiceArea;
+        if (!api) return false;
+        if (api.lookupAirport && api.lookupAirport(text)) return true;
+        if (api.isPrivateAirfield && api.isPrivateAirfield(text)) return true;
+        var choice = $('#airport-choice').val() || '';
+        var typed = $.trim($('#booking-destination').val() || '');
+        return tripKind() === 'airport' && choice === 'other' && text === typed && typed.length > 0;
+    }
+
     async function decideServiceArea(pickup, destination) {
         var api = globalThis.MidnightServiceArea;
         if (!api) {
@@ -86,17 +96,21 @@
         }
         var pickupGeo = null;
         var destinationGeo = null;
-        if (!api.isAirportEnd(pickup) && api.classifyAddress(pickup).status === 'unclear') {
+        var pickupIsAirfield = endIsAirfield(pickup);
+        var destinationIsAirfield = endIsAirfield(destination);
+        if (!pickupIsAirfield && api.classifyAddress(pickup).status === 'unclear') {
             pickupGeo = await censusPlace(pickup);
         }
-        if (!api.isAirportEnd(destination) && api.classifyAddress(destination).status === 'unclear') {
+        if (!destinationIsAirfield && api.classifyAddress(destination).status === 'unclear') {
             destinationGeo = await censusPlace(destination);
         }
         var decision = api.evaluateTrip({
             pickup: pickup,
             destination: destination,
             pickupGeo: pickupGeo,
-            destinationGeo: destinationGeo
+            destinationGeo: destinationGeo,
+            pickupIsAirfield: pickupIsAirfield,
+            destinationIsAirfield: destinationIsAirfield
         });
         decision.pickupGeo = pickupGeo;
         decision.destinationGeo = destinationGeo;
@@ -780,10 +794,12 @@
             $('#airport-fields').removeAttr('hidden').show();
             if (kind === 'group') {
                 setFieldLabel('destination-label', 'Drop-off / venue *');
+                $('#airport-choice-row').hide();
                 $('#booking-quote').hide();
                 $('#quote-details').empty();
             } else {
                 setFieldLabel('destination-label', 'Destination Address *');
+                $('#airport-choice-row').show();
                 $('#booking-quote').show();
             }
         } else {
@@ -2053,17 +2069,13 @@
     if(!$)return;
     var fb='We\'ll confirm your price when we call.';
     var ask='Enter your pickup address and airport to see your price.';
-    var hubs={
-        CLT:{name:'Charlotte Douglas Airport (CLT)',lat:35.2140,lon:-80.9431},
-        JQF:{name:'Concord Regional Airport',lat:35.3878,lon:-80.7091}
-    };
     var geoCache={}, routeCache={}, timer=null, seq=0;
     function q(a){var s='',i=0;while(i<a.length){s+=String.fromCharCode(a[i]^13);i++;}return +s;}
     function esc(s){return String(s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
     function money(n){return '$'+n.toFixed(2);}
-    function whichAirport(raw){
+    function lookupAirport(raw){
         var api=globalThis.MidnightServiceArea;
-        return api?api.whichAirport(raw):null;
+        return api&&api.lookupAirport?api.lookupAirport(raw):null;
     }
     function censusGeo(a){
         return new Promise(function(res,rej){
@@ -2091,11 +2103,10 @@
         return p;
     }
     function inArea(g){return g.lat>34.9&&g.lat<36.2&&g.lon>-81.8&&g.lon<-80.2;}
-    function driveMiles(g,ap){
-        var k=g.lat.toFixed(5)+','+g.lon.toFixed(5)+'>'+ap;
+    function driveMiles(g,airport){
+        var k=g.lat.toFixed(5)+','+g.lon.toFixed(5)+'>'+airport.id;
         if(routeCache[k])return routeCache[k];
-        var A=hubs[ap];
-        var p=fetch('https://router.project-osrm.org/route/v1/driving/'+g.lon+','+g.lat+';'+A.lon+','+A.lat+'?overview=false')
+        var p=fetch('https://router.project-osrm.org/route/v1/driving/'+g.lon+','+g.lat+';'+airport.lon+','+airport.lat+'?overview=false')
             .then(function(r){return r.json();}).then(function(j){
                 if(j&&j.code==='Ok'&&j.routes&&j.routes.length)return j.routes[0].distance/1609.344;throw 'noroute';});
         routeCache[k]=p; p.catch(function(){delete routeCache[k];});
@@ -2122,15 +2133,16 @@
         $('#booking-quote').show();
         var pick=$.trim($('#booking-pickup').val()||'');
         var dest=$.trim($('#booking-destination').val()||'');
-        var ap=whichAirport(dest);
-        var airportYes=true;
+        var choice=$('#airport-choice').val()||'';
+        var airport=lookupAirport(dest);
         var rt=$('#booking-round-trip').is(':checked');
         if(pick.length<6||!/\d/.test(pick)){show(ask);return;}
         if(!dest){show(ask);return;}
         var api=globalThis.MidnightServiceArea;
-        var prelim=api?api.evaluateTrip({pickup:pick,destination:dest}):{code:'unclear'};
+        var forceAirfield=choice==='other'||(api&&api.isPrivateAirfield&&api.isPrivateAirfield(dest));
+        var prelim=api?api.evaluateTrip({pickup:pick,destination:dest,destinationIsAirfield:forceAirfield&&!airport}):{code:'unclear'};
         if(prelim.code==='outside'){show(esc(api.OUT_OF_AREA_MESSAGE));return;}
-        if(!airportYes||!ap){show(fb);return;}
+        if(!airport){show(fb);return;}
         show('Figuring your price&hellip;');
         geocode(pick).then(function(g){
             if(my!==seq)return;
@@ -2144,13 +2156,13 @@
                 if(!decision.ok)throw 'unclear';
             }
             if(!inArea(g))throw 'area';
-            return driveMiles(g,ap);
+            return driveMiles(g,airport);
         }).then(function(mi){
             if(my!==seq||groupEventYes()){if(groupEventYes())hideGroupQuote();return;}
             var one=Math.round(Math.max(q([58,61]),mi*q([63,35,58,56]))*100)/100;
             var cash=rt?one*2:one;
             var card=Math.round(cash*(1+q([61,35,61,62]))*100)/100;
-            var label=rt?'Round trip, '+esc(hubs[ap].name)+' and back':'One way to '+esc(hubs[ap].name);
+            var label=rt?'Round trip, '+esc(airport.name)+' and back':'One way to '+esc(airport.name);
             show('<span class="quote-label">'+label+'</span><br><strong class="quote-total">Cash '+money(cash)+' &middot; Card '+money(card)+'</strong>');
         }).catch(function(err){
             if(my!==seq)return;
@@ -2161,7 +2173,39 @@
         });
     }
     function later(){clearTimeout(timer);timer=setTimeout(refresh,900);}
+    function fillAirportChoices(){
+        var api=globalThis.MidnightServiceArea;
+        var select=document.getElementById('airport-choice');
+        if(!select||!api||!api.AIRPORTS||select.getAttribute('data-ready')==='yes')return;
+        for(var i=0;i<api.AIRPORTS.length;i++){
+            var opt=document.createElement('option');
+            opt.value=api.AIRPORTS[i].id;
+            opt.textContent=api.AIRPORTS[i].name;
+            select.appendChild(opt);
+        }
+        var other=document.createElement('option');
+        other.value='other';
+        other.textContent='Other private airfield';
+        select.appendChild(other);
+        select.setAttribute('data-ready','yes');
+    }
     $(function(){
+        fillAirportChoices();
+        $('#airport-choice').on('change', function(){
+            var id=$(this).val();
+            var api=globalThis.MidnightServiceArea;
+            if(id==='other'){
+                $('#booking-destination').attr('placeholder','Name the private airfield').val('').trigger('input');
+                return;
+            }
+            if(!id||!api||!api.AIRPORTS)return;
+            var found=null;
+            for(var i=0;i<api.AIRPORTS.length;i++){
+                if(api.AIRPORTS[i].id===id)found=api.AIRPORTS[i];
+            }
+            if(!found)return;
+            $('#booking-destination').val(found.typed).trigger('input');
+        });
         $('#booking-pickup, #booking-destination').on('input', later).on('change blur', function(){clearTimeout(timer);refresh();});
         $('#booking-round-trip, #trip-type').on('change', function(){setTimeout(refresh,50);});
         refresh();
