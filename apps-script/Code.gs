@@ -14,6 +14,14 @@
  * Driving quotes: redeploy as a new version (Execute as Me, Anyone) and
  * re-authorize when Google asks for the Maps permission. Until that deploy
  * is live, the website will not show a computed fare.
+ *
+ * Group sheet: a groupEvent of Yes adds one row to the spreadsheet
+ * "Midnight Express LKN Group Bookings". The first group booking creates
+ * that file in this account (midnightexpresslkn@gmail.com) and saves its id.
+ * The calendar event is created first. If the sheet write fails, the event
+ * stays. After pasting this version: Deploy, Manage deployments, edit the
+ * existing deployment, choose New version, and Deploy. Keep the same web
+ * app URL. Approve the Sheets permission when Google asks.
  */
 
 var CALENDAR_ID = "midnightexpresslkn@gmail.com";
@@ -146,6 +154,28 @@ function doPost(e) {
           description: rDesc,
           location: destination,
         });
+      }
+    }
+
+    if (/^yes$/i.test(String(data.groupEvent || ""))) {
+      try {
+        appendGroupBooking_({
+          pickup: pickup,
+          name: name,
+          phone: phone,
+          email: email,
+          destination: destination,
+          date: pickupDate,
+          time: pickupTime,
+          passengers: passengers,
+          bags: bags,
+          flight: flight,
+          roundTrip: roundTrip,
+          returnTime: returnTime,
+          notes: notes,
+        });
+      } catch (sheetErr) {
+        // The request is already on the calendar. A sheet problem must not erase it.
       }
     }
 
@@ -356,6 +386,61 @@ function quoteDrivingMeters_(origin, airport) {
   } catch (ignore) {
     return { ok: false };
   }
+}
+
+var GROUP_BOOKINGS_NAME = "Midnight Express LKN Group Bookings";
+var GROUP_BOOKINGS_PROPERTY = "GROUP_BOOKINGS_SPREADSHEET_ID";
+// One list decides the sheet. Add or remove a line here to change the columns.
+var GROUP_BOOKINGS_COLUMNS = [
+  ["Pickup address", "pickup"],
+  ["Name", "name"],
+  ["Phone", "phone"],
+  ["Email", "email"],
+];
+
+/**
+ * Spreadsheet owned by the account that runs this script.
+ * Deployed as Me, that account is midnightexpresslkn@gmail.com.
+ * The id is kept in Script Properties so later bookings reuse the same file.
+ */
+function groupBookingsSheet_() {
+  var props = PropertiesService.getScriptProperties();
+  var id = props.getProperty(GROUP_BOOKINGS_PROPERTY);
+  var ss = null;
+  if (id) {
+    try {
+      ss = SpreadsheetApp.openById(id);
+    } catch (ignore) {
+      ss = null;
+    }
+  }
+  if (!ss) {
+    ss = SpreadsheetApp.create(GROUP_BOOKINGS_NAME);
+    props.setProperty(GROUP_BOOKINGS_PROPERTY, ss.getId());
+  }
+  var sheet = ss.getSheets()[0];
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(groupBookingsHeaders_());
+  }
+  return sheet;
+}
+
+function groupBookingsHeaders_() {
+  var headers = [];
+  for (var i = 0; i < GROUP_BOOKINGS_COLUMNS.length; i++) {
+    headers.push(GROUP_BOOKINGS_COLUMNS[i][0]);
+  }
+  return headers;
+}
+
+function appendGroupBooking_(row) {
+  var sheet = groupBookingsSheet_();
+  var values = [];
+  for (var i = 0; i < GROUP_BOOKINGS_COLUMNS.length; i++) {
+    var field = GROUP_BOOKINGS_COLUMNS[i][1];
+    values.push(row[field] == null ? "" : row[field]);
+  }
+  sheet.appendRow(values);
 }
 
 function respond_(obj, callback) {
