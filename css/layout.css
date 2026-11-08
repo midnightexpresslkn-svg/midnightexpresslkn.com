@@ -488,7 +488,7 @@ header.hero img.header-logo,
 /* Surfaces without a photograph: black background, red text.
    #db3040 is the logo red #d4081c lifted just enough to stay readable
    on black (the logo red alone is 3.85:1). Hero photos are not restyled.
-   This also removes the teal #00bfa6 accent. */
+   This also removes the old teal accent. */
 body,
 section,
 section.success,
@@ -512,15 +512,10 @@ header.hero .hero-slide {
 
 body,
 section,
-section h1,
-section h2,
-section h3,
-section h4,
 section p,
 section li,
 section label,
 footer,
-footer h3,
 footer p,
 footer li,
 .navbar-default .navbar-brand,
@@ -543,7 +538,17 @@ a.active,
   color: #db3040 !important;
 }
 
+section h1,
+section h2,
+section h3,
+section h4,
+footer h3 {
+  color: #ffffff !important;
+}
+
 header.hero,
+header.hero h1,
+header.hero .name,
 header.hero a.btn-outline,
 header.hero .btn-outline {
   color: #fff;
@@ -624,6 +629,10 @@ a.booking-alternate,
   background-color: #000;
   border-color: #db3040;
   color: #db3040;
+}
+
+.service-icon {
+  color: #ffffff;
 }
 
 .footer-logo {
