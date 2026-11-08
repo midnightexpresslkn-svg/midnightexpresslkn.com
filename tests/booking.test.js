@@ -1018,25 +1018,74 @@ describe("booking", () => {
         });
         check(
           shown(view.document.querySelector("#booking-checking-bags")),
-          true,
+          false,
           {
-            label: "group form asks about bags",
+            label: "group form does not ask about bags",
             source: SOURCE.group,
             loaded: script,
           },
         );
-        check(shown(view.document.querySelector("#booking-flight")), true, {
-          label: "group form asks for an optional flight number",
+        check(shown(view.document.querySelector("#booking-flight")), false, {
+          label: "group form does not ask for a flight number",
           source: SOURCE.group,
           loaded: script,
         });
-        check(shown(view.document.querySelector("#booking-round-trip")), true, {
-          label: "group form asks about a return trip",
+        check(
+          shown(view.document.querySelector("#booking-round-trip")),
+          false,
+          {
+            label: "group form does not ask about a return trip",
+            source: SOURCE.group,
+            loaded: script,
+          },
+        );
+        check(
+          shown(view.document.querySelector("#booking-wheelchair")),
+          false,
+          {
+            label: "group form does not ask about a wheelchair",
+            source: SOURCE.group,
+            loaded: script,
+          },
+        );
+        check(shown(view.document.querySelector("#booking-carseat")), false, {
+          label: "group form does not ask about a car seat",
           source: SOURCE.group,
           loaded: script,
         });
+        check(
+          view.document.querySelector("#notes-label")?.textContent.trim(),
+          "Trip Description",
+          {
+            label: "group notes ask for a trip description",
+            source: SOURCE.group,
+            loaded: script,
+          },
+        );
+        check(
+          view.document
+            .querySelector("#booking-notes")
+            .getAttribute("placeholder"),
+          "Examples: how many pickup and drop-off locations, any extra stops, special requests",
+          {
+            label: "trip description hint lists stops and requests",
+            source: SOURCE.group,
+            loaded: script,
+          },
+        );
+        check(
+          view.document
+            .querySelector("#booking-destination")
+            .getAttribute("placeholder"),
+          "Bank of America Stadium",
+          {
+            label: "group drop-off example is Bank of America Stadium",
+            source: SOURCE.group,
+            loaded: script,
+          },
+        );
         check(shown(view.document.querySelector("#booking-notes")), true, {
-          label: "group form asks for notes",
+          label: "group form asks for a trip description",
           source: SOURCE.group,
           loaded: script,
         });
@@ -1081,12 +1130,7 @@ describe("booking", () => {
           trip: "group",
           passengers: "4",
           destination: "200 Oak St, Sherrills Ford NC",
-          bags: true,
-          flight: "AA1234",
           notes: "reunion",
-          roundTrip: true,
-          returnDate: "2026-12-16",
-          returnTime: "15:00:00",
           time: "10:00:00",
         });
         await submitForm(view);
@@ -1132,27 +1176,27 @@ describe("booking", () => {
           source: SOURCE.group,
           loaded: script,
         });
-        check(payload.checkingBags, "Yes", {
-          label: "group bags are sent",
+        check(payload.checkingBags, "No", {
+          label: "group booking does not send bags",
           actual: payload.checkingBags,
           source: SOURCE.group,
           loaded: script,
         });
-        check(payload.flightNumber, "AA1234", {
-          label: "group flight number is sent",
+        check(payload.flightNumber, "", {
+          label: "group booking does not send a flight number",
           actual: payload.flightNumber,
           source: SOURCE.group,
           loaded: script,
         });
-        check(payload.roundTrip, "Yes", {
-          label: "group return trip is sent",
+        check(payload.roundTrip, "No", {
+          label: "group booking does not send a return trip",
           actual: payload.roundTrip,
           source: SOURCE.group,
           loaded: script,
         });
-        check(payload.returnTime, "15:00:00", {
-          label: "group return time is sent",
-          actual: payload.returnTime,
+        check(/wheelchair|car\s?seat/i.test(JSON.stringify(payload)), false, {
+          label: "group booking does not send wheelchair or car seat",
+          actual: payload,
           source: SOURCE.group,
           loaded: script,
         });
@@ -1592,6 +1636,7 @@ describe("booking", () => {
           roundTrip: true,
           returnDate: day,
           returnTime: "10:30:00",
+          flight: "AA1234",
         });
         await submitForm(view);
         check(resultText(view.document).includes("Request received"), true, {
