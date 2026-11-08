@@ -795,12 +795,14 @@
             if (kind === 'group') {
                 setFieldLabel('destination-label', 'Drop-off / venue *');
                 $('#airport-choice-row').hide();
+                $('#dest-group').show();
                 $('#booking-quote').hide();
                 $('#quote-details').empty();
             } else {
-                setFieldLabel('destination-label', 'Destination Address *');
+                setFieldLabel('destination-label', 'Private airfield *');
                 $('#airport-choice-row').show();
                 $('#booking-quote').show();
+                showOtherAirfieldBox();
             }
         } else {
             $('#airport-fields, #group-fields').attr('hidden', 'hidden').hide();
@@ -808,6 +810,16 @@
         }
         updateConditionalFields();
         updatePassengerCapacity();
+    }
+
+    function showOtherAirfieldBox() {
+        if (tripKind() !== 'airport') return;
+        if (($('#airport-choice').val() || '') === 'other') {
+            $('#dest-group').show();
+            $('#booking-destination').attr('placeholder', 'Name the private airfield');
+        } else {
+            $('#dest-group').hide();
+        }
     }
 
     // =================================================================
@@ -2077,6 +2089,14 @@
         var api=globalThis.MidnightServiceArea;
         return api&&api.lookupAirport?api.lookupAirport(raw):null;
     }
+    function airportFromChoice(id){
+        var api=globalThis.MidnightServiceArea;
+        if(!id||id==='other'||!api||!api.AIRPORTS)return null;
+        for(var i=0;i<api.AIRPORTS.length;i++){
+            if(api.AIRPORTS[i].id===id)return api.AIRPORTS[i];
+        }
+        return null;
+    }
     function censusGeo(a){
         return new Promise(function(res,rej){
             $.ajax({url:'https://geocoding.geo.census.gov/geocoder/locations/onelineaddress',
@@ -2134,12 +2154,16 @@
         var pick=$.trim($('#booking-pickup').val()||'');
         var dest=$.trim($('#booking-destination').val()||'');
         var choice=$('#airport-choice').val()||'';
-        var airport=lookupAirport(dest);
+        var airport=airportFromChoice(choice)||lookupAirport(dest);
         var rt=$('#booking-round-trip').is(':checked');
         if(pick.length<6||!/\d/.test(pick)){show(ask);return;}
+        if(choice==='other'){
+            show(dest?fb:ask);
+            return;
+        }
         if(!dest){show(ask);return;}
         var api=globalThis.MidnightServiceArea;
-        var forceAirfield=choice==='other'||(api&&api.isPrivateAirfield&&api.isPrivateAirfield(dest));
+        var forceAirfield=api&&api.isPrivateAirfield&&api.isPrivateAirfield(dest);
         var prelim=api?api.evaluateTrip({pickup:pick,destination:dest,destinationIsAirfield:forceAirfield&&!airport}):{code:'unclear'};
         if(prelim.code==='outside'){show(esc(api.OUT_OF_AREA_MESSAGE));return;}
         if(!airport){show(fb);return;}
@@ -2180,7 +2204,7 @@
         for(var i=0;i<api.AIRPORTS.length;i++){
             var opt=document.createElement('option');
             opt.value=api.AIRPORTS[i].id;
-            opt.textContent=api.AIRPORTS[i].name;
+            opt.textContent=api.AIRPORTS[i].menu||api.AIRPORTS[i].name;
             select.appendChild(opt);
         }
         var other=document.createElement('option');
@@ -2194,8 +2218,16 @@
         $('#airport-choice').on('change', function(){
             var id=$(this).val();
             var api=globalThis.MidnightServiceArea;
+            if(($('#trip-type').val()||'')==='airport'){
+                if(id==='other'){
+                    $('#dest-group').show();
+                    $('#booking-destination').attr('placeholder','Name the private airfield');
+                }else{
+                    $('#dest-group').hide();
+                }
+            }
             if(id==='other'){
-                $('#booking-destination').attr('placeholder','Name the private airfield').val('').trigger('input');
+                $('#booking-destination').val('').trigger('input');
                 return;
             }
             if(!id||!api||!api.AIRPORTS)return;

@@ -321,6 +321,7 @@
     {
       id: "CLT",
       name: "Charlotte Douglas Airport (CLT)",
+      menu: "CLT Charlotte Douglas (main terminal)",
       typed: "CLT",
       lat: 35.2224,
       lon: -80.9423,
@@ -336,6 +337,7 @@
     {
       id: "CLT-PRIVATE",
       name: "CLT private terminal (Wilson Air Center)",
+      menu: "Charlotte private (Wilson Air Center / Signature)",
       typed: "Wilson Air Center",
       lat: 35.20975,
       lon: -80.93157,
@@ -352,6 +354,7 @@
     {
       id: "JQF",
       name: "Concord Regional Airport",
+      menu: "Concord Regional (JQF)",
       typed: "Concord Regional",
       lat: 35.3856,
       lon: -80.71246,
@@ -367,6 +370,7 @@
     {
       id: "KIPJ",
       name: "Lincolnton-Lincoln County Regional (KIPJ)",
+      menu: "Lincolnton-Lincoln County Regional (KIPJ)",
       typed: "KIPJ",
       lat: 35.48424,
       lon: -81.16304,
@@ -380,6 +384,7 @@
     {
       id: "KRUQ",
       name: "Mid-Carolina Regional, Salisbury (KRUQ)",
+      menu: "Salisbury Mid-Carolina Regional (KRUQ)",
       typed: "KRUQ",
       lat: 35.64653,
       lon: -80.52062,
@@ -388,6 +393,7 @@
     {
       id: "KHKY",
       name: "Hickory Regional (KHKY)",
+      menu: "Hickory Regional (KHKY)",
       typed: "KHKY",
       lat: 35.74222,
       lon: -81.38939,
@@ -396,26 +402,11 @@
     {
       id: "LITTLE-MOUNTAIN",
       name: "Little Mountain Airport",
+      menu: "Little Mountain Airport (Airport Rd, Maiden/Catawba)",
       typed: "Little Mountain Airport",
       lat: 35.5918,
       lon: -81.07952,
       aliases: ["little mountain airport"],
-    },
-    {
-      id: "LANEYS",
-      name: "Laneys Airport",
-      typed: "Laneys Airport",
-      lat: 35.57567,
-      lon: -81.11646,
-      aliases: ["laneys airport", "laneys"],
-    },
-    {
-      id: "LONG-ISLAND",
-      name: "Long Island Airpark",
-      typed: "Long Island Airpark",
-      lat: 35.66161,
-      lon: -80.97181,
-      aliases: ["long island airpark"],
     },
   ];
 

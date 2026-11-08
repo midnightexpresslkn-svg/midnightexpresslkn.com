@@ -90,10 +90,10 @@ test.describe("booking page", () => {
     const posts = await installMocks(page, { miles: 10 });
     await page.goto("/");
     await page.locator("#trip-type").selectOption("airport");
+    await page.locator("#airport-choice").selectOption("CLT");
     await page
       .getByPlaceholder("123 Main Street, Denver NC 28037")
       .fill("123 Main Street, Denver NC 28037");
-    await page.getByPlaceholder("CLT Airport").fill("airport");
     const quote = page.locator("#quote-details");
     await expect(quote).toContainText("Cash $70.00");
     await expect(quote).toContainText("Card $72.10");
@@ -164,10 +164,10 @@ test.describe("booking page", () => {
     await page.locator("#booking-name").fill("TEST, DO NOT BOOK");
     await page.locator("#booking-phone").fill("9804229125");
     await page.locator("#booking-passengers").fill("2");
+    await page.locator("#airport-choice").selectOption("CLT");
     await page
       .getByPlaceholder("123 Main Street, Denver NC 28037")
       .fill("123 Main Street, Denver NC 28037");
-    await page.getByPlaceholder("CLT Airport").fill("CLT");
     await page.locator("#booking-date").evaluate((el) => {
       el._flatpickr.setDate("2026-12-15", true);
       el.value = "2026-12-15";
@@ -195,10 +195,10 @@ test.describe("booking page", () => {
     await page.locator("#booking-name").fill("TEST, DO NOT BOOK");
     await page.locator("#booking-phone").fill("9804229125");
     await page.locator("#booking-passengers").fill("2");
+    await page.locator("#airport-choice").selectOption("CLT");
     await page
       .getByPlaceholder("123 Main Street, Denver NC 28037")
       .fill("123 Main Street, Denver NC 28037");
-    await page.getByPlaceholder("CLT Airport").fill("CLT");
     await page.locator("#booking-date").evaluate((el) => {
       el._flatpickr.setDate("2026-12-15", true);
       el.value = "2026-12-15";
@@ -272,6 +272,18 @@ test.describe("booking page", () => {
     const posts = await installMocks(page, { miles: 12 });
     await page.goto("/");
     await page.locator("#trip-type").selectOption("airport");
+    await expect(page.locator("#booking-destination")).toBeHidden();
+    await expect(page.locator("#airport-choice option")).toHaveText([
+      "Select an airport",
+      "CLT Charlotte Douglas (main terminal)",
+      "Charlotte private (Wilson Air Center / Signature)",
+      "Concord Regional (JQF)",
+      "Lincolnton-Lincoln County Regional (KIPJ)",
+      "Salisbury Mid-Carolina Regional (KRUQ)",
+      "Hickory Regional (KHKY)",
+      "Little Mountain Airport (Airport Rd, Maiden/Catawba)",
+      "Other private airfield",
+    ]);
     await page.locator("#airport-choice").selectOption("KHKY");
     await expect(page.locator("#booking-destination")).toHaveValue("KHKY");
     await page

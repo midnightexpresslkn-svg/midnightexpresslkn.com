@@ -450,9 +450,6 @@ describe("service area rules", () => {
       ["Hickory Regional", "KHKY"],
       ["Hickory airport", "KHKY"],
       ["Little Mountain Airport", "LITTLE-MOUNTAIN"],
-      ["Laneys Airport", "LANEYS"],
-      ["Laneys", "LANEYS"],
-      ["Long Island Airpark", "LONG-ISLAND"],
     ];
     for (const [input, id] of aliases) {
       check(area.whichAirport(input), id, {
