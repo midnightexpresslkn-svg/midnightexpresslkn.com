@@ -367,6 +367,29 @@ header.hero .btn-outline:active {
     line-height: 1.27;
   }
 
+  /* Keep Book Your Ride and Call on the first phone screen.
+     Pull the action buttons up under the van photo; leave the
+     logo, heading, and about line for scrolling below. */
+  header.hero .hero-content > .row > [class*="col-"] {
+    display: flex;
+    flex-direction: column;
+  }
+
+  header.hero .intro-text {
+    display: contents;
+  }
+
+  header.hero .hero-actions {
+    order: -1;
+    margin: 16px 0 12px;
+    gap: 10px;
+  }
+
+  header.hero .hero-actions .btn {
+    width: 100%;
+    max-width: 22rem;
+  }
+
   .hero-control {
     top: 50%;
     margin-top: -22px;
