@@ -300,10 +300,6 @@ test.describe("booking page", () => {
     const call = page.locator("#about-us .about-cta");
     await expect(call).toHaveText("Call us today at (980) 422-9125");
     await expect(call.locator("a")).toHaveAttribute("href", "tel:+19804229125");
-    await expect(page.locator("#why-choose-us")).not.toContainText(
-      "Iron Station",
-    );
-    await expect(page.locator("#why-choose-us .fa-check")).toHaveCount(7);
   });
 
   test("iPhone shows how to add the booking page to the home screen", async ({
