@@ -292,7 +292,7 @@ test.describe("booking page", () => {
     );
   });
 
-  test("known airfield is priced and an other private airfield still books", async ({
+  test("a listed airport is priced from the single airport menu", async ({
     page,
   }) => {
     const posts = await installMocks(page, { miles: 12 });
@@ -300,46 +300,29 @@ test.describe("booking page", () => {
     await page.locator("#trip-type").selectOption("airport");
     await expect(page.locator("#address-label")).toHaveText("Home address *");
     await expect(page.locator("#airport-choice")).toBeVisible();
-    await expect(page.locator("#airfield-choice")).toBeVisible();
+    await expect(page.locator("#airfield-choice")).toHaveCount(0);
     await expect(page.locator("#booking-destination")).toBeHidden();
     const tripBox = await page.locator("#trip-type").boundingBox();
-    const airfieldBox = await page.locator("#airfield-choice").boundingBox();
     const airportBox = await page.locator("#airport-choice").boundingBox();
-    expect(airfieldBox.y).toBeGreaterThan(tripBox.y);
-    expect(airfieldBox.y).toBeLessThan(airportBox.y);
+    expect(airportBox.y).toBeGreaterThan(tripBox.y);
     await expect(page.locator("#airport-choice option")).toHaveText([
       "Select an airport",
-      "CLT main terminal",
-      "Concord passenger terminal",
-    ]);
-    await expect(page.locator("#airfield-choice option")).toHaveText([
-      "Select a private airfield",
-      "Charlotte private (Wilson/Signature)",
-      "Concord private FBO",
-      "Lincolnton KIPJ",
-      "Salisbury KRUQ",
-      "Hickory KHKY",
+      "Charlotte Douglas International (CLT)",
+      "Concord-Padgett Regional (JQF)",
+      "Lincolnton (KIPJ)",
+      "Charlotte private jets (Wilson/Signature, Modern Aviation)",
+      "Concord private jets",
+      "Charlotte-Monroe Executive (EQY)",
+      "Wilgrove Air Park (8A6)",
       "Little Mountain (Airport Rd, Maiden)",
-      "Other private airfield",
     ]);
-    await page.locator("#airfield-choice").selectOption("KHKY");
-    await expect(page.locator("#airport-choice")).toHaveValue("");
-    await expect(page.locator("#booking-destination")).toHaveValue("KHKY");
+    await page.locator("#airport-choice").selectOption("KIPJ");
+    await expect(page.locator("#booking-destination")).toHaveValue("KIPJ");
     await page
       .getByPlaceholder("123 Main Street, Denver NC 28037")
       .fill("123 Main Street, Denver NC 28037");
-    await expect(page.locator("#quote-details")).toContainText(
-      "Hickory Regional",
-    );
+    await expect(page.locator("#quote-details")).toContainText("Lincolnton");
     await expect(page.locator("#quote-details")).toContainText("Cash");
-    await page.locator("#airfield-choice").selectOption("other");
-    await expect(page.locator("#airport-choice")).toHaveValue("");
-    await page
-      .getByPlaceholder("Name the private airfield")
-      .fill("Smith Field, Charlotte NC");
-    await expect(page.locator("#quote-details")).toContainText(
-      "We'll confirm your price when we call.",
-    );
     await page.locator("#booking-name").fill("TEST, DO NOT BOOK");
     await page.locator("#booking-phone").fill("9804229125");
     await page.locator("#booking-passengers").fill("2");
@@ -370,7 +353,7 @@ test.describe("booking page", () => {
       "Drop-off / venue *",
     );
     await expect(page.locator("#airport-choice-row")).toBeHidden();
-    await expect(page.locator("#airfield-choice-row")).toBeHidden();
+    await expect(page.locator("#airfield-choice")).toHaveCount(0);
     await expect(page.locator("#booking-quote")).toBeHidden();
   });
 

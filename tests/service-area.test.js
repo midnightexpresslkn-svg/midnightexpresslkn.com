@@ -113,6 +113,14 @@ describe("service area rules", () => {
       label: "Sherrill Ford spelling",
       source: SOURCE.excluded,
     });
+    check(trip("7740 Marlette Ln, Sherrills Ford NC", "CLT").ok, true, {
+      label: "Marlette Lane with NC and no comma before the state",
+      source: SOURCE.excluded,
+    });
+    check(trip("7740, Marlette Ln, Sherrills Ford NC", "CLT").ok, true, {
+      label: "a comma after the house number still names Sherrills Ford",
+      source: SOURCE.excluded,
+    });
   });
 
   it("accepts Lowesville when the town is named and not from ZIP 28164 alone", () => {
@@ -422,7 +430,7 @@ describe("service area rules", () => {
       label: "blank is not a known airport",
       source: SOURCE.excluded,
     });
-    check(area.lookupAirport("KIPJ and KRUQ"), null, {
+    check(area.lookupAirport("KIPJ and EQY"), null, {
       label: "two named airfields is not one airport",
       source: SOURCE.excluded,
     });
@@ -437,7 +445,7 @@ describe("service area rules", () => {
       ["CLT private", "CLT-PRIVATE"],
       ["5400 Airport Drive", "CLT-PRIVATE"],
       ["Concord Regional", "JQF"],
-      ["Concord-Padgett Regional", "JQF"],
+      ["Concord-Padgett Regional", "JQF-PAX"],
       ["KJQF", "JQF"],
       ["9000 Aviation Blvd", "JQF"],
       ["Allegiant", "JQF-PAX"],
@@ -446,13 +454,12 @@ describe("service area rules", () => {
       ["KIPJ", "KIPJ"],
       ["Lincolnton airport", "KIPJ"],
       ["Lincolnton-Lincoln County Regional", "KIPJ"],
-      ["KRUQ", "KRUQ"],
-      ["Salisbury airport", "KRUQ"],
-      ["Mid-Carolina Regional", "KRUQ"],
-      ["KHKY", "KHKY"],
-      ["Hickory Regional", "KHKY"],
-      ["Hickory airport", "KHKY"],
       ["Little Mountain Airport", "LITTLE-MOUNTAIN"],
+      ["Modern Aviation", "CLT-PRIVATE"],
+      ["EQY", "EQY"],
+      ["Charlotte-Monroe Executive", "EQY"],
+      ["8A6", "8A6"],
+      ["Wilgrove Air Park", "8A6"],
     ];
     for (const [input, id] of aliases) {
       check(area.whichAirport(input), id, {
