@@ -439,45 +439,10 @@ describe("booking", () => {
         }
       });
 
-      it("confirms an other private airfield and still sends the request", async () => {
-        const view = await renderBooking(script);
-        view.document.querySelector("#airfield-choice").value = "other";
-        await fillValid(view, {
-          trip: "airport",
-          destination: "Smith Field, Charlotte NC",
-        });
-        check(
-          await showQuote(view, {
-            pickup: "123 Main Street, Denver NC 28037",
-            destination: "Smith Field, Charlotte NC",
-          }),
-          "We'll confirm your price when we call.",
-          {
-            label: "unknown private airfield has no computed price",
-            source: SOURCE.quote,
-            loaded: script,
-          },
-        );
-        view.document.querySelector("#airfield-choice").value = "other";
-        await submitForm(view);
-        check(resultText(view.document).includes("Request received"), true, {
-          label: "unknown private airfield is still booked",
-          actual: resultText(view.document),
-          source: SOURCE.serviceArea,
-          loaded: script,
-        });
-        check(bookingPosts(view.state).length > 0, true, {
-          label: "unknown private airfield is sent",
-          source: SOURCE.serviceArea,
-          loaded: script,
-        });
-      });
-
-      it("keeps home address, airline airports, and private airfields separate", async () => {
+      it("keeps one airport menu at the start of the airport form", async () => {
         const view = await renderBooking(script);
         chooseTrip(view.document, "airport");
         const airline = view.document.querySelector("#airport-choice");
-        const airfield = view.document.querySelector("#airfield-choice");
         const destination = view.document.querySelector("#booking-destination");
         const tripSelect = view.document.querySelector("#trip-type");
         check(
@@ -495,65 +460,43 @@ describe("booking", () => {
             .textContent.trim(),
           "Airport",
           {
-            label: "airline menu is its own field",
+            label: "the single menu is labeled Airport",
             source: SOURCE.airport,
             loaded: script,
           },
         );
-        check(
-          view.document
-            .querySelector("#airfield-choice-row label")
-            .textContent.trim(),
-          "Private airfield",
-          {
-            label: "private airfield menu is its own field",
-            source: SOURCE.airport,
-            loaded: script,
-          },
-        );
-        check(airline.className, tripSelect.className, {
-          label: "airline menu uses the trip type drop-down style",
-          actual: airline.className,
+        check(view.document.querySelector("#airfield-choice"), null, {
+          label: "there is no second airport menu",
           source: SOURCE.airport,
           loaded: script,
         });
-        check(airfield.className, tripSelect.className, {
-          label: "private airfield menu uses the trip type drop-down style",
-          actual: airfield.className,
+        check(airline.className, tripSelect.className, {
+          label: "airport menu uses the trip type drop-down style",
+          actual: airline.className,
           source: SOURCE.airport,
           loaded: script,
         });
         check(
           view.document.querySelector("#trip-type-group").nextElementSibling.id,
-          "airfield-choice-row",
+          "airport-choice-row",
           {
-            label: "private airfield menu sits under the trip type",
+            label: "airport menu sits under the trip type",
             source: SOURCE.airport,
             loaded: script,
           },
         );
-        check(airfield.closest("#a-places"), null, {
-          label: "private airfield menu is not in the address row",
-          source: SOURCE.airport,
-          loaded: script,
-        });
-        check(airline.closest("#a-places") != null, true, {
-          label: "airline menu sits with the home address",
-          source: SOURCE.airport,
-          loaded: script,
-        });
         check(airline.closest("#address-group"), null, {
           label: "home address and airport stay separate controls",
           source: SOURCE.airport,
           loaded: script,
         });
-        check(shown(airline) && shown(airfield), true, {
-          label: "both menus are visible",
+        check(shown(airline), true, {
+          label: "the airport menu is visible",
           source: SOURCE.airport,
           loaded: script,
         });
         check(shown(destination), false, {
-          label: "destination box stays hidden until Other",
+          label: "the destination box stays hidden",
           source: SOURCE.airport,
           loaded: script,
         });
@@ -561,58 +504,55 @@ describe("booking", () => {
           [...airline.options].map((option) => option.textContent),
           [
             "Select an airport",
-            "CLT main terminal",
-            "Concord passenger terminal",
+            "Charlotte Douglas International (CLT)",
+            "Concord-Padgett Regional (JQF)",
+            "Hickory Regional, Catawba County (KHKY)",
+            "Charlotte private (Wilson/Signature, Modern Aviation FBOs at CLT)",
+            "Concord private FBO",
+            "Lincolnton (KIPJ)",
+            "Charlotte-Monroe Executive (EQY)",
+            "Salisbury (KRUQ)",
+            "Wilgrove Air Park (8A6)",
+            "Little Mountain (Airport Rd, Maiden)",
           ],
           {
-            label: "airline menu lists only passenger terminals",
+            label: "airport menu lists every field in order",
             source: SOURCE.airport,
             loaded: script,
           },
         );
         check(
-          [...airfield.options].map((option) => option.textContent),
+          [...airline.options].map((option) => option.value),
           [
-            "Select a private airfield",
-            "Charlotte private (Wilson/Signature)",
-            "Concord private FBO",
-            "Lincolnton KIPJ",
-            "Salisbury KRUQ",
-            "Hickory KHKY",
-            "Little Mountain (Airport Rd, Maiden)",
-            "Other private airfield",
+            "",
+            "CLT",
+            "JQF-PAX",
+            "KHKY",
+            "CLT-PRIVATE",
+            "JQF",
+            "KIPJ",
+            "EQY",
+            "KRUQ",
+            "8A6",
+            "LITTLE-MOUNTAIN",
           ],
           {
-            label: "private airfield menu lists the fields",
+            label: "airport menu keeps the existing option values",
             source: SOURCE.airport,
             loaded: script,
           },
         );
-        airline.value = "CLT";
+        airline.value = "KHKY";
         view.window.jQuery(airline).trigger("change");
-        airfield.value = "KHKY";
-        view.window.jQuery(airfield).trigger("change");
-        check(airline.value, "", {
-          label: "choosing a private airfield clears the airline menu",
-          actual: airline.value,
-          source: SOURCE.airport,
-          loaded: script,
-        });
         check(destination.value, "KHKY", {
-          label: "the private airfield fills the destination",
+          label: "the chosen airport fills the destination",
           source: SOURCE.airport,
           loaded: script,
         });
         airline.value = "JQF-PAX";
         view.window.jQuery(airline).trigger("change");
-        check(airfield.value, "", {
-          label: "choosing an airline airport clears the private airfield",
-          actual: airfield.value,
-          source: SOURCE.airport,
-          loaded: script,
-        });
         check(destination.value, "Allegiant", {
-          label: "the airline airport fills the destination",
+          label: "Concord-Padgett still uses the passenger terminal",
           source: SOURCE.airport,
           loaded: script,
         });
@@ -621,28 +561,6 @@ describe("booking", () => {
           source: SOURCE.airport,
           loaded: script,
         });
-        airfield.value = "other";
-        view.window.jQuery(airfield).trigger("change");
-        check(airline.value, "", {
-          label: "Other private airfield clears the airline menu",
-          actual: airline.value,
-          source: SOURCE.airport,
-          loaded: script,
-        });
-        check(shown(destination), true, {
-          label: "Other private airfield reveals the text box",
-          source: SOURCE.airport,
-          loaded: script,
-        });
-        check(
-          destination.getAttribute("placeholder"),
-          "Name the private airfield",
-          {
-            label: "Other private airfield asks for the field name",
-            source: SOURCE.airport,
-            loaded: script,
-          },
-        );
         chooseTrip(view.document, "group");
         check(
           view.document.querySelector("#address-label").textContent.trim(),
@@ -654,12 +572,7 @@ describe("booking", () => {
           },
         );
         check(shown(airline), false, {
-          label: "group form hides the airline menu",
-          source: SOURCE.group,
-          loaded: script,
-        });
-        check(shown(airfield), false, {
-          label: "group form hides the private airfield menu",
+          label: "group form hides the airport menu",
           source: SOURCE.group,
           loaded: script,
         });
@@ -668,21 +581,37 @@ describe("booking", () => {
           source: SOURCE.group,
           loaded: script,
         });
+        check(
+          view.document.querySelector("#trip-type").options[1].textContent,
+          "Airport",
+          {
+            label: "trip type still says Airport",
+            source: SOURCE.group,
+            loaded: script,
+          },
+        );
+        check(
+          view.document.querySelector("#trip-type").options[2].textContent,
+          "Group",
+          {
+            label: "trip type still says Group",
+            source: SOURCE.group,
+            loaded: script,
+          },
+        );
       });
 
       it("refuses an airport trip until one menu is chosen", async () => {
         const view = await renderBooking(script);
         await fillValid(view, { trip: "airport" });
         view.document.querySelector("#airport-choice").value = "";
-        view.document.querySelector("#airfield-choice").value = "";
+        view.document.querySelector("#booking-destination").value = "";
         await submitForm(view);
         check(
-          resultText(view.document).includes(
-            "Please choose an airport or a private airfield",
-          ),
+          resultText(view.document).includes("Please choose an airport"),
           true,
           {
-            label: "submit requires an airline airport or a private airfield",
+            label: "submit requires an airport",
             actual: resultText(view.document),
             source: SOURCE.airport,
             loaded: script,
@@ -1472,6 +1401,74 @@ describe("booking", () => {
             loaded: script,
           },
         );
+      });
+
+      it("accepts a stadium name when the geocoder has no match", async () => {
+        const view = await renderBooking(script, { censusMode: "miss" });
+        await fillValid(view, {
+          trip: "group",
+          name: "TEST, DO NOT BOOK",
+          pickup: "7740 Marlette Ln, Sherrills Ford NC",
+          destination: "Bank of America stadium",
+        });
+        check(
+          view.document
+            .querySelector("#booking-destination")
+            .getAttribute("placeholder"),
+          "Bank of America Stadium",
+          {
+            label: "drop-off hint stays Bank of America Stadium",
+            source: SOURCE.group,
+            loaded: script,
+          },
+        );
+        await submitForm(view);
+        check(resultText(view.document).includes("Request received"), true, {
+          label: "a venue name without a town is accepted",
+          actual: resultText(view.document),
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(
+          resultText(view.document).includes("Please include the town"),
+          false,
+          {
+            label: "a venue name is not asked for a town",
+            actual: resultText(view.document),
+            source: SOURCE.group,
+            loaded: script,
+          },
+        );
+      });
+
+      it("accepts a pickup with a comma after the house number", async () => {
+        const view = await renderBooking(script, { censusMode: "miss" });
+        await fillValid(view, {
+          trip: "group",
+          name: "TEST, DO NOT BOOK",
+          pickup: "7740, Marlette Ln, Sherrills Ford NC",
+          destination: "Bank of America stadium",
+        });
+        await submitForm(view);
+        check(resultText(view.document).includes("Request received"), true, {
+          label: "Sherrills Ford NC without a comma before NC is accepted",
+          actual: resultText(view.document),
+          source: SOURCE.group,
+          loaded: script,
+        });
+        const payload = calendarPayload(view);
+        check(payload.pickupAddress, "7740, Marlette Ln, Sherrills Ford NC", {
+          label: "calendar keeps the typed pickup",
+          actual: payload && payload.pickupAddress,
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(payload.destinationAddress, "Bank of America stadium", {
+          label: "calendar keeps the stadium drop-off",
+          actual: payload && payload.destinationAddress,
+          source: SOURCE.group,
+          loaded: script,
+        });
       });
 
       it("sends a group booking to the calendar as an unconfirmed group request", async () => {

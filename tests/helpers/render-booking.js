@@ -341,26 +341,13 @@ export async function fillValid(view, overrides = {}) {
     const found =
       api && api.lookupAirport ? api.lookupAirport(destination) : null;
     const airline = doc.querySelector("#airport-choice");
-    const airfield = doc.querySelector("#airfield-choice");
-    const useOther =
-      airfield &&
-      !found &&
-      (airfield.value === "other" || overrides.airfield === "other");
-    if (useOther) {
-      airline.value = "";
-      airfield.value = "other";
-      view.window.jQuery(airfield).trigger("change");
-      setControl(doc.querySelector("#booking-destination"), destination);
-    } else if (found && airline && airfield) {
-      const select = found.kind === "airline" ? airline : airfield;
-      const other = found.kind === "airline" ? airfield : airline;
-      other.value = "";
-      select.value = found.id;
-      view.window.jQuery(select).trigger("change");
+    if (found && airline) {
+      airline.value = found.id;
+      view.window.jQuery(airline).trigger("change");
     } else {
       setControl(doc.querySelector("#booking-destination"), destination);
-      if (airline && airfield && !airline.value && !airfield.value) {
-        airline.value = "CLT";
+      if (airline && !airline.value && overrides.airportId !== "") {
+        airline.value = overrides.airportId || "CLT";
       }
     }
   }
