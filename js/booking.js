@@ -2149,6 +2149,7 @@
 !function($){
     if(!$)return;
     var fb='We\'ll confirm your price when we call.';
+    var far='For trips over 50 miles, please call <a href="tel:+19804229125">(980) 422-9125</a> for your price.';
     var ask='Enter your home address and airport to see your price.';
     var geoCache={}, routeCache={}, timer=null, seq=0;
     function q(a){var s='',i=0;while(i<a.length){s+=String.fromCharCode(a[i]^13);i++;}return +s;}
@@ -2261,7 +2262,9 @@
             return driveMiles(g,airport);
         }).then(function(mi){
             if(my!==seq||groupEventYes()){if(groupEventYes())hideGroupQuote();return;}
-            var oneCents=Math.round(Math.max(q([59,56]),mi*q([63,35,58,56]))*100);
+            // Donald (Nov 9, 2026): no online price over 50 driving miles; same limit as Ara.
+            if(!(typeof mi==='number'&&isFinite(mi)&&mi>0&&mi<=50))throw (typeof mi==='number'&&mi>50)?'far':'nomiles';
+            var oneCents=Math.round(Math.max(q([59,56]),mi*q([63,35,59,62]))*100);
             var cashCents=nearestFive(rt?oneCents*2:oneCents);
             var cardCents=nearestFive(Math.round(cashCents*(1+q([61,35,61,62]))));
             var cash=cashCents/100, card=cardCents/100;
@@ -2272,6 +2275,7 @@
             if(groupEventYes()){hideGroupQuote();return;}
             if(err==='out'&&api){show(esc(api.OUT_OF_AREA_MESSAGE));return;}
             if(err==='unclear'&&api){show(esc(api.UNCLEAR_MESSAGE));return;}
+            if(err==='far'){show(far);return;}
             show(fb);
         });
     }
