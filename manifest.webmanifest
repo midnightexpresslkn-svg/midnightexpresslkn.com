@@ -1,6 +1,6 @@
 {
   "name": "Midnight Express LKN",
-  "short_name": "Midnight Express",
+  "short_name": "Midnight Express LKN",
   "start_url": "/?source=homescreen#booking",
   "scope": "/",
   "display": "standalone",
