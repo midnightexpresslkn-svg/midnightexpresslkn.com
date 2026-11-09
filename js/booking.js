@@ -841,7 +841,23 @@
         }
     }
 
-    var clientRequestId = 'web-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+    var clientRequestKey = '';
+    var clientRequestId = '';
+
+    function clientRequestIdFor(formData) {
+        var key = [
+            formData.name, formData.pickupDate, formData.pickupTime,
+            formData.pickupAddress, formData.destinationAddress,
+            formData.returnDate, formData.returnTime,
+            formData.departFlightNumber, formData.returnFlightNumber,
+            formData.bagCount, formData.carryOnCount, formData.roundTrip
+        ].join('|');
+        if (key !== clientRequestKey || !clientRequestId) {
+            clientRequestKey = key;
+            clientRequestId = 'web-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+        }
+        return clientRequestId;
+    }
 
     function readCount(selector) {
         var raw = $.trim($(selector).val() || '');
@@ -1776,7 +1792,20 @@
                 pickupAddress: fromAirport ? airportAddress : homeAddress,
                 destinationAddress: fromAirport ? homeAddress : airportAddress,
                 airportDirection: trip === 'airport' ? direction : '',
-                clientRequestId: clientRequestId,
+                clientRequestId: clientRequestIdFor({
+                    name: $('#booking-name').val().trim(),
+                    pickupDate: pickupDate,
+                    pickupTime: pickupTime,
+                    pickupAddress: fromAirport ? airportAddress : homeAddress,
+                    destinationAddress: fromAirport ? homeAddress : airportAddress,
+                    returnDate: asksTripDetails ? returnDate : '',
+                    returnTime: asksTripDetails ? returnTime : '',
+                    departFlightNumber: asksTripDetails ? $('#booking-depart-flight').val().trim() : '',
+                    returnFlightNumber: asksTripDetails && $('#booking-round-trip').is(':checked') ? $('#booking-flight').val().trim() : '',
+                    bagCount: asksTripDetails && bagCount.filled && bagCount.valid ? bagCount.value : null,
+                    carryOnCount: asksTripDetails && carryOnCount.filled && carryOnCount.valid ? carryOnCount.value : null,
+                    roundTrip: asksTripDetails && $('#booking-round-trip').is(':checked') ? 'Yes' : 'No'
+                }),
                 passengers: $('#booking-passengers').val().trim(),
                 specialNotes: notes,
                 airportTrip: trip === 'airport' ? 'Yes' : 'No',

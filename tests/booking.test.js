@@ -11,6 +11,7 @@ import {
   renderBooking,
   resultText,
   showQuote,
+  setWhen,
   submitForm,
 } from "./helpers/render-booking.js";
 
@@ -2312,6 +2313,36 @@ describe("booking", () => {
             loaded: script,
           },
         );
+      });
+
+      it("uses a new request id when the ride changes without a reload", async () => {
+        const view = await renderBooking(script, {
+          calendarResponse: {
+            ok: false,
+            error: "That time is booked. Both drivers are already out then.",
+          },
+        });
+        await fillValid(view, { date: "2026-12-15", time: "10:00:00" });
+        await submitForm(view);
+        const first = JSON.parse(
+          bookingPosts(view.state)
+            .filter((post) => post.url.includes("script.google.com"))
+            .pop().body,
+        ).clientRequestId;
+        view.document.querySelector("#booking-success").textContent = "";
+        setWhen(view.document, "2026-12-15", "16:00:00");
+        await submitForm(view);
+        const second = JSON.parse(
+          bookingPosts(view.state)
+            .filter((post) => post.url.includes("script.google.com"))
+            .pop().body,
+        ).clientRequestId;
+        check(first !== second, true, {
+          label: "ride B does not reuse ride A's request id",
+          actual: { first, second },
+          source: SOURCE.conflict,
+          loaded: script,
+        });
       });
     });
 
