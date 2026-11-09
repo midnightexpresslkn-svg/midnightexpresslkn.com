@@ -787,6 +787,12 @@
             durationMinutes: formData.durationMinutes || RIDE_DURATION_MINUTES,
             contactAddress: formData.contactAddress || ''
         };
+        try {
+            var rememberedOrphan = sessionStorage.getItem('mel-orphan-' + (payload.clientRequestId || ''));
+            if (rememberedOrphan) payload.reconcileOrphanId = rememberedOrphan;
+        } catch (ignoreOrphan) {
+            // Private mode can block sessionStorage. The retry then has no orphan id.
+        }
         // text/plain is a simple request, so the browser does not send OPTIONS.
         // Apps Script does not answer OPTIONS. fetch follows the Content Service
         // redirect to script.googleusercontent.com and can read the JSON.
@@ -802,10 +808,23 @@
         }).then(function(body) {
             var need = formData.roundTrip === 'Yes' ? 2 : 1;
             var ids = body && Array.isArray(body.eventIds) ? body.eventIds.filter(Boolean) : [];
-            if (!body || body.ok !== true || ids.length < need) {
+            if (body && body.orphan) {
+                try {
+                    sessionStorage.setItem('mel-orphan-' + (formData.clientRequestId || ''), String(body.orphanId || ''));
+                } catch (ignoreOrphan) {
+                    // Keep the refusal even if the id cannot be stored for the retry.
+                }
+            }
+            if (!body || body.ok !== true || ids.length < need || body.orphan) {
                 var denied = new Error((body && body.error) || 'The calendar did not confirm the ride');
                 denied.calendar = true;
+                denied.orphan = !!(body && body.orphan);
                 throw denied;
+            }
+            try {
+                sessionStorage.removeItem('mel-orphan-' + (formData.clientRequestId || ''));
+            } catch (ignoreOrphan) {
+                // A blocked sessionStorage does not change the accepted request.
             }
             clientRequestAccepted = true;
             return body;
