@@ -1,6 +1,11 @@
 import { test, expect } from "@playwright/test";
 import { hostnameOf } from "../helpers/hostname.js";
 
+async function answerBags(page) {
+  await page.locator("#booking-checking-bags-no").check();
+  await page.locator("#booking-bag-count").fill("0");
+}
+
 async function installMocks(page, { miles = 10, bookings = [] } = {}) {
   const posts = [];
   await page.route("**/*", async (route) => {
@@ -118,7 +123,7 @@ test.describe("booking page", () => {
     await expect(page.locator("#destination-label")).toHaveText(
       "Drop-off / venue *",
     );
-    await expect(page.locator("#booking-checking-bags")).toBeHidden();
+    await expect(page.locator("#checking-bags-section")).toBeHidden();
     await expect(page.locator("#booking-flight")).toBeHidden();
     await expect(page.locator("#booking-round-trip")).toBeHidden();
     await expect(page.locator("#booking-wheelchair")).toBeHidden();
@@ -187,7 +192,9 @@ test.describe("booking page", () => {
     });
     await page.locator("#airport-choice").selectOption("");
     await page.locator("#bookingForm button[type=submit]").click();
-    const line = page.locator("#booking-success .alert li");
+    const line = page
+      .locator("#booking-success .alert li")
+      .filter({ hasText: "Please choose an airport" });
     await expect(line).toHaveText("Please choose an airport");
     const color = await line.evaluate((el) => getComputedStyle(el).color);
     expect(color).toBe("rgb(255, 255, 255)");
@@ -218,6 +225,7 @@ test.describe("booking page", () => {
       el._flatpickr.setDate("10:00:00", true);
       el.value = "10:00:00";
     });
+    await answerBags(page);
     await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
     await expect(page.locator("#booking-success")).toContainText(
       "Request received",
@@ -249,6 +257,7 @@ test.describe("booking page", () => {
       el._flatpickr.setDate("10:00:00", true);
       el.value = "10:00:00";
     });
+    await answerBags(page);
     await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
     await expect(page.locator("#booking-success")).toContainText(
       "That time is booked",
@@ -266,6 +275,7 @@ test.describe("booking page", () => {
     await expect(link).toHaveAttribute("href", "/?type=group#booking");
     await page.goto("/?type=group#booking");
     await expect(page.locator("#trip-type")).toHaveValue("group");
+    await expect(page.locator("#trip-type-group")).toBeHidden();
     await expect(page.locator("#booking")).toBeVisible();
     await expect(page.locator("#destination-label")).toHaveText(
       "Drop-off / venue *",
@@ -369,6 +379,7 @@ test.describe("booking page", () => {
       el._flatpickr.setDate("10:00:00", true);
       el.value = "10:00:00";
     });
+    await answerBags(page);
     await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
     await expect(page.locator("#booking-success")).toContainText(
       "Request received",

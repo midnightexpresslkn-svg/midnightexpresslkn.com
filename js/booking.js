@@ -719,7 +719,10 @@
             specialNotes: formData.specialNotes || '',
             airportTrip: formData.airportTrip,
             flightNumber: formData.flightNumber || '',
-            checkingBags: formData.checkingBags || 'No',
+            checkingBags: formData.airportTrip === 'Yes'
+                ? bagsForCalendar(formData.checkingBags || 'No', formData.bagCount || 0)
+                : (formData.checkingBags || 'No'),
+            bagCount: formData.bagCount || 0,
             roundTrip: formData.roundTrip || 'No',
             returnDate: formData.returnDate || '',
             returnTime: formData.returnTime || '',
@@ -760,6 +763,35 @@
 
     function isAirportTrip() {
         return tripKind() === 'airport';
+    }
+
+    function checkingBagsChoice() {
+        var chosen = $('input[name="checking-bags"]:checked').val() || '';
+        return chosen === 'Yes' || chosen === 'No' ? chosen : '';
+    }
+
+    function readBagCount() {
+        var raw = $.trim($('#booking-bag-count').val() || '');
+        if (!raw) return { filled: false, value: 0, valid: true };
+        if (!/^\d+$/.test(raw)) return { filled: true, value: 0, valid: false };
+        var count = parseInt(raw, 10);
+        if (count > 20) return { filled: true, value: count, valid: false };
+        return { filled: true, value: count, valid: true };
+    }
+
+    function bagsForCalendar(choice, count) {
+        var word = count === 1 ? 'bag' : 'bags';
+        return choice + ' (' + count + ' ' + word + ')';
+    }
+
+    function readPresetTrip() {
+        var presetTrip = '';
+        try {
+            presetTrip = new URLSearchParams(window.location.search).get('type') || '';
+        } catch (err) {
+            void err;
+        }
+        return presetTrip === 'airport' || presetTrip === 'group' ? presetTrip : '';
     }
 
     function setCols($group, wide) {
@@ -857,7 +889,10 @@
         } else {
             $('#checking-bags-section').hide();
             $('#round-trip-section').hide();
-            $('#booking-checking-bags, #booking-round-trip').prop('checked', false);
+            $('input[name="checking-bags"]').prop('checked', false);
+            $('#booking-bag-count').val('');
+            $('#checking-bags-error, #bag-count-error').text('').hide();
+            $('#booking-round-trip').prop('checked', false);
         }
 
         // Return date and time whenever a round trip is requested.
@@ -934,7 +969,7 @@
     function updatePassengerCapacity() {
         const wheelchair = $('#booking-wheelchair').is(':checked');
         const carseat = $('#booking-carseat').is(':checked');
-        const checkingBags = $('#booking-checking-bags').is(':checked');
+        const checkingBags = checkingBagsChoice() === 'Yes';
 
         const requirements = {
             wheelchair: wheelchair,
@@ -1485,8 +1520,16 @@
         });
 
         // Update passenger capacity when special requirements change
-        $('#booking-wheelchair, #booking-carseat, #booking-checking-bags').on('change', function() {
+        $('#booking-wheelchair, #booking-carseat, input[name="checking-bags"]').on('change', function() {
+            if (this.name === 'checking-bags') {
+                $('#checking-bags-error').text('').hide();
+                $('#checking-bags-section .form-group').first().removeClass('has-error');
+            }
             updatePassengerCapacity();
+        });
+        $('#booking-bag-count').on('input', function() {
+            $('#bag-count-error').text('').hide();
+            $(this).closest('.form-group').removeClass('has-error');
         });
 
         // Update passenger capacity on passenger input change
@@ -1635,6 +1678,8 @@
                 notes = notes ? 'Group event. ' + notes : 'Group event.';
             }
             const asksTripDetails = trip === 'airport';
+            const bagCount = readBagCount();
+            const bagsChoice = checkingBagsChoice();
             const formData = {
                 name: $('#booking-name').val().trim(),
                 phone: $('#booking-phone').data('raw-value') || $('#booking-phone').val().replace(/\D/g, ''),
@@ -1647,7 +1692,8 @@
                 airportTrip: trip === 'airport' ? 'Yes' : 'No',
                 flightNumber: asksTripDetails ? $('#booking-flight').val().trim() : '',
                 pickupTime: pickupTime,
-                checkingBags: asksTripDetails && $('#booking-checking-bags').is(':checked') ? 'Yes' : 'No',
+                checkingBags: asksTripDetails ? bagsChoice : 'No',
+                bagCount: asksTripDetails && bagCount.filled ? bagCount.value : 0,
                 roundTrip: asksTripDetails && $('#booking-round-trip').is(':checked') ? 'Yes' : 'No',
                 returnDate: asksTripDetails ? returnDate : '',
                 returnTime: asksTripDetails ? returnTime : '',
@@ -1758,10 +1804,25 @@
                 isValid = false;
             }
 
+            if (trip === 'airport') {
+                if (!bagsChoice) {
+                    errors.push('Please choose Yes or No for checked bags');
+                    $('#checking-bags-section .form-group').first().addClass('has-error');
+                    $('#checking-bags-error').text('Please choose Yes or No for checked bags').show();
+                    isValid = false;
+                }
+                if (!bagCount.filled || !bagCount.valid) {
+                    errors.push('Please enter how many bags');
+                    $('#booking-bag-count').closest('.form-group').addClass('has-error');
+                    $('#bag-count-error').text('Please enter how many bags').show();
+                    isValid = false;
+                }
+            }
+
             // Validate passenger capacity
             const wheelchair = $('#booking-wheelchair').is(':checked');
             const carseat = $('#booking-carseat').is(':checked');
-            const checkingBags = $('#booking-checking-bags').is(':checked');
+            const checkingBags = checkingBagsChoice() === 'Yes';
 
             const requirements = {
                 wheelchair: wheelchair,
@@ -2071,14 +2132,10 @@
         updatePassengerCapacity();
         updateQuoteDisplay();
         updateTripLayout();
-        var presetTrip = '';
-        try {
-            presetTrip = new URLSearchParams(window.location.search).get('type') || '';
-        } catch (err) {
-            void err;
-        }
-        if (presetTrip === 'group' || presetTrip === 'airport') {
+        var presetTrip = readPresetTrip();
+        if (presetTrip) {
             $('#trip-type').val(presetTrip);
+            $('#trip-type-group').hide();
             updateTripLayout();
         }
         globalThis.MidnightBooking = {
