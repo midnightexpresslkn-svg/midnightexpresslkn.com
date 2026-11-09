@@ -1,5 +1,11 @@
 import { test, expect } from "@playwright/test";
 import { hostnameOf } from "../helpers/hostname.js";
+import { atLocal } from "../helpers/render-booking.js";
+
+async function answerFlight(page) {
+  await page.locator("#airport-direction-to").check();
+  await page.locator("#booking-depart-flight").fill("DL 456");
+}
 
 async function answerBags(page) {
   await page.locator("#booking-checking-bags-no").check();
@@ -205,7 +211,7 @@ test.describe("booking page", () => {
   test("accepts one overlapping ride and refuses the third", async ({
     page,
   }) => {
-    const at = new Date(2026, 11, 15, 10, 0, 0, 0).toISOString();
+    const at = atLocal("2026-12-15", 10, 0);
     const posts = await installMocks(page, {
       bookings: [{ datetime: at }],
     });
@@ -226,6 +232,7 @@ test.describe("booking page", () => {
       el._flatpickr.setDate("10:00:00", true);
       el.value = "10:00:00";
     });
+    await answerFlight(page);
     await answerBags(page);
     await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
     await expect(page.locator("#booking-success")).toContainText(
@@ -237,7 +244,7 @@ test.describe("booking page", () => {
   test("refuses a third ride when both drivers are already busy", async ({
     page,
   }) => {
-    const at = new Date(2026, 11, 15, 10, 0, 0, 0).toISOString();
+    const at = atLocal("2026-12-15", 10, 0);
     const posts = await installMocks(page, {
       bookings: [{ datetime: at }, { datetime: at }],
     });
@@ -258,6 +265,7 @@ test.describe("booking page", () => {
       el._flatpickr.setDate("10:00:00", true);
       el.value = "10:00:00";
     });
+    await answerFlight(page);
     await answerBags(page);
     await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
     await expect(page.locator("#booking-success")).toContainText(
@@ -389,6 +397,7 @@ test.describe("booking page", () => {
       el._flatpickr.setDate("10:00:00", true);
       el.value = "10:00:00";
     });
+    await answerFlight(page);
     await answerBags(page);
     await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
     await expect(page.locator("#booking-success")).toContainText(

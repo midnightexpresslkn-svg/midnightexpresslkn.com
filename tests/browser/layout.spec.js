@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-const widths = [375, 390];
+const widths = [375, 390, 393, 430];
 
 async function quiet(page) {
   await page.route("**/*", async (route) => {
@@ -83,6 +83,31 @@ test.describe("mobile page fits the screen", () => {
       const form = await offenders(page);
       expect(form.scrollWidth).toBeLessThanOrEqual(form.clientWidth + 1);
       expect(form.found).toEqual([]);
+
+      // To and from, then the flight boxes, stay inside the phone.
+      const fromRide = page.locator("#airport-direction-from");
+      await expect(fromRide).toBeVisible();
+      const fromBox = await fromRide.boundingBox();
+      expect(fromBox.x).toBeGreaterThanOrEqual(0);
+      expect(fromBox.x + fromBox.width).toBeLessThanOrEqual(width + 1);
+      await fromRide.check();
+      const fromLayout = await offenders(page);
+      expect(fromLayout.scrollWidth).toBeLessThanOrEqual(
+        fromLayout.clientWidth + 1,
+      );
+      expect(fromLayout.found, JSON.stringify(fromLayout)).toEqual([]);
+
+      // The required flight number boxes fit on a phone (one way, then round trip).
+      const depart = page.locator("#booking-depart-flight");
+      await expect(depart).toBeVisible();
+      const departBox = await depart.boundingBox();
+      expect(departBox.x).toBeGreaterThanOrEqual(0);
+      expect(departBox.x + departBox.width).toBeLessThanOrEqual(width + 1);
+      await page.locator("#booking-round-trip").check();
+      await expect(page.locator("#booking-flight")).toBeVisible();
+      const trip = await offenders(page);
+      expect(trip.scrollWidth).toBeLessThanOrEqual(trip.clientWidth + 1);
+      expect(trip.found, JSON.stringify(trip)).toEqual([]);
     });
   }
 });

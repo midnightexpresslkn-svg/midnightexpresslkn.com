@@ -52,6 +52,7 @@ export const SOURCE = {
       "return Math.abs(proposedMinutes - existingMinutes) < RIDE_DURATION_MINUTES;",
     ),
   drivers: () => sourceLine("js/booking.js", "const DRIVER_COUNT = 2;"),
+  flight: () => sourceLine("js/booking.js", "function placeFlightField()"),
   group: () => sourceLine("js/booking.js", "function updateTripLayout()"),
   pricing: () => sourceLine("index.html", 'id="group-pricing-note"'),
   escape: () => sourceLine("js/booking.js", "function escapeHtml(value)"),

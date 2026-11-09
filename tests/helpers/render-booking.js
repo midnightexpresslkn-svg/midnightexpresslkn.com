@@ -406,6 +406,24 @@ export async function fillValid(view, overrides = {}) {
       "return-",
     );
   }
+  if (trip === "airport" && overrides.direction !== "") {
+    const which = overrides.direction || "to";
+    const radio = doc.querySelector("#airport-direction-" + which);
+    if (radio) {
+      radio.checked = true;
+      window.jQuery(radio).trigger("change");
+    }
+  }
+  if (trip === "airport") {
+    // Flight numbers are required on every airport trip (Donald, Nov 9, 2026).
+    const depart = doc.querySelector("#booking-depart-flight");
+    if (depart && overrides.departFlight !== "") {
+      setControl(depart, overrides.departFlight ?? "DL 456");
+    }
+    if (overrides.roundTrip && overrides.flight === undefined) {
+      setControl(doc.querySelector("#booking-flight"), "AA1234");
+    }
+  }
   setWhen(doc, overrides.date ?? "2026-12-15", overrides.time ?? "10:00:00");
 }
 
@@ -461,6 +479,33 @@ export function resultText(document) {
 }
 
 export function atLocal(ymd, hours, minutes) {
+  // Calendar fixtures are Eastern wall times. The script returns them as UTC,
+  // and the page reads them back as America/New_York on any machine.
   const [year, month, day] = ymd.split("-").map(Number);
-  return new Date(year, month - 1, day, hours, minutes, 0, 0).toISOString();
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+  let utc = Date.UTC(year, month - 1, day, hours, minutes, 0);
+  for (let i = 0; i < 4; i += 1) {
+    const bag = {};
+    fmt.formatToParts(new Date(utc)).forEach((part) => {
+      bag[part.type] = part.value;
+    });
+    const shown = Date.UTC(
+      Number(bag.year),
+      Number(bag.month) - 1,
+      Number(bag.day),
+      Number(bag.hour) % 24,
+      Number(bag.minute),
+    );
+    const want = Date.UTC(year, month - 1, day, hours, minutes);
+    utc += want - shown;
+  }
+  return new Date(utc).toISOString();
 }

@@ -97,6 +97,308 @@ function calendarPayload(view) {
 
 describe("booking", () => {
   describe.each(scripts)("%s", (script) => {
+    describe("no third ride at the same time (two drivers)", () => {
+      it("a rider outside Eastern time cannot book a third 10 AM ride", async () => {
+        // Two rides already at 10:00 AM Eastern on Dec 15 (15:00 UTC), as the calendar script returns them.
+        const saved = process.env.TZ;
+        process.env.TZ = "America/Los_Angeles";
+        try {
+          const view = await renderBooking(script, {
+            bookings: [
+              { datetime: "2026-12-15T15:00:00.000Z" },
+              { datetime: "2026-12-15T15:00:00.000Z" },
+            ],
+          });
+          await fillValid(view, { date: "2026-12-15", time: "10:00:00" });
+          await submitForm(view);
+          check(bookingPosts(view.state).length, 0, {
+            label:
+              "third 10 AM Eastern ride is refused for a California browser",
+            actual: resultText(view.document),
+            source: SOURCE.conflict,
+            loaded: script,
+          });
+        } finally {
+          if (saved === undefined) delete process.env.TZ;
+          else process.env.TZ = saved;
+        }
+      });
+
+      it("checks the calendar again at submit, not a minute-old copy", async () => {
+        const view = await renderBooking(script, { bookings: [] });
+        await fillValid(view, { date: "2026-12-15", time: "10:00:00" });
+        // Two other riders book 10 AM on other phones while this form is open.
+        view.state.bookings = [
+          { datetime: "2026-12-15T15:00:00.000Z" },
+          { datetime: "2026-12-15T15:00:00.000Z" },
+        ];
+        await submitForm(view);
+        check(bookingPosts(view.state).length, 0, {
+          label: "fresh calendar check at submit refuses the third ride",
+          actual: resultText(view.document),
+          source: SOURCE.conflict,
+          loaded: script,
+        });
+      });
+    });
+
+    describe("flight number (required on every airport trip)", () => {
+      it("a one-way airport trip asks for the flight number", async () => {
+        const view = await renderBooking(script);
+        chooseTrip(view.document, "airport");
+        const field = view.document.querySelector("#booking-depart-flight");
+        check(!!field && shown(field), true, {
+          label: "one-way airport form shows a flight number box",
+          source: SOURCE.flight,
+          loaded: script,
+        });
+        check(
+          view.document.querySelector("#depart-flight-label")?.textContent,
+          "Flight Number *",
+          {
+            label: "one-way label says the flight number is required",
+            source: SOURCE.flight,
+            loaded: script,
+          },
+        );
+      });
+
+      it("refuses a one-way airport trip with no flight number", async () => {
+        const view = await renderBooking(script);
+        await fillValid(view, { departFlight: "" });
+        await submitForm(view);
+        check(
+          resultText(view.document).includes("Flight number is required"),
+          true,
+          {
+            label: "missing flight number is named",
+            actual: resultText(view.document),
+            source: SOURCE.flight,
+            loaded: script,
+          },
+        );
+        check(bookingPosts(view.state).length, 0, {
+          label: "nothing is sent without a flight number",
+          source: SOURCE.flight,
+          loaded: script,
+        });
+      });
+
+      it("refuses a flight number that is not a flight number", async () => {
+        const view = await renderBooking(script);
+        await fillValid(view, { departFlight: "12" });
+        await submitForm(view);
+        check(
+          resultText(view.document).includes(
+            "Please enter a valid flight number",
+          ),
+          true,
+          {
+            label: "bad flight number is refused",
+            actual: resultText(view.document),
+            source: SOURCE.flight,
+            loaded: script,
+          },
+        );
+        check(bookingPosts(view.state).length, 0, {
+          label: "nothing is sent with a bad flight number",
+          source: SOURCE.flight,
+          loaded: script,
+        });
+      });
+
+      it("sends the one-way flight number to Donald's calendar", async () => {
+        const view = await renderBooking(script);
+        await fillValid(view, { departFlight: "DL 456" });
+        await submitForm(view);
+        const payload = calendarPayload(view);
+        check(payload && payload.flightNumber, "DL 456", {
+          label: "calendar request carries the flight number",
+          actual: payload && payload.flightNumber,
+          source: SOURCE.flight,
+          loaded: script,
+        });
+      });
+
+      it("a round trip needs both the departing and the return flight", async () => {
+        const view = await renderBooking(script);
+        await fillValid(view, { roundTrip: true, flight: "" });
+        await submitForm(view);
+        check(
+          view.document.querySelector("#depart-flight-label")?.textContent,
+          "Departing Flight Number *",
+          {
+            label: "round trip label names the departing flight",
+            source: SOURCE.flight,
+            loaded: script,
+          },
+        );
+        check(
+          view.document.querySelector("#flight-label")?.textContent,
+          "Return Flight Number *",
+          {
+            label: "return flight is marked required",
+            source: SOURCE.flight,
+            loaded: script,
+          },
+        );
+        check(
+          resultText(view.document).includes(
+            "Return flight number is required",
+          ),
+          true,
+          {
+            label: "missing return flight is named",
+            actual: resultText(view.document),
+            source: SOURCE.flight,
+            loaded: script,
+          },
+        );
+        check(bookingPosts(view.state).length, 0, {
+          label: "nothing is sent without the return flight",
+          source: SOURCE.flight,
+          loaded: script,
+        });
+      });
+
+      it("a round trip sends both flights to Donald's calendar", async () => {
+        const view = await renderBooking(script);
+        await fillValid(view, {
+          roundTrip: true,
+          departFlight: "DL 456",
+          flight: "AA 1234",
+        });
+        await submitForm(view);
+        const payload = calendarPayload(view);
+        check(
+          payload && payload.flightNumber,
+          "Departing DL 456, return AA 1234",
+          {
+            label: "calendar request names both flights",
+            actual: payload && payload.flightNumber,
+            source: SOURCE.flight,
+            loaded: script,
+          },
+        );
+      });
+    });
+
+    describe("one-way from the airport", () => {
+      it("asks to or from and does not pre-select either", async () => {
+        const view = await renderBooking(script);
+        chooseTrip(view.document, "airport");
+        const to = view.document.querySelector("#airport-direction-to");
+        const from = view.document.querySelector("#airport-direction-from");
+        check(!!to && !!from, true, {
+          label: "airport form offers to and from",
+          source: SOURCE.flight,
+          loaded: script,
+        });
+        check(to.checked || from.checked, false, {
+          label: "neither direction is pre-selected",
+          source: SOURCE.flight,
+          loaded: script,
+        });
+      });
+
+      it("refuses a one-way airport trip until to or from is chosen", async () => {
+        const view = await renderBooking(script);
+        await fillValid(view, { direction: "" });
+        await submitForm(view);
+        check(
+          resultText(view.document).includes(
+            "Please choose To the airport or From the airport",
+          ),
+          true,
+          {
+            label: "missing direction is named",
+            actual: resultText(view.document),
+            source: SOURCE.flight,
+            loaded: script,
+          },
+        );
+        check(bookingPosts(view.state).length, 0, {
+          label: "nothing is sent until the direction is chosen",
+          source: SOURCE.flight,
+          loaded: script,
+        });
+      });
+
+      it("a ride from the airport picks up there and drops off at home", async () => {
+        const view = await renderBooking(script);
+        await fillValid(view, { direction: "from", departFlight: "DL 456" });
+        check(
+          view.document.querySelector("#address-label").textContent.trim(),
+          "Drop-off address *",
+          {
+            label: "from-airport label is the drop-off",
+            source: SOURCE.flight,
+            loaded: script,
+          },
+        );
+        check(
+          view.document.querySelector("#date-label").textContent.trim(),
+          "Arrival date *",
+          {
+            label: "from-airport date is the arrival",
+            source: SOURCE.flight,
+            loaded: script,
+          },
+        );
+        check(
+          view.document.querySelector("#time-label").textContent.trim(),
+          "Arrival time *",
+          {
+            label: "from-airport time is the arrival",
+            source: SOURCE.flight,
+            loaded: script,
+          },
+        );
+        check(
+          view.document
+            .querySelector("#depart-flight-label")
+            .textContent.trim(),
+          "Arrival Flight Number *",
+          {
+            label: "from-airport flight is the arrival flight",
+            source: SOURCE.flight,
+            loaded: script,
+          },
+        );
+        await submitForm(view);
+        const payload = calendarPayload(view);
+        const airport = view.window.MidnightServiceArea.lookupAirport("CLT");
+        check(payload && payload.pickupAddress, airport.typed, {
+          label: "calendar pickup is the airport",
+          actual: payload && payload.pickupAddress,
+          source: SOURCE.flight,
+          loaded: script,
+        });
+        check(
+          payload && payload.destinationAddress,
+          "123 Main Street, Denver NC 28037",
+          {
+            label: "calendar drop-off is the home address",
+            actual: payload && payload.destinationAddress,
+            source: SOURCE.flight,
+            loaded: script,
+          },
+        );
+        check(payload && payload.airportDirection, "from", {
+          label: "calendar records a from-airport ride",
+          actual: payload && payload.airportDirection,
+          source: SOURCE.flight,
+          loaded: script,
+        });
+        check(payload && payload.flightNumber, "DL 456", {
+          label: "from-airport ride still sends the flight number",
+          actual: payload && payload.flightNumber,
+          source: SOURCE.flight,
+          loaded: script,
+        });
+      });
+    });
+
     describe("quote", () => {
       it("charges at least $65 cash and 3% more on a card", async () => {
         const view = await renderBooking(script, { miles: 10 });

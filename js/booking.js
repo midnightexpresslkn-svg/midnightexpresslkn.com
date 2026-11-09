@@ -221,10 +221,23 @@
         return y + '-' + m + '-' + d;
     }
 
+    // Rides are on Eastern time. The calendar script returns UTC instants, so read them as
+    // Eastern wall-clock times whatever time zone the rider's phone is in (Nov 9, 2026 triple-booking fix).
+    var EASTERN_PARTS = (typeof Intl !== 'undefined' && Intl.DateTimeFormat)
+        ? new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+        : null;
     function parseBookingDateTime(datetimeStr) {
         const date = new Date(datetimeStr);
+        if (EASTERN_PARTS && !isNaN(date.getTime())) {
+            var parts = {};
+            EASTERN_PARTS.formatToParts(date).forEach(function(p) { parts[p.type] = p.value; });
+            return {
+                date: parts.year + '-' + parts.month + '-' + parts.day,
+                hours: Number(parts.hour) % 24,
+                minutes: Number(parts.minute)
+            };
+        }
         return {
-            // Local calendar date (not UTC) so evening ET rides stay on the right day
             date: formatLocalYmd(date),
             hours: date.getHours(),
             minutes: date.getMinutes()
@@ -706,6 +719,14 @@
         });
     }
 
+    // The calendar script has one Flight line for both rides, so a round trip names both flights there.
+    function calendarFlight(formData) {
+        var depart = formData.departFlightNumber || '';
+        var back = formData.flightNumber || '';
+        if (formData.roundTrip === 'Yes' && depart && back) return 'Departing ' + depart + ', return ' + back;
+        return depart || back || '';
+    }
+
     function postCalendarPayload(formData) {
         var payload = {
             name: formData.name,
@@ -718,7 +739,7 @@
             passengers: formData.passengers,
             specialNotes: formData.specialNotes || '',
             airportTrip: formData.airportTrip,
-            flightNumber: formData.flightNumber || '',
+            flightNumber: calendarFlight(formData),
             checkingBags: formData.airportTrip === 'Yes'
                 ? bagsForCalendar(formData.checkingBags || 'No', formData.bagCount || 0)
                 : (formData.checkingBags || 'No'),
@@ -726,6 +747,8 @@
             roundTrip: formData.roundTrip || 'No',
             returnDate: formData.returnDate || '',
             returnTime: formData.returnTime || '',
+            airportDirection: formData.airportDirection || '',
+            clientRequestId: formData.clientRequestId || '',
             groupEvent: formData.groupEvent || 'No',
             durationMinutes: formData.durationMinutes || RIDE_DURATION_MINUTES,
             contactAddress: formData.contactAddress || ''
@@ -764,6 +787,47 @@
     function isAirportTrip() {
         return tripKind() === 'airport';
     }
+
+    // One-way airport rides are either to the airport or from it.
+    // A round trip is both: leave home, then come back.
+    function airportDirection() {
+        if (!isAirportTrip()) return '';
+        if ($('#booking-round-trip').is(':checked')) return 'round';
+        var chosen = $('input[name="airport-direction"]:checked').val() || '';
+        return chosen === 'to' || chosen === 'from' ? chosen : '';
+    }
+
+    function applyDirectionLabels() {
+        if (!isAirportTrip()) return;
+        var dir = airportDirection();
+        if (dir === 'from') {
+            setFieldLabel('address-label', 'Drop-off address *');
+            setFieldLabel('date-label', 'Arrival date *');
+            setFieldLabel('time-label', 'Arrival time *');
+            $('#depart-flight-label').text('Arrival Flight Number *');
+            $('#airport-direction-row').show();
+        } else if (dir === 'round') {
+            setFieldLabel('address-label', 'Home address *');
+            setFieldLabel('date-label', 'Departure date *');
+            setFieldLabel('time-label', 'Departure time *');
+            setFieldLabel('return-date-label', 'Return arrival date *');
+            setFieldLabel('return-time-label', 'Return arrival time *');
+            $('#airport-direction-row').hide();
+        } else if (dir === 'to') {
+            setFieldLabel('address-label', 'Home address *');
+            setFieldLabel('date-label', 'Departure date *');
+            setFieldLabel('time-label', 'Departure time *');
+            $('#depart-flight-label').text('Departure Flight Number *');
+            $('#airport-direction-row').show();
+        } else {
+            setFieldLabel('address-label', 'Home address *');
+            setFieldLabel('date-label', 'Pickup Date *');
+            setFieldLabel('time-label', 'Pickup Time *');
+            $('#airport-direction-row').show();
+        }
+    }
+
+    var clientRequestId = 'web-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
 
     function checkingBagsChoice() {
         var chosen = $('input[name="checking-bags"]:checked').val() || '';
@@ -864,19 +928,25 @@
      * Update conditional fields based on airport trip and round trip selections
      * Follows existing show/hide patterns from booking.js
      */
+    // Donald (Nov 9, 2026): a flight number is required on every airport trip.
+    // One way: "Flight Number *". Round trip: "Departing Flight Number *" and "Return Flight Number *".
     function placeFlightField() {
         var $flight = $('#flight-group');
-        if (isGroupEvent()) {
+        if (!isAirportTrip()) {
             $flight.hide();
             $('#flight-slot').hide();
             $('#booking-flight').val('');
+            $('#booking-depart-flight').val('');
             return;
         }
+        var roundTrip = $('#booking-round-trip').is(':checked');
+        $('#flight-slot').show();
+        $('#depart-flight-label').text(roundTrip ? 'Departing Flight Number *' : 'Flight Number *');
         $flight.show();
         $flight.removeClass('col-md-12').addClass('col-md-4');
-        $('#flight-label').text('Return Flight Number');
+        $('#flight-label').text('Return Flight Number *');
         $('#return-flight-section').append($flight);
-        $('#flight-slot').hide();
+        applyDirectionLabels();
     }
 
     function updateConditionalFields() {
@@ -1056,7 +1126,7 @@
             passengers: bookingData.passengers,
             specialNotes: bookingData.specialNotes,
             airportTrip: bookingData.airportTrip,
-            flightNumber: '', // No flight number for outbound (dropping off at airport)
+            flightNumber: bookingData.departFlightNumber || '', // The flight they leave on
             checkingBags: bookingData.checkingBags,
             specialRequirements: bookingData.specialRequirements,
             otherRequirementText: bookingData.otherRequirementText
@@ -1461,7 +1531,7 @@
             // Initialize flight formatter if airport trip is "Yes"
             if ($(this).val() === 'Yes') {
                 setTimeout(function() {
-                    $('#booking-flight').off('input.flight').on('input.flight', function() {
+                    $('#booking-flight, #booking-depart-flight').off('input.flight').on('input.flight', function() {
                         let value = $(this).val().toUpperCase().replace(/[^A-Z0-9]/g, '');
 
                         // Limit to reasonable flight number length (max 2-3 letters + 4 digits = 6-7 characters)
@@ -1516,6 +1586,11 @@
 
         // Show/hide conditional fields based on round trip selection
         $('#booking-round-trip').on('change', function() {
+            updateConditionalFields();
+        });
+        $('input[name="airport-direction"]').on('change', function() {
+            $('#airport-direction-error').text('').hide();
+            $('#airport-direction-row .form-group').removeClass('has-error');
             updateConditionalFields();
         });
 
@@ -1630,7 +1705,7 @@
         });
 
         // Clear error message when user starts typing again (like contact form)
-        $('#booking-name, #booking-phone, #booking-email, #booking-pickup, #booking-destination, #booking-passengers, #booking-notes, #booking-flight, #booking-date, #booking-time, #booking-return-date, #booking-return-time, #booking-other-text').on('focus', function() {
+        $('#booking-name, #booking-phone, #booking-email, #booking-pickup, #booking-destination, #booking-passengers, #booking-notes, #booking-flight, #booking-depart-flight, #booking-date, #booking-time, #booking-return-date, #booking-return-time, #booking-other-text').on('focus', function() {
             if ($('#booking-success .alert-danger').length > 0) {
                 $('#booking-success').html('');
             }
@@ -1639,6 +1714,8 @@
         // Form submission
         $form.on('submit', async function(e) {
             e.preventDefault();
+            // Re-read the calendar at submit so rides booked on other phones in the last minute count.
+            lastFetchTime = null;
 
             // Clear previous errors
             $('.help-block.text-danger').text('').hide();
@@ -1672,7 +1749,11 @@
             const returnTime = $('#booking-return-time').val();
 
             const trip = tripKind();
-            const contactAddress = $('#booking-pickup').val().trim();
+            const homeAddress = $('#booking-pickup').val().trim();
+            const airportAddress = $('#booking-destination').val().trim();
+            const direction = airportDirection();
+            const fromAirport = direction === 'from';
+            const contactAddress = homeAddress;
             var notes = $('#booking-notes').val().trim();
             if (trip === 'group') {
                 notes = notes ? 'Group event. ' + notes : 'Group event.';
@@ -1685,12 +1766,15 @@
                 phone: $('#booking-phone').data('raw-value') || $('#booking-phone').val().replace(/\D/g, ''),
                 email: $('#booking-email').val().trim(),
                 pickupDate: pickupDate,
-                pickupAddress: contactAddress,
-                destinationAddress: $('#booking-destination').val().trim(),
+                pickupAddress: fromAirport ? airportAddress : homeAddress,
+                destinationAddress: fromAirport ? homeAddress : airportAddress,
+                airportDirection: trip === 'airport' ? direction : '',
+                clientRequestId: clientRequestId,
                 passengers: $('#booking-passengers').val().trim(),
                 specialNotes: notes,
                 airportTrip: trip === 'airport' ? 'Yes' : 'No',
                 flightNumber: asksTripDetails ? $('#booking-flight').val().trim() : '',
+                departFlightNumber: asksTripDetails ? $('#booking-depart-flight').val().trim() : '',
                 pickupTime: pickupTime,
                 checkingBags: asksTripDetails ? bagsChoice : 'No',
                 bagCount: asksTripDetails && bagCount.filled ? bagCount.value : 0,
@@ -1735,24 +1819,35 @@
             }
 
             // Pickup date validation
+            var dateMessage = fromAirport ? 'Arrival date is required' : (direction === 'to' || direction === 'round' ? 'Departure date is required' : 'Pickup date is required');
+            var timeMessage = fromAirport ? 'Arrival time is required' : (direction === 'to' || direction === 'round' ? 'Departure time is required' : 'Pickup time is required');
             if (!formData.pickupDate) {
-                errors.push('Pickup date is required');
+                errors.push(dateMessage);
                 $('#booking-date').closest('.form-group').addClass('has-error');
-                $('#date-error').text('Pickup date is required').show();
+                $('#date-error').text(dateMessage).show();
                 isValid = false;
             }
 
             // Pickup time validation
             if (!formData.pickupTime) {
-                errors.push('Pickup time is required');
+                errors.push(timeMessage);
                 $('#booking-time').closest('.form-group').addClass('has-error');
-                $('#time-error').text('Pickup time is required').show();
+                $('#time-error').text(timeMessage).show();
                 isValid = false;
             }
 
-            // Pickup address validation
-            if (!formData.pickupAddress) {
-                var pickupMessage = trip === 'airport' ? 'Home address is required' : 'Pickup address is required';
+            if (trip === 'airport' && formData.roundTrip !== 'Yes' && direction !== 'to' && direction !== 'from') {
+                errors.push('Please choose To the airport or From the airport');
+                $('#airport-direction-row .form-group').addClass('has-error');
+                $('#airport-direction-error').text('Please choose To the airport or From the airport').show();
+                isValid = false;
+            }
+
+            // The house is what the rider types. From the airport, that house is the drop-off.
+            if (!homeAddress) {
+                var pickupMessage = trip !== 'airport'
+                    ? 'Pickup address is required'
+                    : (fromAirport ? 'Drop-off address is required' : 'Home address is required');
                 errors.push(pickupMessage);
                 $('#booking-pickup').closest('.form-group').addClass('has-error');
                 $('#pickup-error').text(pickupMessage).show();
@@ -1762,7 +1857,7 @@
                 const area = await decideServiceArea(formData.pickupAddress, formData.destinationAddress);
                 if (!area.ok) {
                     errors.push(area.message);
-                    markServiceAreaFields(formData.pickupAddress, formData.destinationAddress, area);
+                    markServiceAreaFields(homeAddress, trip === 'airport' ? airportAddress : formData.destinationAddress, area);
                     isValid = false;
                 }
             }
@@ -1770,7 +1865,7 @@
             // Destination address validation
             if (trip === 'airport') {
                 var airlineChoice = $('#airport-choice').val() || '';
-                if (!airlineChoice || !formData.destinationAddress) {
+                if (!airlineChoice || !airportAddress) {
                     errors.push('Please choose an airport');
                     $('#airport-choice').closest('.form-group').addClass('has-error');
                     $('#airport-choice-error').text('Please choose an airport').show();
@@ -1790,11 +1885,27 @@
                 isValid = false;
             }
 
-            // Validate flight number when one was typed. It is optional.
-            if ((formData.airportTrip === 'Yes' || formData.groupEvent === 'Yes') && formData.flightNumber && !validateFlightNumber(formData.flightNumber)) {
-                errors.push('Please enter a valid flight number (e.g., AA1234)');
-                $('#booking-flight').closest('.form-group').addClass('has-error').find('.help-block').text('Please enter a valid flight number (e.g., AA1234)').show();
-                isValid = false;
+            // Flight numbers are required on every airport trip (Donald, Nov 9, 2026).
+            if (formData.airportTrip === 'Yes') {
+                var departMsg = '';
+                if (!formData.departFlightNumber) departMsg = 'Flight number is required';
+                else if (!validateFlightNumber(formData.departFlightNumber)) departMsg = 'Please enter a valid flight number (e.g., AA1234)';
+                if (departMsg) {
+                    errors.push(departMsg);
+                    $('#booking-depart-flight').closest('.form-group').addClass('has-error');
+                    $('#depart-flight-error').text(departMsg).show();
+                    isValid = false;
+                }
+                if (formData.roundTrip === 'Yes') {
+                    var returnMsg = '';
+                    if (!formData.flightNumber) returnMsg = 'Return flight number is required';
+                    else if (!validateFlightNumber(formData.flightNumber)) returnMsg = 'Please enter a valid return flight number (e.g., AA1234)';
+                    if (returnMsg) {
+                        errors.push(returnMsg);
+                        $('#booking-flight').closest('.form-group').addClass('has-error').find('.help-block').text(returnMsg).show();
+                        isValid = false;
+                    }
+                }
             }
 
             // Validate "Other" special requirement text field if "Other" is checked
@@ -2268,7 +2379,8 @@
             var cashCents=nearestFive(rt?oneCents*2:oneCents);
             var cardCents=nearestFive(Math.round(cashCents*(1+q([61,35,61,62]))));
             var cash=cashCents/100, card=cardCents/100;
-            var label=rt?'Round trip, '+esc(airport.name)+' and back':'One way to '+esc(airport.name);
+            var way=$('input[name="airport-direction"]:checked').val()||'';
+            var label=rt?'Round trip, '+esc(airport.name)+' and back':(way==='from'?'One way from '+esc(airport.name):'One way to '+esc(airport.name));
             show('<span class="quote-label">'+label+'</span><br><strong class="quote-total">Cash '+money(cash)+' &middot; Card '+money(card)+'</strong>');
         }).catch(function(err){
             if(my!==seq)return;
@@ -2315,7 +2427,7 @@
             $('#booking-destination').val(found.typed).trigger('input');
         });
         $('#booking-pickup, #booking-destination').on('input', later).on('change blur', function(){clearTimeout(timer);refresh();});
-        $('#booking-round-trip, #trip-type').on('change', function(){setTimeout(refresh,50);});
+        $('#booking-round-trip, #trip-type, input[name="airport-direction"]').on('change', function(){setTimeout(refresh,50);});
         refresh();
     });
 }(window.jQuery);
