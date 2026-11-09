@@ -192,7 +192,14 @@
                 cache: false,
                 success: function(bookings) {
                     console.log('Fetched bookings:', bookings);
-                    cachedBookings = Array.isArray(bookings) ? bookings : [];
+                    if (!Array.isArray(bookings) || bookings.ok === false) {
+                        bookingsFetchOk = false;
+                        cachedBookings = [];
+                        lastFetchTime = null;
+                        resolve([]);
+                        return;
+                    }
+                    cachedBookings = bookings;
                     lastFetchTime = Date.now();
                     bookingsFetchOk = true;
                     resolve(cachedBookings);
@@ -221,10 +228,23 @@
         return y + '-' + m + '-' + d;
     }
 
+    // Rides are on Eastern time. The calendar script returns UTC instants, so read them as
+    // Eastern wall-clock times whatever time zone the rider's phone is in (Nov 9, 2026 triple-booking fix).
+    var EASTERN_PARTS = (typeof Intl !== 'undefined' && Intl.DateTimeFormat)
+        ? new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+        : null;
     function parseBookingDateTime(datetimeStr) {
         const date = new Date(datetimeStr);
+        if (EASTERN_PARTS && !isNaN(date.getTime())) {
+            var parts = {};
+            EASTERN_PARTS.formatToParts(date).forEach(function(p) { parts[p.type] = p.value; });
+            return {
+                date: parts.year + '-' + parts.month + '-' + parts.day,
+                hours: Number(parts.hour) % 24,
+                minutes: Number(parts.minute)
+            };
+        }
         return {
-            // Local calendar date (not UTC) so evening ET rides stay on the right day
             date: formatLocalYmd(date),
             hours: date.getHours(),
             minutes: date.getMinutes()
@@ -291,19 +311,30 @@
      */
     function countOverlappingRides(proposedMinutes, existingBookings, proposedDuration) {
         var durP = proposedDuration || RIDE_DURATION_MINUTES;
-        var count = 0;
+        var endP = proposedMinutes + durP;
+        var spans = [];
         for (var i = 0; i < existingBookings.length; i++) {
             var booking = existingBookings[i];
-            var existingMinutes = booking.startMinutes != null
+            var start = booking.startMinutes != null
                 ? booking.startMinutes
                 : booking.hours * 60 + booking.minutes;
             var durE = booking.durationMinutes || RIDE_DURATION_MINUTES;
-            var overlaps = (durP === RIDE_DURATION_MINUTES && durE === RIDE_DURATION_MINUTES)
-                ? ridesOverlap(proposedMinutes, existingMinutes)
-                : (proposedMinutes < existingMinutes + durE && existingMinutes < proposedMinutes + durP);
-            if (overlaps) count++;
+            if (proposedMinutes < start + durE && start < endP) spans.push({ start: start, end: start + durE });
         }
-        return count;
+        var points = [proposedMinutes];
+        for (var s = 0; s < spans.length; s++) {
+            if (spans[s].start > proposedMinutes && spans[s].start < endP) points.push(spans[s].start);
+        }
+        var worst = 1;
+        for (var p = 0; p < points.length; p++) {
+            var at = points[p];
+            var active = 1;
+            for (var k = 0; k < spans.length; k++) {
+                if (at >= spans[k].start && at < spans[k].end) active++;
+            }
+            if (active > worst) worst = active;
+        }
+        return worst - 1;
     }
 
     /**
@@ -580,9 +611,19 @@
      * @param {string} flightNumber - Flight number
      * @returns {boolean}
      */
+    var AIRLINE_CODES = { delta: 'DL', 'delta air lines': 'DL', american: 'AA', 'american airlines': 'AA', united: 'UA', 'united airlines': 'UA', southwest: 'WN', jetblue: 'B6', spirit: 'NK', frontier: 'F9', allegiant: 'G4', endeavor: '9E', republic: 'YX', psa: 'OH', skywest: 'OO' };
+    function normalizeFlightNumber(raw) {
+        var text = String(raw || '').trim().replace(/\s+/g, ' ');
+        var named = text.match(/^([A-Za-z][A-Za-z .'-]*?)[ -]+(\d{1,4}[A-Za-z]?)$/);
+        if (named) {
+            var key = named[1].toLowerCase().replace(/\./g, '').replace(/\s+/g, ' ').trim();
+            if (AIRLINE_CODES[key]) return AIRLINE_CODES[key] + ' ' + named[2].toUpperCase();
+        }
+        return text;
+    }
     function validateFlightNumber(flightNumber) {
-        const pattern = /^[a-zA-Z0-9]{2,3}[\s-]?\d{1,4}[a-zA-Z]?$/;
-        return pattern.test(flightNumber);
+        var compact = normalizeFlightNumber(flightNumber).replace(/[\s-]+/g, '').toUpperCase();
+        return /^(?:[A-Z]{2}|[A-Z]\d|\d[A-Z]|[A-Z]{3})\d{1,4}[A-Z]?$/.test(compact);
     }
 
     /**
@@ -664,6 +705,12 @@
                 durationMinutes: mins > 0 ? mins : RIDE_DURATION_MINUTES
             };
         });
+        if (!bookingsFetchOk) {
+            return {
+                valid: false,
+                error: 'We could not check the calendar. Call (980) 422-9125 before booking online.'
+            };
+        }
         var pending = pendingBookings.map(function(b) {
             return {
                 date: b.date,
@@ -693,8 +740,7 @@
 
     /**
      * Best-effort mirror to the new calendar Apps Script after the Google Form succeeds.
-     * no-cors + fire-and-forget so a calendar failure never blocks the customer request.
-     * Best-effort calendar mirror after Google Form success (no-cors).
+     * The page reads the JSON answer. A refusal or an unreadable answer is not success.
      */
     function postBookingToCalendar(formData) {
         if (!isNewScriptReady()) {
@@ -704,6 +750,14 @@
             if (!decision.ok) return Promise.reject(serviceAreaError(decision));
             return postCalendarPayload(formData);
         });
+    }
+
+    // The calendar script has one Flight line for both rides, so a round trip names both flights there.
+    function calendarFlight(formData) {
+        var depart = formData.departFlightNumber || '';
+        var back = formData.flightNumber || '';
+        if (formData.roundTrip === 'Yes' && depart && back) return 'Departing ' + depart + ', return ' + back;
+        return depart || back || '';
     }
 
     function postCalendarPayload(formData) {
@@ -718,29 +772,62 @@
             passengers: formData.passengers,
             specialNotes: formData.specialNotes || '',
             airportTrip: formData.airportTrip,
-            flightNumber: formData.flightNumber || '',
-            checkingBags: formData.airportTrip === 'Yes'
-                ? bagsForCalendar(formData.checkingBags || 'No', formData.bagCount || 0)
-                : (formData.checkingBags || 'No'),
-            bagCount: formData.bagCount || 0,
+            flightNumber: normalizeFlightNumber(calendarFlight(formData)),
+            departFlightNumber: normalizeFlightNumber(formData.departFlightNumber || ''),
+            returnFlightNumber: normalizeFlightNumber(formData.returnFlightNumber || ''),
+            checkingBags: formData.checkingBags || 'No',
+            bagCount: formData.bagCount,
+            carryOnCount: formData.carryOnCount,
             roundTrip: formData.roundTrip || 'No',
             returnDate: formData.returnDate || '',
             returnTime: formData.returnTime || '',
+            airportDirection: formData.airportDirection || '',
+            clientRequestId: formData.clientRequestId || '',
             groupEvent: formData.groupEvent || 'No',
             durationMinutes: formData.durationMinutes || RIDE_DURATION_MINUTES,
             contactAddress: formData.contactAddress || ''
         };
+        try {
+            var rememberedOrphan = sessionStorage.getItem('mel-orphan-' + (payload.clientRequestId || ''));
+            if (rememberedOrphan) payload.reconcileOrphanId = rememberedOrphan;
+        } catch (ignoreOrphan) {
+            // Private mode can block sessionStorage. The retry then has no orphan id.
+        }
+        // text/plain is a simple request, so the browser does not send OPTIONS.
+        // Apps Script does not answer OPTIONS. fetch follows the Content Service
+        // redirect to script.googleusercontent.com and can read the JSON.
+        // https://developers.google.com/apps-script/guides/content
         return fetch(NEW_SCRIPT_URL, {
             method: 'POST',
-            mode: 'no-cors',
+            redirect: 'follow',
             credentials: 'omit',
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify(payload)
-        }).then(function() {
-            return { delivered: 'opaque' };
-        }).catch(function(err) {
-            console.warn('Calendar mirror failed (request still sent to owner):', err);
-            return { skipped: true, error: String(err && err.message ? err.message : err) };
+        }).then(function(response) {
+            return response.json();
+        }).then(function(body) {
+            var need = formData.roundTrip === 'Yes' ? 2 : 1;
+            var ids = body && Array.isArray(body.eventIds) ? body.eventIds.filter(Boolean) : [];
+            if (body && body.orphan) {
+                try {
+                    sessionStorage.setItem('mel-orphan-' + (formData.clientRequestId || ''), String(body.orphanId || ''));
+                } catch (ignoreOrphan) {
+                    // Keep the refusal even if the id cannot be stored for the retry.
+                }
+            }
+            if (!body || body.ok !== true || ids.length < need || body.orphan) {
+                var denied = new Error((body && body.error) || 'The calendar did not confirm the ride');
+                denied.calendar = true;
+                denied.orphan = !!(body && body.orphan);
+                throw denied;
+            }
+            try {
+                sessionStorage.removeItem('mel-orphan-' + (formData.clientRequestId || ''));
+            } catch (ignoreOrphan) {
+                // A blocked sessionStorage does not change the accepted request.
+            }
+            clientRequestAccepted = true;
+            return body;
         });
     }
 
@@ -765,23 +852,79 @@
         return tripKind() === 'airport';
     }
 
-    function checkingBagsChoice() {
-        var chosen = $('input[name="checking-bags"]:checked').val() || '';
-        return chosen === 'Yes' || chosen === 'No' ? chosen : '';
+    // One-way airport rides are either to the airport or from it.
+    // A round trip is both: leave home, then come back.
+    function airportDirection() {
+        if (!isAirportTrip()) return '';
+        if ($('#booking-round-trip').is(':checked')) return 'round';
+        var chosen = $('input[name="airport-direction"]:checked').val() || '';
+        return chosen === 'to' || chosen === 'from' ? chosen : '';
     }
 
-    function readBagCount() {
-        var raw = $.trim($('#booking-bag-count').val() || '');
-        if (!raw) return { filled: false, value: 0, valid: true };
-        if (!/^\d+$/.test(raw)) return { filled: true, value: 0, valid: false };
+    function applyDirectionLabels() {
+        if (!isAirportTrip()) return;
+        var dir = airportDirection();
+        if (dir === 'from') {
+            setFieldLabel('address-label', 'Drop-off address *');
+            setFieldLabel('date-label', 'Arrival date *');
+            setFieldLabel('time-label', 'Arrival time *');
+            $('#depart-flight-label').text('Arrival Flight Number *');
+            $('#airport-direction-row').show();
+        } else if (dir === 'round') {
+            setFieldLabel('address-label', 'Home address *');
+            setFieldLabel('date-label', 'Departure date *');
+            setFieldLabel('time-label', 'Departure time *');
+            setFieldLabel('return-date-label', 'Return arrival date *');
+            setFieldLabel('return-time-label', 'Return arrival time *');
+            $('#airport-direction-row').hide();
+        } else if (dir === 'to') {
+            setFieldLabel('address-label', 'Home address *');
+            setFieldLabel('date-label', 'Departure date *');
+            setFieldLabel('time-label', 'Departure time *');
+            $('#depart-flight-label').text('Departure Flight Number *');
+            $('#airport-direction-row').show();
+        } else {
+            setFieldLabel('address-label', 'Home address *');
+            setFieldLabel('date-label', 'Pickup Date *');
+            setFieldLabel('time-label', 'Pickup Time *');
+            $('#airport-direction-row').show();
+        }
+    }
+
+    var clientRequestKey = '';
+    var clientRequestId = '';
+    var clientRequestAccepted = false;
+
+    function clientRequestIdFor(formData) {
+        var key = [
+            formData.name, formData.phone, formData.passengers,
+            formData.pickupDate, formData.pickupTime,
+            formData.pickupAddress, formData.destinationAddress,
+            formData.returnDate, formData.returnTime,
+            formData.departFlightNumber, formData.returnFlightNumber,
+            formData.bagCount, formData.carryOnCount, formData.roundTrip,
+            formData.specialNotes, formData.groupEvent, formData.durationMinutes
+        ].join('|');
+        if (clientRequestAccepted || key !== clientRequestKey || !clientRequestId) {
+            clientRequestAccepted = false;
+            clientRequestKey = key;
+            clientRequestId = 'web-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+        }
+        return clientRequestId;
+    }
+
+    function readCount(selector) {
+        var raw = $.trim($(selector).val() || '');
+        if (!raw) return { filled: false, value: null, valid: false };
+        if (!/^\d+$/.test(raw)) return { filled: true, value: null, valid: false };
         var count = parseInt(raw, 10);
         if (count > 20) return { filled: true, value: count, valid: false };
         return { filled: true, value: count, valid: true };
     }
 
-    function bagsForCalendar(choice, count) {
-        var word = count === 1 ? 'bag' : 'bags';
-        return choice + ' (' + count + ' ' + word + ')';
+    function bagsForCalendar(checked, carryOn) {
+        var choice = checked > 0 ? 'Yes' : 'No';
+        return choice + ' (' + checked + ' checked, ' + carryOn + ' carry-on)';
     }
 
     function readPresetTrip() {
@@ -864,19 +1007,25 @@
      * Update conditional fields based on airport trip and round trip selections
      * Follows existing show/hide patterns from booking.js
      */
+    // Donald (Nov 9, 2026): a flight number is required on every airport trip.
+    // One way: "Flight Number *". Round trip: "Departing Flight Number *" and "Return Flight Number *".
     function placeFlightField() {
         var $flight = $('#flight-group');
-        if (isGroupEvent()) {
+        if (!isAirportTrip()) {
             $flight.hide();
             $('#flight-slot').hide();
             $('#booking-flight').val('');
+            $('#booking-depart-flight').val('');
             return;
         }
+        var roundTrip = $('#booking-round-trip').is(':checked');
+        $('#flight-slot').show();
+        $('#depart-flight-label').text(roundTrip ? 'Departing Flight Number *' : 'Flight Number *');
         $flight.show();
         $flight.removeClass('col-md-12').addClass('col-md-4');
-        $('#flight-label').text('Return Flight Number');
+        $('#flight-label').text('Return Flight Number *');
         $('#return-flight-section').append($flight);
-        $('#flight-slot').hide();
+        applyDirectionLabels();
     }
 
     function updateConditionalFields() {
@@ -889,9 +1038,8 @@
         } else {
             $('#checking-bags-section').hide();
             $('#round-trip-section').hide();
-            $('input[name="checking-bags"]').prop('checked', false);
-            $('#booking-bag-count').val('');
-            $('#checking-bags-error, #bag-count-error').text('').hide();
+            $('#booking-bag-count, #booking-carry-on-count').val('');
+            $('#checking-bags-error, #carry-on-error').text('').hide();
             $('#booking-round-trip').prop('checked', false);
         }
 
@@ -969,7 +1117,8 @@
     function updatePassengerCapacity() {
         const wheelchair = $('#booking-wheelchair').is(':checked');
         const carseat = $('#booking-carseat').is(':checked');
-        const checkingBags = checkingBagsChoice() === 'Yes';
+        const checkedNow = readCount('#booking-bag-count');
+        const checkingBags = !!(checkedNow.filled && checkedNow.valid && checkedNow.value > 0);
 
         const requirements = {
             wheelchair: wheelchair,
@@ -1056,7 +1205,7 @@
             passengers: bookingData.passengers,
             specialNotes: bookingData.specialNotes,
             airportTrip: bookingData.airportTrip,
-            flightNumber: '', // No flight number for outbound (dropping off at airport)
+            flightNumber: bookingData.departFlightNumber || '', // The flight they leave on
             checkingBags: bookingData.checkingBags,
             specialRequirements: bookingData.specialRequirements,
             otherRequirementText: bookingData.otherRequirementText
@@ -1461,7 +1610,7 @@
             // Initialize flight formatter if airport trip is "Yes"
             if ($(this).val() === 'Yes') {
                 setTimeout(function() {
-                    $('#booking-flight').off('input.flight').on('input.flight', function() {
+                    $('#booking-flight, #booking-depart-flight').off('input.flight').on('input.flight', function() {
                         let value = $(this).val().toUpperCase().replace(/[^A-Z0-9]/g, '');
 
                         // Limit to reasonable flight number length (max 2-3 letters + 4 digits = 6-7 characters)
@@ -1518,18 +1667,20 @@
         $('#booking-round-trip').on('change', function() {
             updateConditionalFields();
         });
+        $('input[name="airport-direction"]').on('change', function() {
+            $('#airport-direction-error').text('').hide();
+            $('#airport-direction-row .form-group').removeClass('has-error');
+            updateConditionalFields();
+        });
 
         // Update passenger capacity when special requirements change
-        $('#booking-wheelchair, #booking-carseat, input[name="checking-bags"]').on('change', function() {
-            if (this.name === 'checking-bags') {
-                $('#checking-bags-error').text('').hide();
-                $('#checking-bags-section .form-group').first().removeClass('has-error');
-            }
+        $('#booking-wheelchair, #booking-carseat').on('change', function() {
             updatePassengerCapacity();
         });
-        $('#booking-bag-count').on('input', function() {
-            $('#bag-count-error').text('').hide();
+        $('#booking-bag-count, #booking-carry-on-count').on('input', function() {
+            $(this).closest('.form-group').find('.help-block').text('').hide();
             $(this).closest('.form-group').removeClass('has-error');
+            updatePassengerCapacity();
         });
 
         // Update passenger capacity on passenger input change
@@ -1630,7 +1781,7 @@
         });
 
         // Clear error message when user starts typing again (like contact form)
-        $('#booking-name, #booking-phone, #booking-email, #booking-pickup, #booking-destination, #booking-passengers, #booking-notes, #booking-flight, #booking-date, #booking-time, #booking-return-date, #booking-return-time, #booking-other-text').on('focus', function() {
+        $('#booking-name, #booking-phone, #booking-email, #booking-pickup, #booking-destination, #booking-passengers, #booking-notes, #booking-flight, #booking-depart-flight, #booking-date, #booking-time, #booking-return-date, #booking-return-time, #booking-other-text').on('focus', function() {
             if ($('#booking-success .alert-danger').length > 0) {
                 $('#booking-success').html('');
             }
@@ -1639,6 +1790,8 @@
         // Form submission
         $form.on('submit', async function(e) {
             e.preventDefault();
+            // Re-read the calendar at submit so rides booked on other phones in the last minute count.
+            lastFetchTime = null;
 
             // Clear previous errors
             $('.help-block.text-danger').text('').hide();
@@ -1672,28 +1825,56 @@
             const returnTime = $('#booking-return-time').val();
 
             const trip = tripKind();
-            const contactAddress = $('#booking-pickup').val().trim();
+            const homeAddress = $('#booking-pickup').val().trim();
+            const airportAddress = $('#booking-destination').val().trim();
+            const direction = airportDirection();
+            const fromAirport = direction === 'from';
+            const contactAddress = homeAddress;
             var notes = $('#booking-notes').val().trim();
             if (trip === 'group') {
                 notes = notes ? 'Group event. ' + notes : 'Group event.';
             }
             const asksTripDetails = trip === 'airport';
-            const bagCount = readBagCount();
-            const bagsChoice = checkingBagsChoice();
+            const bagCount = readCount('#booking-bag-count');
+            const carryOnCount = readCount('#booking-carry-on-count');
+            const bagsRecorded = bagCount.filled && bagCount.valid && carryOnCount.filled && carryOnCount.valid;
             const formData = {
                 name: $('#booking-name').val().trim(),
                 phone: $('#booking-phone').data('raw-value') || $('#booking-phone').val().replace(/\D/g, ''),
                 email: $('#booking-email').val().trim(),
                 pickupDate: pickupDate,
-                pickupAddress: contactAddress,
-                destinationAddress: $('#booking-destination').val().trim(),
+                pickupAddress: fromAirport ? airportAddress : homeAddress,
+                destinationAddress: fromAirport ? homeAddress : airportAddress,
+                airportDirection: trip === 'airport' ? direction : '',
+                clientRequestId: clientRequestIdFor({
+                    name: $('#booking-name').val().trim(),
+                    pickupDate: pickupDate,
+                    pickupTime: pickupTime,
+                    pickupAddress: fromAirport ? airportAddress : homeAddress,
+                    destinationAddress: fromAirport ? homeAddress : airportAddress,
+                    returnDate: asksTripDetails ? returnDate : '',
+                    returnTime: asksTripDetails ? returnTime : '',
+                    departFlightNumber: asksTripDetails ? $('#booking-depart-flight').val().trim() : '',
+                    returnFlightNumber: asksTripDetails && $('#booking-round-trip').is(':checked') ? $('#booking-flight').val().trim() : '',
+                    bagCount: asksTripDetails && bagCount.filled && bagCount.valid ? bagCount.value : null,
+                    carryOnCount: asksTripDetails && carryOnCount.filled && carryOnCount.valid ? carryOnCount.value : null,
+                    roundTrip: asksTripDetails && $('#booking-round-trip').is(':checked') ? 'Yes' : 'No',
+                    phone: $('#booking-phone').data('raw-value') || $('#booking-phone').val().replace(/\D/g, ''),
+                    passengers: $('#booking-passengers').val().trim(),
+                    specialNotes: notes,
+                    groupEvent: trip === 'group' ? 'Yes' : 'No',
+                    durationMinutes: trip === 'group' ? ($('#booking-duration').val() || '') : RIDE_DURATION_MINUTES
+                }),
                 passengers: $('#booking-passengers').val().trim(),
                 specialNotes: notes,
                 airportTrip: trip === 'airport' ? 'Yes' : 'No',
                 flightNumber: asksTripDetails ? $('#booking-flight').val().trim() : '',
+                departFlightNumber: asksTripDetails ? $('#booking-depart-flight').val().trim() : '',
+                returnFlightNumber: asksTripDetails && $('#booking-round-trip').is(':checked') ? $('#booking-flight').val().trim() : '',
                 pickupTime: pickupTime,
-                checkingBags: asksTripDetails ? bagsChoice : 'No',
-                bagCount: asksTripDetails && bagCount.filled ? bagCount.value : 0,
+                checkingBags: asksTripDetails && bagsRecorded ? bagsForCalendar(bagCount.value, carryOnCount.value) : 'No',
+                bagCount: asksTripDetails && bagCount.filled && bagCount.valid ? bagCount.value : null,
+                carryOnCount: asksTripDetails && carryOnCount.filled && carryOnCount.valid ? carryOnCount.value : null,
                 roundTrip: asksTripDetails && $('#booking-round-trip').is(':checked') ? 'Yes' : 'No',
                 returnDate: asksTripDetails ? returnDate : '',
                 returnTime: asksTripDetails ? returnTime : '',
@@ -1735,24 +1916,35 @@
             }
 
             // Pickup date validation
+            var dateMessage = fromAirport ? 'Arrival date is required' : (direction === 'to' || direction === 'round' ? 'Departure date is required' : 'Pickup date is required');
+            var timeMessage = fromAirport ? 'Arrival time is required' : (direction === 'to' || direction === 'round' ? 'Departure time is required' : 'Pickup time is required');
             if (!formData.pickupDate) {
-                errors.push('Pickup date is required');
+                errors.push(dateMessage);
                 $('#booking-date').closest('.form-group').addClass('has-error');
-                $('#date-error').text('Pickup date is required').show();
+                $('#date-error').text(dateMessage).show();
                 isValid = false;
             }
 
             // Pickup time validation
             if (!formData.pickupTime) {
-                errors.push('Pickup time is required');
+                errors.push(timeMessage);
                 $('#booking-time').closest('.form-group').addClass('has-error');
-                $('#time-error').text('Pickup time is required').show();
+                $('#time-error').text(timeMessage).show();
                 isValid = false;
             }
 
-            // Pickup address validation
-            if (!formData.pickupAddress) {
-                var pickupMessage = trip === 'airport' ? 'Home address is required' : 'Pickup address is required';
+            if (trip === 'airport' && formData.roundTrip !== 'Yes' && direction !== 'to' && direction !== 'from') {
+                errors.push('Please choose To the airport or From the airport');
+                $('#airport-direction-row .form-group').addClass('has-error');
+                $('#airport-direction-error').text('Please choose To the airport or From the airport').show();
+                isValid = false;
+            }
+
+            // The house is what the rider types. From the airport, that house is the drop-off.
+            if (!homeAddress) {
+                var pickupMessage = trip !== 'airport'
+                    ? 'Pickup address is required'
+                    : (fromAirport ? 'Drop-off address is required' : 'Home address is required');
                 errors.push(pickupMessage);
                 $('#booking-pickup').closest('.form-group').addClass('has-error');
                 $('#pickup-error').text(pickupMessage).show();
@@ -1762,7 +1954,7 @@
                 const area = await decideServiceArea(formData.pickupAddress, formData.destinationAddress);
                 if (!area.ok) {
                     errors.push(area.message);
-                    markServiceAreaFields(formData.pickupAddress, formData.destinationAddress, area);
+                    markServiceAreaFields(homeAddress, trip === 'airport' ? airportAddress : formData.destinationAddress, area);
                     isValid = false;
                 }
             }
@@ -1770,7 +1962,7 @@
             // Destination address validation
             if (trip === 'airport') {
                 var airlineChoice = $('#airport-choice').val() || '';
-                if (!airlineChoice || !formData.destinationAddress) {
+                if (!airlineChoice || !airportAddress) {
                     errors.push('Please choose an airport');
                     $('#airport-choice').closest('.form-group').addClass('has-error');
                     $('#airport-choice-error').text('Please choose an airport').show();
@@ -1790,11 +1982,27 @@
                 isValid = false;
             }
 
-            // Validate flight number when one was typed. It is optional.
-            if ((formData.airportTrip === 'Yes' || formData.groupEvent === 'Yes') && formData.flightNumber && !validateFlightNumber(formData.flightNumber)) {
-                errors.push('Please enter a valid flight number (e.g., AA1234)');
-                $('#booking-flight').closest('.form-group').addClass('has-error').find('.help-block').text('Please enter a valid flight number (e.g., AA1234)').show();
-                isValid = false;
+            // Flight numbers are required on every airport trip (Donald, Nov 9, 2026).
+            if (formData.airportTrip === 'Yes') {
+                var departMsg = '';
+                if (!formData.departFlightNumber) departMsg = 'Flight number is required';
+                else if (!validateFlightNumber(formData.departFlightNumber)) departMsg = 'Please enter a valid flight number (e.g., AA1234)';
+                if (departMsg) {
+                    errors.push(departMsg);
+                    $('#booking-depart-flight').closest('.form-group').addClass('has-error');
+                    $('#depart-flight-error').text(departMsg).show();
+                    isValid = false;
+                }
+                if (formData.roundTrip === 'Yes') {
+                    var returnMsg = '';
+                    if (!formData.flightNumber) returnMsg = 'Return flight number is required';
+                    else if (!validateFlightNumber(formData.flightNumber)) returnMsg = 'Please enter a valid return flight number (e.g., AA1234)';
+                    if (returnMsg) {
+                        errors.push(returnMsg);
+                        $('#booking-flight').closest('.form-group').addClass('has-error').find('.help-block').text(returnMsg).show();
+                        isValid = false;
+                    }
+                }
             }
 
             // Validate "Other" special requirement text field if "Other" is checked
@@ -1805,16 +2013,22 @@
             }
 
             if (trip === 'airport') {
-                if (!bagsChoice) {
-                    errors.push('Please choose Yes or No for checked bags');
-                    $('#checking-bags-section .form-group').first().addClass('has-error');
-                    $('#checking-bags-error').text('Please choose Yes or No for checked bags').show();
+                var checkedMsg = '';
+                if (!bagCount.filled) checkedMsg = 'Checked bags is required';
+                else if (!bagCount.valid) checkedMsg = 'Enter a checked bag count from 0 to 20';
+                if (checkedMsg) {
+                    errors.push(checkedMsg);
+                    $('#booking-bag-count').closest('.form-group').addClass('has-error');
+                    $('#checking-bags-error').text(checkedMsg).show();
                     isValid = false;
                 }
-                if (!bagCount.filled || !bagCount.valid) {
-                    errors.push('Please enter how many bags');
-                    $('#booking-bag-count').closest('.form-group').addClass('has-error');
-                    $('#bag-count-error').text('Please enter how many bags').show();
+                var carryMsg = '';
+                if (!carryOnCount.filled) carryMsg = 'Carry-on bags is required';
+                else if (!carryOnCount.valid) carryMsg = 'Enter a carry-on bag count from 0 to 20';
+                if (carryMsg) {
+                    errors.push(carryMsg);
+                    $('#booking-carry-on-count').closest('.form-group').addClass('has-error');
+                    $('#carry-on-error').text(carryMsg).show();
                     isValid = false;
                 }
             }
@@ -1822,7 +2036,7 @@
             // Validate passenger capacity
             const wheelchair = $('#booking-wheelchair').is(':checked');
             const carseat = $('#booking-carseat').is(':checked');
-            const checkingBags = checkingBagsChoice() === 'Yes';
+            const checkingBags = !!(bagCount.filled && bagCount.valid && bagCount.value > 0);
 
             const requirements = {
                 wheelchair: wheelchair,
@@ -1972,15 +2186,10 @@
                 console.log('Form Data:', formData);
                 console.log('Pending bookings:', pendingBookings.length);
 
-                // Handle dual submission for round-trip bookings
-                const submissions = await handleDualSubmission(formData);
+                // The calendar script decides capacity. Read its answer before any other post.
+                await postBookingToCalendar(formData);
 
-                // Best-effort calendar mirror to Apps Script
-                try {
-                    await postBookingToCalendar(formData);
-                } catch (calendarErr) {
-                    console.warn('Calendar mirror error ignored:', calendarErr);
-                }
+                const submissions = await handleDualSubmission(formData);
 
                 // Invalidate cache after successful submission so future validations fetch fresh data
                 cachedBookings = [];
@@ -2239,7 +2448,9 @@
         var choice=$('#airport-choice').val()||'';
         var airport=airportFromChoice(choice)||lookupAirport(dest);
         var rt=$('#booking-round-trip').is(':checked');
-        if(pick.length<6||!/\d/.test(pick)){show(ask);return;}
+        var wayNow=$('input[name="airport-direction"]:checked').val()||'';
+        var askNow=wayNow==='from'?'Enter your drop-off address and airport to see your price.':ask;
+        if(pick.length<6||!/\d/.test(pick)){show(askNow);return;}
         if(!choice&&!dest){show(ask);return;}
         var api=globalThis.MidnightServiceArea;
         var forceAirfield=api&&api.isPrivateAirfield&&api.isPrivateAirfield(dest);
@@ -2268,7 +2479,8 @@
             var cashCents=nearestFive(rt?oneCents*2:oneCents);
             var cardCents=nearestFive(Math.round(cashCents*(1+q([61,35,61,62]))));
             var cash=cashCents/100, card=cardCents/100;
-            var label=rt?'Round trip, '+esc(airport.name)+' and back':'One way to '+esc(airport.name);
+            var way=$('input[name="airport-direction"]:checked').val()||'';
+            var label=rt?'Round trip, '+esc(airport.name)+' and back':(way==='from'?'One way from '+esc(airport.name):'One way to '+esc(airport.name));
             show('<span class="quote-label">'+label+'</span><br><strong class="quote-total">Cash '+money(cash)+' &middot; Card '+money(card)+'</strong>');
         }).catch(function(err){
             if(my!==seq)return;
@@ -2315,7 +2527,7 @@
             $('#booking-destination').val(found.typed).trigger('input');
         });
         $('#booking-pickup, #booking-destination').on('input', later).on('change blur', function(){clearTimeout(timer);refresh();});
-        $('#booking-round-trip, #trip-type').on('change', function(){setTimeout(refresh,50);});
+        $('#booking-round-trip, #trip-type, input[name="airport-direction"]').on('change', function(){setTimeout(refresh,50);});
         refresh();
     });
 }(window.jQuery);

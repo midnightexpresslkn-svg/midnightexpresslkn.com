@@ -740,7 +740,7 @@ a.booking-alternate,
 #areas-served .service-area-list,
 #booking p,
 #booking label,
-#booking #checking-bags-label,
+#booking #checking-bags-label, #airport-direction-label,
 #booking a,
 #booking .add-home-tip,
 #booking .booking-legal,
@@ -825,7 +825,7 @@ a.booking-alternate,
     margin-bottom: 16px;
   }
 
-  #checking-bags-label,
+  #checking-bags-label, #airport-direction-label,
   #bookingForm label,
   #bookingForm .form-control,
   #bookingForm select,
@@ -876,7 +876,7 @@ a.booking-alternate,
     margin-top: 12px;
   }
 
-  #checking-bags-label,
+  #checking-bags-label, #airport-direction-label,
   #bookingForm label,
   #bookingForm .form-control,
   #bookingForm select,
@@ -1135,16 +1135,37 @@ section button.btn {
 
 /* Booking form labels match the page words. */
 #booking label,
-#booking #checking-bags-label,
+#booking #checking-bags-label, #airport-direction-label,
 #booking #quote-details {
   font-size: 24px !important;
 }
 
 @media (max-width: 767px) {
   #booking label,
-  #booking #checking-bags-label,
+  #booking #checking-bags-label, #airport-direction-label,
   #booking #quote-details {
     font-size: 21px !important;
+  }
+}
+
+@media (max-width: 991px) {
+  #return-flight-section {
+    display: block;
+    overflow: visible;
+    clear: both;
+  }
+
+  #return-flight-section > .form-group {
+    width: 100%;
+    max-width: 100%;
+    float: none;
+    clear: both;
+  }
+
+  #return-flight-section label {
+    display: block;
+    overflow: visible;
+    white-space: normal;
   }
 }
 

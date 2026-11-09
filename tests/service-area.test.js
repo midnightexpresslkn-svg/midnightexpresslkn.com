@@ -585,6 +585,18 @@ describe("service area rules", () => {
       label: "served ZIP after two unknown words",
       source: SOURCE.excluded,
     });
+    check(area.classifyAddress("Denver NC USA").status, "served", {
+      label: "trailing USA does not hide North Carolina",
+      source: SOURCE.excluded,
+    });
+    check(area.classifyAddress("Denver").status, "unclear", {
+      label: "a town with no state is not guessed",
+      source: SOURCE.excluded,
+    });
+    check(area.classifyAddress("Denver NC 28037-4821").status, "served", {
+      label: "ZIP+4 keeps the town",
+      source: SOURCE.excluded,
+    });
     check(area.classifyAddress("99999").status, "unclear", {
       label: "unknown ZIP is not a town",
       source: SOURCE.excluded,

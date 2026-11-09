@@ -115,6 +115,8 @@ export async function renderBooking(script, options = {}) {
     routeMode: options.routeMode ?? "ok",
     routesMiles: options.routesMiles ?? null,
     failPost: options.failPost ?? false,
+    calendarRead: options.calendarRead ?? "ok",
+    calendarResponse: options.calendarResponse ?? null,
     requests: [],
   };
 
@@ -161,7 +163,14 @@ export async function renderBooking(script, options = {}) {
           });
       }
     } else if (host === "script.google.com") {
-      settings.success && settings.success(state.bookings);
+      if (state.calendarRead === "error") {
+        settings.error && settings.error({}, "error", "calendar unavailable");
+      } else if (state.calendarRead === "refused") {
+        settings.success &&
+          settings.success({ ok: false, error: "Calendar unavailable" });
+      } else {
+        settings.success && settings.success(state.bookings);
+      }
     } else if (settings.error) {
       settings.error({}, "error", "blocked");
     }
@@ -210,6 +219,18 @@ export async function renderBooking(script, options = {}) {
     }
     if (host === "nominatim.openstreetmap.org") {
       return jsonResponse([{ lat: String(state.lat), lon: String(state.lon) }]);
+    }
+    if (host === "script.google.com" && method === "POST") {
+      const body = state.calendarResponse || {
+        ok: true,
+        eventIds: ["evt-test-1", "evt-test-2"],
+      };
+      return {
+        ok: true,
+        status: 200,
+        json: async () => body,
+        text: async () => JSON.stringify(body),
+      };
     }
     if (host === "script.google.com" || host === "docs.google.com") {
       return {
@@ -380,19 +401,15 @@ export async function fillValid(view, overrides = {}) {
     setControl(doc.querySelector("#booking-notes"), overrides.notes);
   }
   if (trip === "airport") {
-    const choice = doc.querySelector(
-      overrides.bags
-        ? "#booking-checking-bags-yes"
-        : "#booking-checking-bags-no",
-    );
     const count = doc.querySelector("#booking-bag-count");
-    if (choice) {
-      choice.checked = true;
-      window.jQuery(choice).trigger("change");
-    }
-    if (count) {
+    const carry = doc.querySelector("#booking-carry-on-count");
+    if (count && overrides.bagCount !== "") {
       count.value = overrides.bagCount ?? (overrides.bags ? "2" : "0");
       window.jQuery(count).trigger("input");
+    }
+    if (carry && overrides.carryOnCount !== "") {
+      carry.value = overrides.carryOnCount ?? "0";
+      window.jQuery(carry).trigger("input");
     }
   }
   if (overrides.roundTrip) {
@@ -405,6 +422,24 @@ export async function fillValid(view, overrides = {}) {
       overrides.returnTime ?? "15:00:00",
       "return-",
     );
+  }
+  if (trip === "airport" && overrides.direction !== "") {
+    const which = overrides.direction || "to";
+    const radio = doc.querySelector("#airport-direction-" + which);
+    if (radio) {
+      radio.checked = true;
+      window.jQuery(radio).trigger("change");
+    }
+  }
+  if (trip === "airport") {
+    // Flight numbers are required on every airport trip (Donald, Nov 9, 2026).
+    const depart = doc.querySelector("#booking-depart-flight");
+    if (depart && overrides.departFlight !== "") {
+      setControl(depart, overrides.departFlight ?? "DL 456");
+    }
+    if (overrides.roundTrip && overrides.flight === undefined) {
+      setControl(doc.querySelector("#booking-flight"), "AA1234");
+    }
   }
   setWhen(doc, overrides.date ?? "2026-12-15", overrides.time ?? "10:00:00");
 }
@@ -461,6 +496,33 @@ export function resultText(document) {
 }
 
 export function atLocal(ymd, hours, minutes) {
+  // Calendar fixtures are Eastern wall times. The script returns them as UTC,
+  // and the page reads them back as America/New_York on any machine.
   const [year, month, day] = ymd.split("-").map(Number);
-  return new Date(year, month - 1, day, hours, minutes, 0, 0).toISOString();
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+  let utc = Date.UTC(year, month - 1, day, hours, minutes, 0);
+  for (let i = 0; i < 4; i += 1) {
+    const bag = {};
+    fmt.formatToParts(new Date(utc)).forEach((part) => {
+      bag[part.type] = part.value;
+    });
+    const shown = Date.UTC(
+      Number(bag.year),
+      Number(bag.month) - 1,
+      Number(bag.day),
+      Number(bag.hour) % 24,
+      Number(bag.minute),
+    );
+    const want = Date.UTC(year, month - 1, day, hours, minutes);
+    utc += want - shown;
+  }
+  return new Date(utc).toISOString();
 }

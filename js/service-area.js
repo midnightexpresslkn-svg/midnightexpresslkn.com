@@ -242,6 +242,7 @@
     return String(raw || "")
       .toLowerCase()
       .replace(/['’]/g, "")
+      .replace(/\b(?:usa|united states of america|united states)\b/g, " ")
       .replace(/[^a-z0-9]+/g, " ")
       .replace(/\s+/g, " ")
       .trim();
