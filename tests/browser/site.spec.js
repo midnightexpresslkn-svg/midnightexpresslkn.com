@@ -110,6 +110,7 @@ test.describe("booking page", () => {
     await expect(quote).toContainText("Cash $65.00");
     await expect(quote).toContainText("Card $65.00");
     await expect(quote).not.toContainText("2.75");
+    await expect(quote).not.toContainText("2.63");
     await expect(quote).not.toContainText(/per mile/i);
     expect(posts).toEqual([]);
   });

@@ -27,12 +27,12 @@ describe("security", () => {
   it("does not show a per-mile rate or the internal price formula on the page", () => {
     const text = visibleText(page);
     check(
-      /2\.75|per[\s-]?mile|\$\s*\/\s*mi|miles\s*[x×]\s*2/i.test(text),
+      /2\.75|2\.63|per[\s-]?mile|\$\s*\/\s*mi|miles\s*[x×]\s*2/i.test(text),
       false,
       {
         label: "visible page text contains internal pricing",
         expected: "no per-mile rate in visible text",
-        actual: text.includes("2.75") ? "found 2.75" : "no rate found",
+        actual: /2\.75|2\.63/.test(text) ? "found a rate" : "no rate found",
         source: SOURCE.quote,
       },
     );

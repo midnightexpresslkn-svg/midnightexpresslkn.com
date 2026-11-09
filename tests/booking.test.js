@@ -28,7 +28,7 @@ function nearestFiveCents(cents) {
 }
 
 function totals(miles, roundTrip = false) {
-  const oneCents = Math.round(Math.max(65, miles * 2.75) * 100);
+  const oneCents = Math.round(Math.max(65, miles * 2.63) * 100);
   const cashCents = nearestFiveCents(roundTrip ? oneCents * 2 : oneCents);
   const cardCents = nearestFiveCents(Math.round(cashCents * 1.03));
   return {
@@ -131,7 +131,7 @@ describe("booking", () => {
         );
       });
 
-      it("uses miles times 2.75 once the trip is past the $65 minimum", async () => {
+      it("uses miles times 2.63 once the trip is past the $65 minimum", async () => {
         const view = await renderBooking(script, { miles: 40 });
         await showQuote(view, {
           pickup: "123 Main Street, Denver NC 28037",
@@ -148,7 +148,7 @@ describe("booking", () => {
         );
         check(
           totals(40),
-          { cash: "110.00", card: "115.00" },
+          { cash: "105.00", card: "110.00" },
           {
             label: "40-mile fare rule",
             source: SOURCE.quote,
@@ -215,7 +215,7 @@ describe("booking", () => {
           loaded: script,
         });
         await showQuote(view, { pickup: maiden, destination: "CLT" });
-        check(quoteTotal(view.document), "Cash $110.00 · Card $115.00", {
+        check(quoteTotal(view.document), "Cash $105.00 · Card $110.00", {
           label: "Maiden pickup gets a different fare",
           source: SOURCE.quote,
           loaded: script,
@@ -280,6 +280,46 @@ describe("booking", () => {
         });
       });
 
+      it("gives no online price past 50 miles, the same limit as Ara", async () => {
+        const at50 = await renderBooking(script, { miles: 50 });
+        await showQuote(at50, {
+          pickup: "123 Main Street, Denver NC 28037",
+          destination: "CLT",
+        });
+        check(quoteTotal(at50.document), "Cash $130.00 · Card $135.00", {
+          label: "exactly 50 miles still gets a price",
+          source: SOURCE.quote,
+          loaded: script,
+        });
+        for (const miles of [50.01, 55, 150]) {
+          const view = await renderBooking(script, { miles });
+          await showQuote(view, {
+            pickup: "123 Main Street, Denver NC 28037",
+            destination: "CLT",
+          });
+          check(
+            view.document.querySelector("#quote-details").textContent,
+            "For trips over 50 miles, please call (980) 422-9125 for your price.",
+            {
+              label: `${miles} miles shows no price and says to call`,
+              source: SOURCE.quote,
+              loaded: script,
+            },
+          );
+          check(
+            view.document
+              .querySelector("#quote-details a")
+              ?.getAttribute("href"),
+            "tel:+19804229125",
+            {
+              label: `${miles} miles call link dials Donald`,
+              source: SOURCE.quote,
+              loaded: script,
+            },
+          );
+        }
+      });
+
       it("prices the shortest alternative route, not the fastest", async () => {
         const view = await renderBooking(script, {
           routesMiles: [32.7, 27.2],
@@ -297,7 +337,7 @@ describe("booking", () => {
           source: SOURCE.quote,
           loaded: script,
         });
-        check(quoteTotal(view.document), "Cash $75.00 · Card $75.00", {
+        check(quoteTotal(view.document), "Cash $70.00 · Card $70.00", {
           label: "27.2 miles is used instead of the 32.7-mile fastest route",
           actual: quoteTotal(view.document),
           source: SOURCE.quote,
@@ -307,11 +347,11 @@ describe("booking", () => {
 
       it("rounds cash and card to the nearest $5, and an exact .50 goes down", async () => {
         const cases = [
-          [7250 / 275, "Cash $70.00 · Card $70.00"],
-          [7251 / 275, "Cash $75.00 · Card $75.00"],
-          [7750 / 275, "Cash $75.00 · Card $75.00"],
-          [7751 / 275, "Cash $80.00 · Card $80.00"],
-          [8500 / 275, "Cash $85.00 · Card $90.00"],
+          [7250 / 263, "Cash $70.00 · Card $70.00"],
+          [7251 / 263, "Cash $75.00 · Card $75.00"],
+          [7750 / 263, "Cash $75.00 · Card $75.00"],
+          [7751 / 263, "Cash $80.00 · Card $80.00"],
+          [8500 / 263, "Cash $85.00 · Card $90.00"],
         ];
         for (const [miles, expected] of cases) {
           const view = await renderBooking(script, { miles });
@@ -363,7 +403,7 @@ describe("booking", () => {
           source: SOURCE.airport,
           loaded: script,
         });
-        check(quoteTotal(view.document).includes("Cash $110.00"), true, {
+        check(quoteTotal(view.document).includes("Cash $105.00"), true, {
           label: `priced ${destination}`,
           source: SOURCE.quote,
           loaded: script,
