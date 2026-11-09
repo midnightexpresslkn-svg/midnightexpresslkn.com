@@ -735,6 +735,7 @@ a.booking-alternate,
 #areas-served .service-area-list,
 #booking p,
 #booking label,
+#booking #checking-bags-label,
 #booking a,
 #booking .add-home-tip,
 #booking .booking-legal,
@@ -1057,6 +1058,7 @@ footer .btn-social .fa {
   outline-offset: 2px;
 }
 
+#booking .help-block.text-danger,
 #booking #checking-bags-error,
 #booking #bag-count-error {
   color: #db3040 !important;
