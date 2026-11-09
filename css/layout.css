@@ -76,6 +76,21 @@ header.hero img.header-logo,
     box-sizing: border-box;
   }
 
+  #checking-bags-section {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  #checking-bags-section > [class*="col-"] {
+    float: none;
+    width: 50%;
+    max-width: 50%;
+    flex: 1 1 50%;
+    padding-right: 0;
+  }
+
   header.hero .hero-content {
     padding-left: 16px;
     padding-right: 16px;
@@ -1015,4 +1030,35 @@ footer .btn-social .fa {
 #bookingForm input[type="checkbox"]:focus-visible {
   outline: 2px solid #ffffff;
   outline-offset: 2px;
+}
+
+#bookingForm input[type="radio"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  margin: 0 6px 0 0;
+  vertical-align: -3px;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  background-color: transparent;
+  background-repeat: no-repeat;
+  background-position: center;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+
+#bookingForm input[type="radio"]:checked {
+  background-image: radial-gradient(circle, #ffffff 0 4px, transparent 4.5px);
+}
+
+#bookingForm input[type="radio"]:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+
+#booking #checking-bags-error,
+#booking #bag-count-error {
+  color: #db3040 !important;
+  font-weight: bold;
 }

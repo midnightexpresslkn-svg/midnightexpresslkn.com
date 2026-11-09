@@ -1111,6 +1111,48 @@ describe("booking", () => {
           source: SOURCE.passengers,
           loaded: script,
         });
+        const payload = calendarPayload(view);
+        check(payload.checkingBags, "No (0 bags)", {
+          label: "no checked bags still sends the bag count",
+          actual: payload && payload.checkingBags,
+          source: SOURCE.passengers,
+          loaded: script,
+        });
+        check(payload.bagCount, 0, {
+          label: "zero bags is sent as 0",
+          actual: payload && payload.bagCount,
+          source: SOURCE.passengers,
+          loaded: script,
+        });
+      });
+
+      it("asks for checked bags and a bag count before an airport request is sent", async () => {
+        const view = await renderBooking(script);
+        await fillValid(view, { trip: "airport" });
+        view.document.querySelector("#booking-checking-bags-yes").checked =
+          false;
+        view.document.querySelector("#booking-checking-bags-no").checked =
+          false;
+        view.document.querySelector("#booking-bag-count").value = "";
+        await submitForm(view);
+        const text = resultText(view.document);
+        check(text.includes("Please choose Yes or No for checked bags"), true, {
+          label: "skipped checked bags show the yes or no error",
+          actual: text,
+          source: SOURCE.passengers,
+          loaded: script,
+        });
+        check(text.includes("Please enter how many bags"), true, {
+          label: "an empty bag count shows an error",
+          actual: text,
+          source: SOURCE.passengers,
+          loaded: script,
+        });
+        check(bookingPosts(view.state).length, 0, {
+          label: "skipped bag answers send no request",
+          source: SOURCE.passengers,
+          loaded: script,
+        });
       });
 
       it("accepts four passengers with checked bags", async () => {
@@ -1119,6 +1161,19 @@ describe("booking", () => {
         await submitForm(view);
         check(resultText(view.document).includes("Request received"), true, {
           label: "four passengers with bags can request a ride",
+          source: SOURCE.passengers,
+          loaded: script,
+        });
+        const payload = calendarPayload(view);
+        check(payload.checkingBags, "Yes (2 bags)", {
+          label: "checked bags sends Yes and the bag count",
+          actual: payload && payload.checkingBags,
+          source: SOURCE.passengers,
+          loaded: script,
+        });
+        check(payload.bagCount, 2, {
+          label: "calendar payload includes the bag count",
+          actual: payload && payload.bagCount,
           source: SOURCE.passengers,
           loaded: script,
         });
@@ -1292,7 +1347,7 @@ describe("booking", () => {
           loaded: script,
         });
         check(
-          shown(view.document.querySelector("#booking-checking-bags")),
+          shown(view.document.querySelector("#checking-bags-section")),
           false,
           {
             label: "group form does not ask about bags",
@@ -1388,6 +1443,11 @@ describe("booking", () => {
           source: SOURCE.group,
           loaded: script,
         });
+        check(shown(view.document.querySelector("#trip-type-group")), false, {
+          label: "a group link does not ask for the trip type again",
+          source: SOURCE.group,
+          loaded: script,
+        });
         check(
           shown(view.document.querySelector("#booking-destination")),
           true,
@@ -1397,6 +1457,49 @@ describe("booking", () => {
             loaded: script,
           },
         );
+      });
+
+      it("opens the airport form from the home page link without asking again", async () => {
+        const view = await renderBooking(script, {
+          url: "/?type=airport#booking",
+        });
+        const link = view.document.querySelector("#book-airport-ride");
+        check(link?.textContent.trim(), "Book an Airport Ride", {
+          label: "home page has Book an Airport Ride",
+          actual: link?.textContent,
+          source: SOURCE.airport,
+          loaded: script,
+        });
+        check(link?.getAttribute("href"), "/?type=airport#booking", {
+          label: "airport link opens the booking form with airport selected",
+          actual: link?.getAttribute("href"),
+          source: SOURCE.airport,
+          loaded: script,
+        });
+        check(view.document.querySelector("#trip-type").value, "airport", {
+          label: "type=airport preselects Airport",
+          source: SOURCE.airport,
+          loaded: script,
+        });
+        check(shown(view.document.querySelector("#trip-type-group")), false, {
+          label: "an airport link does not ask for the trip type again",
+          source: SOURCE.airport,
+          loaded: script,
+        });
+        check(shown(view.document.querySelector("#airport-choice")), true, {
+          label: "the airport list stays after the trip type is already chosen",
+          source: SOURCE.airport,
+          loaded: script,
+        });
+      });
+
+      it("keeps one trip type chooser when the page did not choose", async () => {
+        const view = await renderBooking(script, { url: "/#booking" });
+        check(shown(view.document.querySelector("#trip-type-group")), true, {
+          label: "Book Your Ride still asks for the trip type once",
+          source: SOURCE.group,
+          loaded: script,
+        });
       });
 
       it("accepts a stadium name when the geocoder has no match", async () => {

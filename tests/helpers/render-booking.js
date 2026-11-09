@@ -379,13 +379,21 @@ export async function fillValid(view, overrides = {}) {
   if (overrides.notes) {
     setControl(doc.querySelector("#booking-notes"), overrides.notes);
   }
-  if (overrides.bags) {
-    const bags = role(doc, "checkbox", {
-      name: /checking bags/i,
-      hidden: true,
-    });
-    bags.checked = true;
-    window.jQuery(bags).trigger("change");
+  if (trip === "airport") {
+    const choice = doc.querySelector(
+      overrides.bags
+        ? "#booking-checking-bags-yes"
+        : "#booking-checking-bags-no",
+    );
+    const count = doc.querySelector("#booking-bag-count");
+    if (choice) {
+      choice.checked = true;
+      window.jQuery(choice).trigger("change");
+    }
+    if (count) {
+      count.value = overrides.bagCount ?? (overrides.bags ? "2" : "0");
+      window.jQuery(count).trigger("input");
+    }
   }
   if (overrides.roundTrip) {
     const roundTrip = role(doc, "checkbox", { name: /round trip/i });
