@@ -424,3 +424,50 @@ test.describe("booking page", () => {
     await expect(page).toHaveURL(/#booking/);
   });
 });
+
+test.describe("hero CTAs above the fold on phones", () => {
+  const viewports = [
+    { width: 375, height: 667 },
+    { width: 390, height: 844 },
+    { width: 393, height: 852 },
+    { width: 430, height: 932 },
+  ];
+
+  for (const { width, height } of viewports) {
+    test(`Book Your Ride and Call fit in ${width}x${height}`, async ({
+      page,
+    }) => {
+      await page.route("**/*", async (route) => {
+        const host = new URL(route.request().url()).hostname;
+        if (host === "127.0.0.1" || host === "localhost") {
+          await route.continue();
+          return;
+        }
+        await route.fulfill({
+          status: 200,
+          contentType: "text/plain",
+          body: "",
+        });
+      });
+      await page.setViewportSize({ width, height });
+      await page.goto("/");
+      await page.evaluate(() => document.fonts && document.fonts.ready);
+
+      const book = page.locator('header.hero a[href="#booking"]');
+      const call = page.locator('header.hero a[href^="tel:"]');
+      await expect(book).toBeVisible();
+      await expect(call).toBeVisible();
+
+      const bookBox = await book.boundingBox();
+      const callBox = await call.boundingBox();
+      expect(bookBox, "Book Your Ride missing box").toBeTruthy();
+      expect(callBox, "Call missing box").toBeTruthy();
+
+      expect(bookBox.y).toBeGreaterThanOrEqual(0);
+      expect(bookBox.y + bookBox.height).toBeLessThanOrEqual(height + 1);
+      expect(callBox.y).toBeGreaterThanOrEqual(0);
+      expect(callBox.y + callBox.height).toBeLessThanOrEqual(height + 1);
+      expect(callBox.y).toBeGreaterThanOrEqual(bookBox.y);
+    });
+  }
+});
