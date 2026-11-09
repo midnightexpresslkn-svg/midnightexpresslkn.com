@@ -360,6 +360,13 @@ header.hero .btn-outline:active {
     text-shadow: none;
   }
 
+  /* The longer hero line stays about as tall as the short one,
+     so both buttons remain in the same place on a phone. */
+  header.hero .intro-text .skills {
+    font-size: 14px;
+    line-height: 1.27;
+  }
+
   .hero-control {
     top: 50%;
     margin-top: -22px;

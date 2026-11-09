@@ -24,6 +24,39 @@ describe("manifest", () => {
     });
   });
 
+  it("names the home screen Midnight Express LKN", () => {
+    const data = JSON.parse(fs.readFileSync("manifest.webmanifest", "utf8"));
+    check(data.short_name, "Midnight Express LKN", {
+      label: "manifest short_name",
+      expected: "Midnight Express LKN",
+      actual: data.short_name,
+      source: SOURCE.manifest,
+    });
+    const pages = fs.readdirSync(".").filter((name) => name.endsWith(".html"));
+    const titles = [];
+    for (const page of pages) {
+      const html = fs.readFileSync(page, "utf8");
+      const match = html.match(
+        /<meta name="apple-mobile-web-app-title" content="([^"]*)">/,
+      );
+      if (match) titles.push({ page, title: match[1] });
+    }
+    check(titles.length > 0, true, {
+      label: "a page sets the Apple home screen title",
+      expected: true,
+      actual: titles.length > 0,
+      source: SOURCE.manifest,
+    });
+    for (const item of titles) {
+      check(item.title, "Midnight Express LKN", {
+        label: `${item.page} apple-mobile-web-app-title`,
+        expected: "Midnight Express LKN",
+        actual: item.title,
+        source: SOURCE.manifest,
+      });
+    }
+  });
+
   it("lists icon files that exist", () => {
     const data = JSON.parse(fs.readFileSync("manifest.webmanifest", "utf8"));
     const missing = (data.icons || [])
