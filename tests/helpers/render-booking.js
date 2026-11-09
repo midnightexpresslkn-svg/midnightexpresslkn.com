@@ -165,6 +165,9 @@ export async function renderBooking(script, options = {}) {
     } else if (host === "script.google.com") {
       if (state.calendarRead === "error") {
         settings.error && settings.error({}, "error", "calendar unavailable");
+      } else if (state.calendarRead === "refused") {
+        settings.success &&
+          settings.success({ ok: false, error: "Calendar unavailable" });
       } else {
         settings.success && settings.success(state.bookings);
       }
@@ -218,7 +221,10 @@ export async function renderBooking(script, options = {}) {
       return jsonResponse([{ lat: String(state.lat), lon: String(state.lon) }]);
     }
     if (host === "script.google.com" && method === "POST") {
-      const body = state.calendarResponse || { ok: true };
+      const body = state.calendarResponse || {
+        ok: true,
+        eventIds: ["evt-test-1", "evt-test-2"],
+      };
       return {
         ok: true,
         status: 200,

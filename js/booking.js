@@ -192,7 +192,14 @@
                 cache: false,
                 success: function(bookings) {
                     console.log('Fetched bookings:', bookings);
-                    cachedBookings = Array.isArray(bookings) ? bookings : [];
+                    if (!Array.isArray(bookings) || bookings.ok === false) {
+                        bookingsFetchOk = false;
+                        cachedBookings = [];
+                        lastFetchTime = null;
+                        resolve([]);
+                        return;
+                    }
+                    cachedBookings = bookings;
                     lastFetchTime = Date.now();
                     bookingsFetchOk = true;
                     resolve(cachedBookings);
@@ -304,19 +311,30 @@
      */
     function countOverlappingRides(proposedMinutes, existingBookings, proposedDuration) {
         var durP = proposedDuration || RIDE_DURATION_MINUTES;
-        var count = 0;
+        var endP = proposedMinutes + durP;
+        var spans = [];
         for (var i = 0; i < existingBookings.length; i++) {
             var booking = existingBookings[i];
-            var existingMinutes = booking.startMinutes != null
+            var start = booking.startMinutes != null
                 ? booking.startMinutes
                 : booking.hours * 60 + booking.minutes;
             var durE = booking.durationMinutes || RIDE_DURATION_MINUTES;
-            var overlaps = (durP === RIDE_DURATION_MINUTES && durE === RIDE_DURATION_MINUTES)
-                ? ridesOverlap(proposedMinutes, existingMinutes)
-                : (proposedMinutes < existingMinutes + durE && existingMinutes < proposedMinutes + durP);
-            if (overlaps) count++;
+            if (proposedMinutes < start + durE && start < endP) spans.push({ start: start, end: start + durE });
         }
-        return count;
+        var points = [proposedMinutes];
+        for (var s = 0; s < spans.length; s++) {
+            if (spans[s].start > proposedMinutes && spans[s].start < endP) points.push(spans[s].start);
+        }
+        var worst = 1;
+        for (var p = 0; p < points.length; p++) {
+            var at = points[p];
+            var active = 1;
+            for (var k = 0; k < spans.length; k++) {
+                if (at >= spans[k].start && at < spans[k].end) active++;
+            }
+            if (active > worst) worst = active;
+        }
+        return worst - 1;
     }
 
     /**
@@ -772,11 +790,14 @@
         }).then(function(response) {
             return response.json();
         }).then(function(body) {
-            if (!body || body.ok !== true) {
-                var denied = new Error((body && body.error) || 'The calendar did not accept the request');
+            var need = formData.roundTrip === 'Yes' ? 2 : 1;
+            var ids = body && Array.isArray(body.eventIds) ? body.eventIds.filter(Boolean) : [];
+            if (!body || body.ok !== true || ids.length < need) {
+                var denied = new Error((body && body.error) || 'The calendar did not confirm the ride');
                 denied.calendar = true;
                 throw denied;
             }
+            clientRequestAccepted = true;
             return body;
         });
     }
@@ -843,16 +864,20 @@
 
     var clientRequestKey = '';
     var clientRequestId = '';
+    var clientRequestAccepted = false;
 
     function clientRequestIdFor(formData) {
         var key = [
-            formData.name, formData.pickupDate, formData.pickupTime,
+            formData.name, formData.phone, formData.passengers,
+            formData.pickupDate, formData.pickupTime,
             formData.pickupAddress, formData.destinationAddress,
             formData.returnDate, formData.returnTime,
             formData.departFlightNumber, formData.returnFlightNumber,
-            formData.bagCount, formData.carryOnCount, formData.roundTrip
+            formData.bagCount, formData.carryOnCount, formData.roundTrip,
+            formData.specialNotes, formData.groupEvent, formData.durationMinutes
         ].join('|');
-        if (key !== clientRequestKey || !clientRequestId) {
+        if (clientRequestAccepted || key !== clientRequestKey || !clientRequestId) {
+            clientRequestAccepted = false;
             clientRequestKey = key;
             clientRequestId = 'web-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
         }
@@ -1804,7 +1829,12 @@
                     returnFlightNumber: asksTripDetails && $('#booking-round-trip').is(':checked') ? $('#booking-flight').val().trim() : '',
                     bagCount: asksTripDetails && bagCount.filled && bagCount.valid ? bagCount.value : null,
                     carryOnCount: asksTripDetails && carryOnCount.filled && carryOnCount.valid ? carryOnCount.value : null,
-                    roundTrip: asksTripDetails && $('#booking-round-trip').is(':checked') ? 'Yes' : 'No'
+                    roundTrip: asksTripDetails && $('#booking-round-trip').is(':checked') ? 'Yes' : 'No',
+                    phone: $('#booking-phone').data('raw-value') || $('#booking-phone').val().replace(/\D/g, ''),
+                    passengers: $('#booking-passengers').val().trim(),
+                    specialNotes: notes,
+                    groupEvent: trip === 'group' ? 'Yes' : 'No',
+                    durationMinutes: trip === 'group' ? ($('#booking-duration').val() || '') : RIDE_DURATION_MINUTES
                 }),
                 passengers: $('#booking-passengers').val().trim(),
                 specialNotes: notes,

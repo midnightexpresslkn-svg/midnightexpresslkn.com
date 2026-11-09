@@ -1148,6 +1148,27 @@ section button.btn {
   }
 }
 
+@media (max-width: 991px) {
+  #return-flight-section {
+    display: block;
+    overflow: visible;
+    clear: both;
+  }
+
+  #return-flight-section > .form-group {
+    width: 100%;
+    max-width: 100%;
+    float: none;
+    clear: both;
+  }
+
+  #return-flight-section label {
+    display: block;
+    overflow: visible;
+    white-space: normal;
+  }
+}
+
 /* Top bar and footer match the page. */
 .navbar-default .navbar-brand {
   font-size: 19px !important;

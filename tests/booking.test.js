@@ -2344,6 +2344,75 @@ describe("booking", () => {
           loaded: script,
         });
       });
+
+      it("uses a new request id after the calendar accepts the ride", async () => {
+        const view = await renderBooking(script);
+        await fillValid(view, { date: "2026-12-15", time: "10:00:00" });
+        await submitForm(view);
+        const posts = () =>
+          bookingPosts(view.state).filter((post) =>
+            post.url.includes("script.google.com"),
+          );
+        const first = JSON.parse(posts().pop().body).clientRequestId;
+        view.document.querySelector("#booking-success").textContent = "";
+        await submitForm(view);
+        const second = JSON.parse(posts().pop().body).clientRequestId;
+        check(first !== second, true, {
+          label: "an accepted ride does not reuse its request id",
+          actual: { first, second },
+          source: SOURCE.conflict,
+          loaded: script,
+        });
+      });
+
+      it("uses a new request id when only the passenger count changes", async () => {
+        const view = await renderBooking(script, {
+          calendarResponse: {
+            ok: false,
+            error: "That time is booked. Both drivers are already out then.",
+          },
+        });
+        await fillValid(view, { date: "2026-12-15", time: "10:00:00" });
+        await submitForm(view);
+        const posts = () =>
+          bookingPosts(view.state).filter((post) =>
+            post.url.includes("script.google.com"),
+          );
+        const first = JSON.parse(posts().pop().body).clientRequestId;
+        view.document.querySelector("#booking-passengers").value = "3";
+        view.document.querySelector("#booking-success").textContent = "";
+        await submitForm(view);
+        const second = JSON.parse(posts().pop().body).clientRequestId;
+        check(first !== second, true, {
+          label: "a passenger change is a different ride",
+          actual: { first, second },
+          source: SOURCE.conflict,
+          loaded: script,
+        });
+      });
+
+      it("does not say all times are available when the calendar list is a refusal", async () => {
+        const view = await renderBooking(script, { calendarRead: "refused" });
+        const holder = view.document.createElement("div");
+        holder.innerHTML =
+          '<div id="timeline-container"><p id="timeline-date"></p><div id="timeline-visual"></div></div>';
+        view.document.body.appendChild(holder);
+        await fillValid(view, { date: "2026-12-15", time: "10:00:00" });
+        const timeline =
+          view.document.querySelector("#timeline-visual").textContent;
+        check(timeline.includes("All times available"), false, {
+          label: "a refused calendar list is not an open day",
+          actual: timeline,
+          source: SOURCE.conflict,
+          loaded: script,
+        });
+        check(timeline.includes("Call (980) 422-9125"), true, {
+          label: "the rider is told to call when the list cannot be read",
+          actual: timeline,
+          source: SOURCE.conflict,
+          loaded: script,
+        });
+      });
     });
 
     describe("availability", () => {

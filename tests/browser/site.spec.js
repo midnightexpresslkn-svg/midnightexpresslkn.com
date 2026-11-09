@@ -28,7 +28,10 @@ async function installMocks(page, { miles = 10, bookings = [] } = {}) {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ ok: true }),
+        body: JSON.stringify({
+          ok: true,
+          eventIds: ["evt-test-1", "evt-test-2"],
+        }),
       });
       return;
     }
