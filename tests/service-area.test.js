@@ -430,7 +430,7 @@ describe("service area rules", () => {
       label: "blank is not a known airport",
       source: SOURCE.excluded,
     });
-    check(area.lookupAirport("KIPJ and KRUQ"), null, {
+    check(area.lookupAirport("KIPJ and EQY"), null, {
       label: "two named airfields is not one airport",
       source: SOURCE.excluded,
     });
@@ -454,12 +454,6 @@ describe("service area rules", () => {
       ["KIPJ", "KIPJ"],
       ["Lincolnton airport", "KIPJ"],
       ["Lincolnton-Lincoln County Regional", "KIPJ"],
-      ["KRUQ", "KRUQ"],
-      ["Salisbury airport", "KRUQ"],
-      ["Mid-Carolina Regional", "KRUQ"],
-      ["KHKY", "KHKY"],
-      ["Hickory Regional", "KHKY"],
-      ["Hickory airport", "KHKY"],
       ["Little Mountain Airport", "LITTLE-MOUNTAIN"],
       ["Modern Aviation", "CLT-PRIVATE"],
       ["EQY", "EQY"],

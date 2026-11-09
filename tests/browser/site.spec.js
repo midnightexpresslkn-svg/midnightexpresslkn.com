@@ -309,23 +309,19 @@ test.describe("booking page", () => {
       "Select an airport",
       "Charlotte Douglas International (CLT)",
       "Concord-Padgett Regional (JQF)",
-      "Hickory Regional, Catawba County (KHKY)",
-      "Charlotte private (Wilson/Signature, Modern Aviation FBOs at CLT)",
-      "Concord private FBO",
       "Lincolnton (KIPJ)",
+      "Charlotte private jets (Wilson/Signature, Modern Aviation)",
+      "Concord private jets",
       "Charlotte-Monroe Executive (EQY)",
-      "Salisbury (KRUQ)",
       "Wilgrove Air Park (8A6)",
       "Little Mountain (Airport Rd, Maiden)",
     ]);
-    await page.locator("#airport-choice").selectOption("KHKY");
-    await expect(page.locator("#booking-destination")).toHaveValue("KHKY");
+    await page.locator("#airport-choice").selectOption("KIPJ");
+    await expect(page.locator("#booking-destination")).toHaveValue("KIPJ");
     await page
       .getByPlaceholder("123 Main Street, Denver NC 28037")
       .fill("123 Main Street, Denver NC 28037");
-    await expect(page.locator("#quote-details")).toContainText(
-      "Hickory Regional",
-    );
+    await expect(page.locator("#quote-details")).toContainText("Lincolnton");
     await expect(page.locator("#quote-details")).toContainText("Cash");
     await page.locator("#booking-name").fill("TEST, DO NOT BOOK");
     await page.locator("#booking-phone").fill("9804229125");

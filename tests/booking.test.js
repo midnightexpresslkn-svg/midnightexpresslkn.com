@@ -506,12 +506,10 @@ describe("booking", () => {
             "Select an airport",
             "Charlotte Douglas International (CLT)",
             "Concord-Padgett Regional (JQF)",
-            "Hickory Regional, Catawba County (KHKY)",
-            "Charlotte private (Wilson/Signature, Modern Aviation FBOs at CLT)",
-            "Concord private FBO",
             "Lincolnton (KIPJ)",
+            "Charlotte private jets (Wilson/Signature, Modern Aviation)",
+            "Concord private jets",
             "Charlotte-Monroe Executive (EQY)",
-            "Salisbury (KRUQ)",
             "Wilgrove Air Park (8A6)",
             "Little Mountain (Airport Rd, Maiden)",
           ],
@@ -527,12 +525,10 @@ describe("booking", () => {
             "",
             "CLT",
             "JQF-PAX",
-            "KHKY",
+            "KIPJ",
             "CLT-PRIVATE",
             "JQF",
-            "KIPJ",
             "EQY",
-            "KRUQ",
             "8A6",
             "LITTLE-MOUNTAIN",
           ],
@@ -542,9 +538,9 @@ describe("booking", () => {
             loaded: script,
           },
         );
-        airline.value = "KHKY";
+        airline.value = "KIPJ";
         view.window.jQuery(airline).trigger("change");
-        check(destination.value, "KHKY", {
+        check(destination.value, "KIPJ", {
           label: "the chosen airport fills the destination",
           source: SOURCE.airport,
           loaded: script,
