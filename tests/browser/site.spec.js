@@ -283,22 +283,27 @@ test.describe("booking page", () => {
     await expect(page.locator("#booking-quote")).toBeHidden();
   });
 
-  test("about section links a group ride with no price", async ({ page }) => {
+  test("about section is one short paragraph", async ({ page }) => {
     await installMocks(page);
+    await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/");
-    const sentence = page.locator("#about-us .about-text").last();
-    await expect(sentence).toHaveText(
-      "We also provide safe, reliable group and bar transportation for weddings, parties, special events, and nights out, and you can book a group ride online in minutes.",
+    const copy = page.locator("#about-us .about-text");
+    await expect(copy).toHaveCount(1);
+    await expect(copy).toHaveText(
+      "Midnight Express LKN is a family-owned airport shuttle service based in Sherrills Ford and Denver, NC. We run reliable, pre-booked rides to and from Charlotte Douglas, Concord Regional, and nearby private airfields. Our licensed, insured drivers track your flight, so we're there when you land — on time, every time. We also do safe group and bar rides for weddings, parties, and nights out.",
     );
-    await expect(sentence.getByRole("link")).toHaveAttribute(
-      "href",
-      "/?type=group#booking",
+    await expect(copy).toHaveCSS("font-size", "18px");
+    await expect(copy).toHaveCSS("color", "rgb(255, 255, 255)");
+    await expect(page.locator("#about-us h2")).toHaveText(
+      "Serving the Denver and Sherrills Ford Side of Lake Norman NC",
     );
-    await expect(sentence.getByRole("link")).toHaveText("book a group ride");
-    await expect(sentence).not.toContainText(/\$|price|fare/i);
-    await expect(sentence.locator("xpath=following-sibling::p[1]")).toHaveClass(
-      /about-cta/,
+    const call = page.locator("#about-us .about-cta");
+    await expect(call).toHaveText("Call us today at (980) 422-9125");
+    await expect(call.locator("a")).toHaveAttribute("href", "tel:+19804229125");
+    await expect(page.locator("#why-choose-us")).not.toContainText(
+      "Iron Station",
     );
+    await expect(page.locator("#why-choose-us .fa-check")).toHaveCount(7);
   });
 
   test("iPhone shows how to add the booking page to the home screen", async ({
