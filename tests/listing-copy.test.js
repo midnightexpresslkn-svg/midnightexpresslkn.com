@@ -36,9 +36,9 @@ describe("listing copy", () => {
     );
     check(
       document.querySelector(".skills").textContent,
-      "CLT Airport Transportation from Denver and Sherrills Ford NC",
+      "Midnight Express LKN - Lake Norman's top-rated, family-owned airport transportation service, serving the Denver and Sherrills Ford side of Lake Norman.",
       {
-        label: "hero uses the original shuttle line",
+        label: "hero line names Midnight Express LKN",
         actual: document.querySelector(".skills").textContent,
       },
     );

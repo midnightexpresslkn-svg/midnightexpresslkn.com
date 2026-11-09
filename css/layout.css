@@ -538,6 +538,13 @@ a.active,
   color: #db3040 !important;
 }
 
+/* The rule above paints every section list item red. The booking
+   error banner is a red alert, so its text has to stay white. */
+#booking-success .alert,
+#booking-success .alert * {
+  color: #ffffff !important;
+}
+
 section h1,
 section h2,
 section h3,

@@ -159,6 +159,34 @@ test.describe("booking page", () => {
     expect(posts).toEqual([]);
   });
 
+  test("blank airport error is readable on a phone", async ({ page }) => {
+    const posts = await installMocks(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/#booking");
+    await page.locator("#trip-type").selectOption("airport");
+    await page.locator("#booking-name").fill("Jame test");
+    await page.locator("#booking-phone").fill("9804229125");
+    await page.locator("#booking-passengers").fill("2");
+    await page
+      .getByPlaceholder("123 Main Street, Denver NC 28037")
+      .fill("123 Main Street, Denver NC 28037");
+    await page.locator("#booking-date").evaluate((el) => {
+      el._flatpickr.setDate("2026-12-15", true);
+      el.value = "2026-12-15";
+    });
+    await page.locator("#booking-time").evaluate((el) => {
+      el._flatpickr.setDate("10:00:00", true);
+      el.value = "10:00:00";
+    });
+    await page.locator("#airport-choice").selectOption("");
+    await page.locator("#bookingForm button[type=submit]").click();
+    const line = page.locator("#booking-success .alert li");
+    await expect(line).toHaveText("Please choose an airport");
+    const color = await line.evaluate((el) => getComputedStyle(el).color);
+    expect(color).toBe("rgb(255, 255, 255)");
+    expect(posts).toEqual([]);
+  });
+
   test("accepts one overlapping ride and refuses the third", async ({
     page,
   }) => {
