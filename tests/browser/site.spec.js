@@ -8,8 +8,8 @@ async function answerFlight(page) {
 }
 
 async function answerBags(page) {
-  await page.locator("#booking-checking-bags-no").check();
   await page.locator("#booking-bag-count").fill("0");
+  await page.locator("#booking-carry-on-count").fill("0");
 }
 
 async function installMocks(page, { miles = 10, bookings = [] } = {}) {
@@ -23,10 +23,16 @@ async function installMocks(page, { miles = 10, bookings = [] } = {}) {
       await route.continue();
       return;
     }
-    if (
-      method === "POST" &&
-      (host === "script.google.com" || host === "docs.google.com")
-    ) {
+    if (method === "POST" && host === "script.google.com") {
+      posts.push(url);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true }),
+      });
+      return;
+    }
+    if (method === "POST" && host === "docs.google.com") {
       posts.push(url);
       await route.fulfill({ status: 204, body: "" });
       return;

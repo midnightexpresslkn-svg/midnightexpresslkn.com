@@ -1,7 +1,7 @@
 /**
- * Reference calendar capacity. This is the contract a shared server must
- * enforce for the website and Ara together. It is not the deployed Apps
- * Script, and a passing run here does not prove that deployment.
+ * LOCAL CONTRACT ONLY. This is not the deployed Apps Script and a pass
+ * here does not mean a live calendar refused a third ride. The Version 10
+ * script is tested separately, outside this website repo.
  *
  * Two drivers. A ride occupies two hours from its Eastern pickup.
  * A third overlapping ride is refused. One request is accepted or refused

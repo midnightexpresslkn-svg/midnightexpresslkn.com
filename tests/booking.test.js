@@ -1454,7 +1454,7 @@ describe("booking", () => {
           loaded: script,
         });
         const payload = calendarPayload(view);
-        check(payload.checkingBags, "No (0 bags)", {
+        check(payload.checkingBags, "No (0 checked, 0 carry-on)", {
           label: "no checked bags still sends the bag count",
           actual: payload && payload.checkingBags,
           source: SOURCE.passengers,
@@ -1468,24 +1468,152 @@ describe("booking", () => {
         });
       });
 
-      it("asks for checked bags and a bag count before an airport request is sent", async () => {
+      it("requires a checked bag count and a carry-on count, and zero is allowed", async () => {
         const view = await renderBooking(script);
-        await fillValid(view, { trip: "airport" });
-        view.document.querySelector("#booking-checking-bags-yes").checked =
-          false;
-        view.document.querySelector("#booking-checking-bags-no").checked =
-          false;
+        chooseTrip(view.document, "airport");
+        check(
+          view.document.querySelector("#checking-bags-label")?.textContent,
+          "Checked bags *",
+          {
+            label: "checked bags label is required",
+            actual: view.document.querySelector("#checking-bags-label")
+              ?.textContent,
+            source: SOURCE.passengers,
+            loaded: script,
+          },
+        );
+        check(
+          view.document.querySelector("#carry-on-label")?.textContent,
+          "Carry-on bags *",
+          {
+            label: "carry-on bags label is required",
+            actual: view.document.querySelector("#carry-on-label")?.textContent,
+            source: SOURCE.passengers,
+            loaded: script,
+          },
+        );
+
+        await fillValid(view, { bagCount: "", carryOnCount: "0" });
         view.document.querySelector("#booking-bag-count").value = "";
         await submitForm(view);
+        check(
+          resultText(view.document).includes("Checked bags is required"),
+          true,
+          {
+            label: "a blank checked bag count is named",
+            actual: resultText(view.document),
+            source: SOURCE.passengers,
+            loaded: script,
+          },
+        );
+        check(bookingPosts(view.state).length, 0, {
+          label: "a blank checked bag count sends nothing",
+          source: SOURCE.passengers,
+          loaded: script,
+        });
+
+        const carry = await renderBooking(script);
+        await fillValid(carry, { bagCount: "0", carryOnCount: "" });
+        const carryInput = carry.document.querySelector(
+          "#booking-carry-on-count",
+        );
+        if (carryInput) carryInput.value = "";
+        await submitForm(carry);
+        check(
+          resultText(carry.document).includes("Carry-on bags is required"),
+          true,
+          {
+            label: "a blank carry-on count is named",
+            actual: resultText(carry.document),
+            source: SOURCE.passengers,
+            loaded: script,
+          },
+        );
+        check(bookingPosts(carry.state).length, 0, {
+          label: "a blank carry-on count sends nothing",
+          source: SOURCE.passengers,
+          loaded: script,
+        });
+
+        const zeros = await renderBooking(script);
+        await fillValid(zeros, { bagCount: "0", carryOnCount: "0" });
+        await submitForm(zeros);
+        const zeroPayload = calendarPayload(zeros);
+        check(zeroPayload && zeroPayload.bagCount, 0, {
+          label: "explicit zero checked bags is sent as 0",
+          actual: zeroPayload && zeroPayload.bagCount,
+          source: SOURCE.passengers,
+          loaded: script,
+        });
+        check(zeroPayload && zeroPayload.carryOnCount, 0, {
+          label: "explicit zero carry-on bags is sent as 0",
+          actual: zeroPayload && zeroPayload.carryOnCount,
+          source: SOURCE.passengers,
+          loaded: script,
+        });
+        check(bookingPosts(zeros.state).length > 0, true, {
+          label: "explicit zero bag counts are accepted",
+          source: SOURCE.passengers,
+          loaded: script,
+        });
+      });
+
+      it("sends checked and carry-on counts on a from-airport round trip", async () => {
+        const view = await renderBooking(script);
+        await fillValid(view, {
+          direction: "from",
+          roundTrip: true,
+          bagCount: "2",
+          carryOnCount: "1",
+          bags: true,
+        });
+        await submitForm(view);
+        const payload = calendarPayload(view);
+        check(payload && payload.bagCount, 2, {
+          label: "checked bag count reaches the calendar payload",
+          actual: payload && payload.bagCount,
+          source: SOURCE.passengers,
+          loaded: script,
+        });
+        check(payload && payload.carryOnCount, 1, {
+          label: "carry-on count reaches the calendar payload",
+          actual: payload && payload.carryOnCount,
+          source: SOURCE.passengers,
+          loaded: script,
+        });
+        check(payload && payload.checkingBags, "Yes (2 checked, 1 carry-on)", {
+          label: "calendar text records both bag counts",
+          actual: payload && payload.checkingBags,
+          source: SOURCE.passengers,
+          loaded: script,
+        });
+        check(payload && payload.airportDirection, "round", {
+          label: "round trip still records both directions",
+          actual: payload && payload.airportDirection,
+          source: SOURCE.passengers,
+          loaded: script,
+        });
+      });
+
+      it("asks for checked bags and a bag count before an airport request is sent", async () => {
+        const view = await renderBooking(script);
+        await fillValid(view, {
+          trip: "airport",
+          bagCount: "",
+          carryOnCount: "",
+        });
+        view.document.querySelector("#booking-bag-count").value = "";
+        view.document.querySelector("#booking-carry-on-count").value = "";
+        await submitForm(view);
         const text = resultText(view.document);
-        check(text.includes("Please choose Yes or No for checked bags"), true, {
-          label: "skipped checked bags show the yes or no error",
+        check(text.includes("Checked bags is required"), true, {
+          label: "skipped checked bags show the required error",
           actual: text,
           source: SOURCE.passengers,
           loaded: script,
         });
-        check(text.includes("Please enter how many bags"), true, {
-          label: "an empty bag count shows an error",
+        check(text.includes("Carry-on bags is required"), true, {
+          label: "skipped carry-on bags show the required error",
           actual: text,
           source: SOURCE.passengers,
           loaded: script,
@@ -1507,7 +1635,7 @@ describe("booking", () => {
           loaded: script,
         });
         const payload = calendarPayload(view);
-        check(payload.checkingBags, "Yes (2 bags)", {
+        check(payload.checkingBags, "Yes (2 checked, 0 carry-on)", {
           label: "checked bags sends Yes and the bag count",
           actual: payload && payload.checkingBags,
           source: SOURCE.passengers,
@@ -2111,6 +2239,79 @@ describe("booking", () => {
           source: SOURCE.group,
           loaded: script,
         });
+      });
+    });
+
+    describe("calendar must answer before a request is accepted", () => {
+      it("does not say the time is free or accept a ride when the calendar cannot be read", async () => {
+        const view = await renderBooking(script, { calendarRead: "error" });
+        await fillValid(view, { date: "2026-12-15", time: "10:00:00" });
+        await submitForm(view);
+        const text = resultText(view.document);
+        check(text.includes("All times available"), false, {
+          label: "a failed calendar read is not described as free",
+          actual: text,
+          source: SOURCE.conflict,
+          loaded: script,
+        });
+        check(text.includes("Request received"), false, {
+          label: "a failed calendar read is not a received request",
+          actual: text,
+          source: SOURCE.conflict,
+          loaded: script,
+        });
+        check(text.includes("We could not check the calendar"), true, {
+          label: "the rider is told the calendar could not be checked",
+          actual: text,
+          source: SOURCE.conflict,
+          loaded: script,
+        });
+        check(bookingPosts(view.state).length, 0, {
+          label: "nothing is sent when the calendar cannot be read",
+          source: SOURCE.conflict,
+          loaded: script,
+        });
+      });
+
+      it("shows the calendar refusal and does not say the request was received", async () => {
+        const view = await renderBooking(script, {
+          calendarResponse: {
+            ok: false,
+            error: "That time is booked. Both drivers are already out then.",
+          },
+        });
+        await fillValid(view, { date: "2026-12-15", time: "10:00:00" });
+        await submitForm(view);
+        const text = resultText(view.document);
+        check(
+          text.includes(
+            "That time is booked. Both drivers are already out then.",
+          ),
+          true,
+          {
+            label: "the calendar refusal is shown",
+            actual: text,
+            source: SOURCE.conflict,
+            loaded: script,
+          },
+        );
+        check(text.includes("Request received"), false, {
+          label: "a calendar refusal is not confirmation",
+          actual: text,
+          source: SOURCE.conflict,
+          loaded: script,
+        });
+        check(
+          bookingPosts(view.state).some((post) =>
+            post.url.includes("docs.google.com"),
+          ),
+          false,
+          {
+            label: "the form is not sent after the calendar refuses",
+            source: SOURCE.conflict,
+            loaded: script,
+          },
+        );
       });
     });
 

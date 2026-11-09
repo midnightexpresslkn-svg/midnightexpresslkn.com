@@ -115,6 +115,8 @@ export async function renderBooking(script, options = {}) {
     routeMode: options.routeMode ?? "ok",
     routesMiles: options.routesMiles ?? null,
     failPost: options.failPost ?? false,
+    calendarRead: options.calendarRead ?? "ok",
+    calendarResponse: options.calendarResponse ?? null,
     requests: [],
   };
 
@@ -161,7 +163,11 @@ export async function renderBooking(script, options = {}) {
           });
       }
     } else if (host === "script.google.com") {
-      settings.success && settings.success(state.bookings);
+      if (state.calendarRead === "error") {
+        settings.error && settings.error({}, "error", "calendar unavailable");
+      } else {
+        settings.success && settings.success(state.bookings);
+      }
     } else if (settings.error) {
       settings.error({}, "error", "blocked");
     }
@@ -210,6 +216,15 @@ export async function renderBooking(script, options = {}) {
     }
     if (host === "nominatim.openstreetmap.org") {
       return jsonResponse([{ lat: String(state.lat), lon: String(state.lon) }]);
+    }
+    if (host === "script.google.com" && method === "POST") {
+      const body = state.calendarResponse || { ok: true };
+      return {
+        ok: true,
+        status: 200,
+        json: async () => body,
+        text: async () => JSON.stringify(body),
+      };
     }
     if (host === "script.google.com" || host === "docs.google.com") {
       return {
@@ -380,19 +395,15 @@ export async function fillValid(view, overrides = {}) {
     setControl(doc.querySelector("#booking-notes"), overrides.notes);
   }
   if (trip === "airport") {
-    const choice = doc.querySelector(
-      overrides.bags
-        ? "#booking-checking-bags-yes"
-        : "#booking-checking-bags-no",
-    );
     const count = doc.querySelector("#booking-bag-count");
-    if (choice) {
-      choice.checked = true;
-      window.jQuery(choice).trigger("change");
-    }
-    if (count) {
+    const carry = doc.querySelector("#booking-carry-on-count");
+    if (count && overrides.bagCount !== "") {
       count.value = overrides.bagCount ?? (overrides.bags ? "2" : "0");
       window.jQuery(count).trigger("input");
+    }
+    if (carry && overrides.carryOnCount !== "") {
+      carry.value = overrides.carryOnCount ?? "0";
+      window.jQuery(carry).trigger("input");
     }
   }
   if (overrides.roundTrip) {
