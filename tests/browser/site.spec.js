@@ -292,7 +292,8 @@ test.describe("booking page", () => {
     await expect(copy).toHaveText(
       "Midnight Express LKN is a family-owned airport shuttle service based in Sherrills Ford and Denver, NC. We run reliable, pre-booked rides to and from Charlotte Douglas, Concord Regional, and nearby private airfields. Our licensed, insured drivers track your flight, so we're there when you land — on time, every time. We also do safe group and bar rides for weddings, parties, and nights out.",
     );
-    await expect(copy).toHaveCSS("font-size", "18px");
+    // 21px on phones matches the rest of the page, per Donald (Nov 9, 2026).
+    await expect(copy).toHaveCSS("font-size", "21px");
     await expect(copy).toHaveCSS("color", "rgb(255, 255, 255)");
     await expect(page.locator("#about-us h2")).toHaveText(
       "Serving the Denver and Sherrills Ford Side of Lake Norman NC",

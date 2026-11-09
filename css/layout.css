@@ -217,7 +217,7 @@ header.hero img.header-logo,
   }
 
   #why-choose-us .feature-list {
-    font-size: 18.75px;
+    font-size: 21px;
     line-height: 1.45;
     margin-bottom: 0;
   }
@@ -236,7 +236,7 @@ header.hero img.header-logo,
   }
 
   #about-us .about-text {
-    font-size: 18px;
+    font-size: 21px;
     line-height: 1.5;
     margin-bottom: 10px;
   }
@@ -244,7 +244,7 @@ header.hero img.header-logo,
   .about-cta {
     margin-top: 8px;
     margin-bottom: 0;
-    font-size: 18px;
+    font-size: 21px;
   }
 
   #reviews {
@@ -697,7 +697,12 @@ a.booking-alternate,
   }
 
   #why-choose-us .feature-list {
-    font-size: 22.5px;
+    font-size: 25px;
+  }
+
+  #about-us .about-text,
+  #about-us .about-cta {
+    font-size: 24px;
   }
 
   #why-choose-us .feature-list li {
@@ -1066,3 +1071,91 @@ footer .btn-social .fa {
   color: #db3040 !important;
   font-weight: bold;
 }
+
+/* Every section heading is the same size. */
+section h2 {
+  font-size: 45px !important;
+}
+
+@media (max-width: 767px) {
+  section h2 {
+    font-size: 26px !important;
+  }
+}
+
+/* One size for the words and one size for the buttons, top to bottom. */
+header .intro-text .skills,
+#services .service-description,
+#why-choose-us .feature-list,
+#why-choose-us .feature-list li,
+#about-us .about-text,
+#about-us .about-cta,
+#reviews p,
+#reviews blockquote,
+#areas-served li,
+#booking p.text-center,
+#contact .contact-lines p {
+  font-size: 24px !important;
+}
+
+header .btn,
+section .btn,
+section a.btn,
+section button.btn {
+  font-size: 20px !important;
+}
+
+@media (max-width: 767px) {
+  header .intro-text .skills,
+  #services .service-description,
+  #why-choose-us .feature-list,
+  #why-choose-us .feature-list li,
+  #about-us .about-text,
+  #about-us .about-cta,
+  #reviews p,
+  #reviews blockquote,
+  #areas-served li,
+  #booking p.text-center,
+  #contact .contact-lines p {
+    font-size: 21px !important;
+  }
+}
+
+/* Small headings match too. */
+#services h3,
+#areas-served h4 {
+  font-size: 22px !important;
+}
+
+@media (max-width: 767px) {
+  header .intro-text .name {
+    font-size: 26px !important;
+  }
+}
+
+/* Booking form labels match the page words. */
+#booking label,
+#booking #checking-bags-label,
+#booking #quote-details {
+  font-size: 24px !important;
+}
+
+@media (max-width: 767px) {
+  #booking label,
+  #booking #checking-bags-label,
+  #booking #quote-details {
+    font-size: 21px !important;
+  }
+}
+
+/* Top bar and footer match the page. */
+.navbar-default .navbar-brand {
+  font-size: 19px !important;
+}
+
+@media (min-width: 768px) {
+  .navbar-default .navbar-brand {
+    font-size: 24px !important;
+  }
+}
+
