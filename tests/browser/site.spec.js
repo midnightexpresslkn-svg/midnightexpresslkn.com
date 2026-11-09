@@ -300,6 +300,13 @@ test.describe("booking page", () => {
     const call = page.locator("#about-us .about-cta");
     await expect(call).toHaveText("Call us today at (980) 422-9125");
     await expect(call.locator("a")).toHaveAttribute("href", "tel:+19804229125");
+    const checks = page.locator("#why-choose-us .feature-list li");
+    await expect(checks).toHaveCount(8);
+    await expect(checks.nth(1)).toHaveText("Flat-rate pricing");
+    await expect(page.locator("#why-choose-us .fa-check")).toHaveCount(8);
+    await expect(page.locator("#why-choose-us")).not.toContainText(
+      "Iron Station",
+    );
   });
 
   test("iPhone shows how to add the booking page to the home screen", async ({
