@@ -30,7 +30,7 @@ describe("review button", () => {
         source: SOURCE.review,
       },
     );
-    check(link.getAttribute("href"), WRITE_REVIEW, {
+    check(new URL(link.getAttribute("href")).href, WRITE_REVIEW, {
       label: "review button link",
       source: SOURCE.review,
     });
@@ -52,7 +52,7 @@ describe("review button", () => {
         actual: Boolean(icon),
         source: SOURCE.review,
       });
-      check(icon.getAttribute("href"), GOOGLE_LISTING, {
+      check(new URL(icon.getAttribute("href")).href, GOOGLE_LISTING, {
         label: `${file} Google icon opens the listing`,
         actual: icon.getAttribute("href"),
         source: SOURCE.review,
@@ -65,13 +65,20 @@ describe("review button", () => {
         label: `${file} Google icon uses noopener`,
         source: SOURCE.review,
       });
-      const writeLinks = [...document.querySelectorAll("a.btn-success")].map(
-        (node) => node.getAttribute("href"),
-      );
       if (file === "index.html") {
-        check(writeLinks.includes(WRITE_REVIEW), true, {
+        const write = role(
+          document,
+          "link",
+          { name: "Leave a review on Google" },
+          {
+            label: "green review button",
+            expected: "Leave a review on Google",
+            source: SOURCE.review,
+          },
+        );
+        check(new URL(write.getAttribute("href")).href, WRITE_REVIEW, {
           label: "green button still uses the g.page review link",
-          actual: writeLinks,
+          actual: write.getAttribute("href"),
           source: SOURCE.review,
         });
       }
