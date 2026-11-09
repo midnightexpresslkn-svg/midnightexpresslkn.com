@@ -52,6 +52,26 @@ header.hero img.header-logo,
   overflow-wrap: anywhere;
 }
 
+/* White type on the red danger fill is hard to read on a phone.
+   Keep the warning on the black page with a red edge. */
+#booking-success .alert-danger {
+  background-color: #000;
+  color: #ffffff;
+  border: 2px solid #e74c3c;
+}
+
+#booking-success .alert-danger strong,
+#booking-success .alert-danger li,
+#booking-success .alert-danger p {
+  color: #ffffff !important;
+  background-color: transparent;
+}
+
+#airport-choice-error {
+  color: #ffffff !important;
+  font-weight: bold;
+}
+
 @media (max-width: 767px) {
   .container {
     width: 100%;

@@ -115,6 +115,7 @@ export async function renderBooking(script, options = {}) {
     routeMode: options.routeMode ?? "ok",
     routesMiles: options.routesMiles ?? null,
     failPost: options.failPost ?? false,
+    calendarResponse: options.calendarResponse ?? { ok: true },
     requests: [],
   };
 
@@ -210,6 +211,16 @@ export async function renderBooking(script, options = {}) {
     }
     if (host === "nominatim.openstreetmap.org") {
       return jsonResponse([{ lat: String(state.lat), lon: String(state.lon) }]);
+    }
+    if (host === "script.google.com" && method === "POST") {
+      const body = state.calendarResponse || { ok: true };
+      return {
+        ok: true,
+        status: 200,
+        type: "cors",
+        json: async () => body,
+        text: async () => JSON.stringify(body),
+      };
     }
     if (host === "script.google.com" || host === "docs.google.com") {
       return {

@@ -692,13 +692,13 @@
     }
 
     /**
-     * Best-effort mirror to the new calendar Apps Script after the Google Form succeeds.
-     * no-cors + fire-and-forget so a calendar failure never blocks the customer request.
-     * Best-effort calendar mirror after Google Form success (no-cors).
+     * The calendar Apps Script is what creates the REQUEST (unconfirmed) event.
+     * Its reply can be read (it sends Access-Control-Allow-Origin: *). A refusal
+     * or a network failure must not be reported as "Request received".
      */
     function postBookingToCalendar(formData) {
         if (!isNewScriptReady()) {
-            return Promise.resolve({ skipped: true });
+            return Promise.reject(new Error('Booking calendar is not configured'));
         }
         return decideServiceArea(formData.pickupAddress, formData.destinationAddress).then(function(decision) {
             if (!decision.ok) return Promise.reject(serviceAreaError(decision));
@@ -729,15 +729,26 @@
         };
         return fetch(NEW_SCRIPT_URL, {
             method: 'POST',
-            mode: 'no-cors',
+            mode: 'cors',
             credentials: 'omit',
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify(payload)
-        }).then(function() {
-            return { delivered: 'opaque' };
-        }).catch(function(err) {
-            console.warn('Calendar mirror failed (request still sent to owner):', err);
-            return { skipped: true, error: String(err && err.message ? err.message : err) };
+        }).then(function(response) {
+            if (!response || !response.ok) {
+                throw new Error('Submission failed (HTTP ' + (response && response.status) + ')');
+            }
+            return response.text().then(function(text) {
+                var data;
+                try {
+                    data = JSON.parse(text);
+                } catch (ignore) {
+                    data = null;
+                }
+                if (!data || data.ok !== true) {
+                    throw new Error((data && data.error) || 'The calendar did not accept the request');
+                }
+                return { delivered: 'calendar', test: data.test === true };
+            });
         });
     }
 
@@ -1122,10 +1133,10 @@
     }
 
     /**
-     * Submit to Google Forms (cross-origin).
-     * Can detect: network failure, abort, timeout → error UI + call message.
-     * Cannot read Google acceptance: opaque no-cors response → "Request received. We'll call to confirm".
-     * Never claim booked/confirmed.
+     * Submit to Google Forms (cross-origin, no-cors).
+     * A 401 from the form is hidden by no-cors and looks the same as a saved
+     * response, so this post is only a best-effort copy. "Request received"
+     * is decided by the calendar reply, which the page can read.
      */
     function submitToGoogleSheets(submissionData) {
         return decideServiceArea(submissionData.pickupAddress, submissionData.destinationAddress).then(function(decision) {
@@ -1877,7 +1888,11 @@
                 }
 
                 $('#booking-success').html(errorHtml).show();
-                placeInView($('#booking-success'), 'nearest');
+                if (errors.indexOf('Please choose an airport') !== -1) {
+                    placeInView($('#airport-choice-row'), 'center');
+                } else {
+                    placeInView($('#booking-success'), 'nearest');
+                }
                 return;
             }
 
@@ -1911,15 +1926,10 @@
                 console.log('Form Data:', formData);
                 console.log('Pending bookings:', pendingBookings.length);
 
-                // Handle dual submission for round-trip bookings
-                const submissions = await handleDualSubmission(formData);
-
-                // Best-effort calendar mirror to Apps Script
-                try {
-                    await postBookingToCalendar(formData);
-                } catch (calendarErr) {
-                    console.warn('Calendar mirror error ignored:', calendarErr);
-                }
+                // The form post is best-effort. The calendar reply is the proof
+                // the request was received, so a refusal stops the success screen.
+                await handleDualSubmission(formData);
+                await postBookingToCalendar(formData);
 
                 // Invalidate cache after successful submission so future validations fetch fresh data
                 cachedBookings = [];

@@ -597,6 +597,29 @@ describe("booking", () => {
         );
       });
 
+      it("does not say the request was received when the calendar refuses it", async () => {
+        const view = await renderBooking(script, {
+          calendarResponse: {
+            ok: false,
+            error: "Calendar refused the request",
+          },
+        });
+        await fillValid(view, { trip: "airport" });
+        await submitForm(view);
+        check(resultText(view.document).includes("Request received"), false, {
+          label: "a refused calendar request is not called received",
+          actual: resultText(view.document),
+          source: SOURCE.airport,
+          loaded: script,
+        });
+        check(resultText(view.document).includes("could not send"), true, {
+          label: "the customer is told the request was not sent",
+          actual: resultText(view.document),
+          source: SOURCE.airport,
+          loaded: script,
+        });
+      });
+
       it("refuses an airport trip until one menu is chosen", async () => {
         const view = await renderBooking(script);
         await fillValid(view, { trip: "airport" });
