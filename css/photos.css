@@ -386,8 +386,11 @@ header.hero .btn-outline:active {
   }
 
   header.hero .hero-actions .btn {
+    /* 22rem was 220px (html rem is 10px) and clipped the Call label */
     width: 100%;
-    max-width: 22rem;
+    max-width: 100%;
+    box-sizing: border-box;
+    text-align: center;
   }
 
   .hero-control {

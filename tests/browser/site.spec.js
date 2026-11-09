@@ -471,3 +471,77 @@ test.describe("hero CTAs above the fold on phones", () => {
     });
   }
 });
+
+test.describe("Call button text fits inside the button on phones", () => {
+  const widths = [320, 360, 375, 390, 393, 412, 430];
+
+  for (const width of widths) {
+    test(`Call label stays inside the button at ${width}px`, async ({
+      page,
+    }) => {
+      await page.route("**/*", async (route) => {
+        const host = new URL(route.request().url()).hostname;
+        if (host === "127.0.0.1" || host === "localhost") {
+          await route.continue();
+          return;
+        }
+        await route.fulfill({
+          status: 200,
+          contentType: "text/plain",
+          body: "",
+        });
+      });
+      await page.setViewportSize({ width, height: 844 });
+      await page.goto("/");
+      await page.evaluate(() => document.fonts && document.fonts.ready);
+
+      const call = page.locator('header.hero a[href^="tel:"]');
+      const book = page.locator('header.hero a[href="#booking"]');
+      await expect(call).toBeVisible();
+      await expect(book).toBeVisible();
+
+      const metrics = await page.evaluate(() => {
+        const callEl = document.querySelector('header.hero a[href^="tel:"]');
+        const bookEl = document.querySelector('header.hero a[href="#booking"]');
+        const callBox = callEl.getBoundingClientRect();
+        const bookBox = bookEl.getBoundingClientRect();
+        const range = document.createRange();
+        range.selectNodeContents(callEl);
+        let minL = Infinity;
+        let maxR = -Infinity;
+        for (const rect of range.getClientRects()) {
+          if (rect.width < 1 || rect.height < 1) continue;
+          minL = Math.min(minL, rect.left);
+          maxR = Math.max(maxR, rect.right);
+        }
+        return {
+          scrollWidth: callEl.scrollWidth,
+          clientWidth: callEl.clientWidth,
+          callWidth: callBox.width,
+          bookWidth: bookBox.width,
+          contentLeft: minL,
+          contentRight: maxR,
+          buttonLeft: callBox.left,
+          buttonRight: callBox.right,
+        };
+      });
+
+      expect(
+        metrics.scrollWidth,
+        `Call text overflows button box: ${JSON.stringify(metrics)}`,
+      ).toBeLessThanOrEqual(metrics.clientWidth + 1);
+      expect(
+        metrics.contentLeft,
+        `Call text starts left of button: ${JSON.stringify(metrics)}`,
+      ).toBeGreaterThanOrEqual(metrics.buttonLeft - 1);
+      expect(
+        metrics.contentRight,
+        `Call text extends past button: ${JSON.stringify(metrics)}`,
+      ).toBeLessThanOrEqual(metrics.buttonRight + 1);
+      expect(
+        Math.abs(metrics.callWidth - metrics.bookWidth),
+        `Call and Book widths should match: ${JSON.stringify(metrics)}`,
+      ).toBeLessThanOrEqual(1);
+    });
+  }
+});
