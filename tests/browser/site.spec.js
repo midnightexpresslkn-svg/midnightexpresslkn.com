@@ -81,6 +81,13 @@ test.describe("booking page", () => {
       "href",
       "https://g.page/r/Ce81R31gU1X-ECA/review",
     );
+    const icon = page.getByRole("link", { name: "Google reviews" });
+    await expect(icon).toHaveAttribute(
+      "href",
+      "https://www.google.com/maps/search/?api=1&query=Midnight+Express+LKN&query_place_id=ChIJKxRQ8TeXoyIR7zVHfWBTVf4",
+    );
+    await expect(icon).toHaveAttribute("target", "_blank");
+    await expect(icon).toHaveAttribute("rel", "noopener");
     expect(posts).toEqual([]);
   });
 
