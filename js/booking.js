@@ -611,9 +611,19 @@
      * @param {string} flightNumber - Flight number
      * @returns {boolean}
      */
+    var AIRLINE_CODES = { delta: 'DL', 'delta air lines': 'DL', american: 'AA', 'american airlines': 'AA', united: 'UA', 'united airlines': 'UA', southwest: 'WN', jetblue: 'B6', spirit: 'NK', frontier: 'F9', allegiant: 'G4', endeavor: '9E', republic: 'YX', psa: 'OH', skywest: 'OO' };
+    function normalizeFlightNumber(raw) {
+        var text = String(raw || '').trim().replace(/\s+/g, ' ');
+        var named = text.match(/^([A-Za-z][A-Za-z .'-]*?)[ -]+(\d{1,4}[A-Za-z]?)$/);
+        if (named) {
+            var key = named[1].toLowerCase().replace(/\./g, '').replace(/\s+/g, ' ').trim();
+            if (AIRLINE_CODES[key]) return AIRLINE_CODES[key] + ' ' + named[2].toUpperCase();
+        }
+        return text;
+    }
     function validateFlightNumber(flightNumber) {
-        const pattern = /^[a-zA-Z0-9]{2,3}[\s-]?\d{1,4}[a-zA-Z]?$/;
-        return pattern.test(flightNumber);
+        var compact = normalizeFlightNumber(flightNumber).replace(/[\s-]+/g, '').toUpperCase();
+        return /^(?:[A-Z]{2}|[A-Z]\d|\d[A-Z]|[A-Z]{3})\d{1,4}[A-Z]?$/.test(compact);
     }
 
     /**
@@ -762,9 +772,9 @@
             passengers: formData.passengers,
             specialNotes: formData.specialNotes || '',
             airportTrip: formData.airportTrip,
-            flightNumber: calendarFlight(formData),
-            departFlightNumber: formData.departFlightNumber || '',
-            returnFlightNumber: formData.returnFlightNumber || '',
+            flightNumber: normalizeFlightNumber(calendarFlight(formData)),
+            departFlightNumber: normalizeFlightNumber(formData.departFlightNumber || ''),
+            returnFlightNumber: normalizeFlightNumber(formData.returnFlightNumber || ''),
             checkingBags: formData.checkingBags || 'No',
             bagCount: formData.bagCount,
             carryOnCount: formData.carryOnCount,

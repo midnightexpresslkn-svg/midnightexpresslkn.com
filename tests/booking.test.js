@@ -208,6 +208,42 @@ describe("booking", () => {
         });
       });
 
+      it("refuses a flight number that is only digits", async () => {
+        const view = await renderBooking(script);
+        await fillValid(view, { departFlight: "1234" });
+        await submitForm(view);
+        check(
+          resultText(view.document).includes(
+            "Please enter a valid flight number",
+          ),
+          true,
+          {
+            label: "digits alone are not a flight number",
+            actual: resultText(view.document),
+            source: SOURCE.flight,
+            loaded: script,
+          },
+        );
+        check(bookingPosts(view.state).length, 0, {
+          label: "digits alone are not sent",
+          source: SOURCE.flight,
+          loaded: script,
+        });
+      });
+
+      it("sends an airline name as its code", async () => {
+        const view = await renderBooking(script);
+        await fillValid(view, { departFlight: "Delta 456" });
+        await submitForm(view);
+        const payload = calendarPayload(view);
+        check(payload && payload.departFlightNumber, "DL 456", {
+          label: "Delta 456 is sent as DL 456",
+          actual: payload && payload.departFlightNumber,
+          source: SOURCE.flight,
+          loaded: script,
+        });
+      });
+
       it("sends the one-way flight number to Donald's calendar", async () => {
         const view = await renderBooking(script);
         await fillValid(view, { departFlight: "DL 456" });
