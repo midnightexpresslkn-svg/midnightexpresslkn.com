@@ -424,6 +424,18 @@ export async function fillValid(view, overrides = {}) {
     (trip === "group" ? "200 Oak St, Sherrills Ford NC" : "CLT");
   if (trip === "group") {
     setControl(doc.querySelector("#booking-destination"), destination);
+  } else if (overrides.airportId === "PRIVATE") {
+    const airline = doc.querySelector("#airport-choice");
+    airline.value = "PRIVATE";
+    view.window.jQuery(airline).trigger("change");
+    setControl(
+      doc.querySelector("#airfield-name"),
+      overrides.airfieldName ?? "Smith Field",
+    );
+    setControl(
+      doc.querySelector("#airfield-address"),
+      overrides.airfieldAddress ?? "100 Runway Rd, Charlotte NC 28202",
+    );
   } else {
     const api = view.window.MidnightServiceArea;
     const found =
@@ -526,6 +538,41 @@ export async function showQuote(
   );
   setControl(view.document.querySelector("#booking-destination"), destination);
   window.jQuery("#booking-destination").trigger("blur");
+  let text = "";
+  await waitFor(
+    () => {
+      text =
+        view.document
+          .querySelector("#quote-details")
+          ?.textContent?.replace(/\s+/g, " ")
+          .trim() || "";
+      if (!text || /figuring/i.test(text))
+        throw new Error(`quote not ready: ${text}`);
+    },
+    { timeout: 4000 },
+  );
+  return text;
+}
+
+export async function showAirfieldQuote(
+  view,
+  { pickup, name, address, roundTrip = false },
+) {
+  chooseTrip(view.document, "airport");
+  if (roundTrip) {
+    const box = role(view.document, "checkbox", { name: /round trip/i });
+    box.checked = true;
+    view.window.jQuery(box).trigger("change");
+  }
+  setControl(
+    placeholder(view.document, "123 Main Street, Denver NC 28037"),
+    pickup,
+  );
+  setControl(view.document.querySelector("#airfield-name"), name);
+  setControl(view.document.querySelector("#airfield-address"), address);
+  const choice = view.document.querySelector("#airport-choice");
+  choice.value = "PRIVATE";
+  view.window.jQuery(choice).trigger("change");
   let text = "";
   await waitFor(
     () => {
