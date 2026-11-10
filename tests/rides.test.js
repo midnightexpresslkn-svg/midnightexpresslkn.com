@@ -1926,3 +1926,150 @@ describe.each(scripts)("private airfield %s", (script) => {
     );
   });
 });
+
+const GROUP_DETAILS =
+  "Please tell us about your group event (what it is, how many people, and anything we should know).";
+
+describe.each(scripts)("group description %s", (script) => {
+  it("blocks an empty or blank group description and keeps other rides optional", async () => {
+    const empty = await renderBooking(script, { miles: 4 });
+    await fillValid(empty, { trip: "group", notes: "" });
+    check(
+      empty.document.querySelector("#notes-label").textContent.trim(),
+      "Trip Description *",
+      {
+        label: "the group description label is required",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    check(empty.document.querySelector("#booking-notes").required, true, {
+      label: "the group description box is required",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    await submitForm(empty);
+    check(resultText(empty.document).includes(GROUP_DETAILS), true, {
+      label: "an empty group description is blocked",
+      actual: resultText(empty.document),
+      source: "js/booking.js",
+      loaded: script,
+    });
+    check(empty.document.activeElement.id, "booking-notes", {
+      label: "the empty group description gets focus",
+      actual: empty.document.activeElement.id,
+      source: "js/booking.js",
+      loaded: script,
+    });
+    check(bookingPosts(empty.state).length, 0, {
+      label: "an empty group description sends nothing",
+      source: "js/booking.js",
+      loaded: script,
+    });
+
+    const spaces = await renderBooking(script, { miles: 4 });
+    await fillValid(spaces, { trip: "group", notes: " \n\t " });
+    await submitForm(spaces);
+    check(resultText(spaces.document).includes(GROUP_DETAILS), true, {
+      label: "a whitespace-only group description is blocked",
+      actual: resultText(spaces.document),
+      source: "js/booking.js",
+      loaded: script,
+    });
+    check(bookingPosts(spaces.state).length, 0, {
+      label: "a blank group description sends nothing",
+      source: "js/booking.js",
+      loaded: script,
+    });
+
+    const told = await renderBooking(script, { miles: 4 });
+    await fillValid(told, {
+      trip: "group",
+      notes: "birthday dinner for 6",
+    });
+    await submitForm(told);
+    check(resultText(told.document).includes("Request received"), true, {
+      label: "a group description lets the request through",
+      actual: resultText(told.document),
+      source: "js/booking.js",
+      loaded: script,
+    });
+    const groupPayload = JSON.parse(
+      bookingPosts(told.state).find((request) =>
+        hostIs(request.url, "script.google.com"),
+      ).body,
+    );
+    check(groupPayload.specialNotes.includes("birthday dinner for 6"), true, {
+      label: "the group request carries the description",
+      actual: groupPayload.specialNotes,
+      source: "js/booking.js",
+      loaded: script,
+    });
+
+    const airport = await renderBooking(script, { miles: 10 });
+    await fillValid(airport, { trip: "airport", notes: "" });
+    check(airport.document.querySelector("#booking-notes").required, false, {
+      label: "an airport note stays optional",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    check(
+      airport.document.querySelector("#notes-label").textContent.trim(),
+      "Special Notes",
+      {
+        label: "an airport note is not marked required",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    await submitForm(airport);
+    check(resultText(airport.document).includes("Request received"), true, {
+      label: "an airport ride can be requested with no description",
+      actual: resultText(airport.document),
+      source: "js/booking.js",
+      loaded: script,
+    });
+
+    const bar = await renderBooking(script, { miles: 4 });
+    await fillValid(bar, { trip: "local", notes: "" });
+    check(bar.document.querySelector("#booking-notes").required, false, {
+      label: "a bar note stays optional",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    await submitForm(bar);
+    check(resultText(bar.document).includes("Request received"), true, {
+      label: "a bar ride can be requested with no description",
+      actual: resultText(bar.document),
+      source: "js/booking.js",
+      loaded: script,
+    });
+
+    const party = await renderBooking(script, { miles: 4 });
+    await fillValid(party, { trip: "local", localKind: "party", notes: "" });
+    await submitForm(party);
+    check(resultText(party.document).includes("Request received"), true, {
+      label: "a party ride can be requested with no description",
+      actual: resultText(party.document),
+      source: "js/booking.js",
+      loaded: script,
+    });
+
+    const field = await renderBooking(script, { miles: 40 });
+    await fillValid(field, { trip: "airport", notes: "" });
+    choosePrivate(field, "Smith Field", "100 Runway Rd, Charlotte NC 28202");
+    field.document.querySelector("#booking-notes").value = "";
+    await submitForm(field);
+    check(resultText(field.document).includes("Request received"), true, {
+      label: "a private airfield can be requested with no description",
+      actual: resultText(field.document),
+      source: "js/booking.js",
+      loaded: script,
+    });
+    check(field.document.querySelector("#booking-notes").required, false, {
+      label: "a private airfield note stays optional",
+      source: "js/booking.js",
+      loaded: script,
+    });
+  });
+});

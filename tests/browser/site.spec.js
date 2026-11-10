@@ -137,7 +137,7 @@ test.describe("booking page", () => {
     await expect(page.locator("#notes-hint")).toHaveText(
       "Anything we should know? For example, a wheelchair, a car seat, or extra luggage.",
     );
-    await expect(page.locator("#notes-label")).toHaveText("Trip Description");
+    await expect(page.locator("#notes-label")).toHaveText("Trip Description *");
     await expect(page.locator("#group-hours")).toBeVisible();
     await expect(page.locator("#booking-notes")).toBeVisible();
     await expect(page.locator("#quote-details")).not.toContainText("Cash $");
@@ -156,6 +156,7 @@ test.describe("booking page", () => {
     await page.locator("#booking-name").fill("TEST, DO NOT BOOK");
     await page.locator("#booking-phone").fill("9804229125");
     await page.locator("#booking-passengers").fill("2");
+    await page.locator("#booking-notes").fill("A wedding party downtown");
     await page.locator("#group-hours").fill("2");
     await page.locator("#booking-pickup").fill("8109 pike road charlotte");
     await page.locator("#rule-age").check();
@@ -706,6 +707,167 @@ test.describe("new rides on a 375px phone", () => {
     await page.locator("#rule-smoke").check();
     await page.locator("#rule-damage").check();
     expect(posts).toEqual([]);
+  });
+});
+
+test.describe("group description on a 375px phone", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+  });
+
+  test("an empty group description is blocked", async ({ page }) => {
+    const posts = await installMocks(page);
+    await page.goto("/");
+    await page.locator("#trip-type").selectOption("group");
+    await expect(page.locator("#notes-label")).toHaveText("Trip Description *");
+    await fillIdentity(page);
+    await page.locator("#group-hours").fill("2");
+    await page
+      .locator("#booking-pickup")
+      .fill("123 Main Street, Denver NC 28037");
+    await page.locator("#rule-age").check();
+    await page.locator("#rule-smoke").check();
+    await page.locator("#rule-damage").check();
+    await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
+    await expect(page.locator("#booking-success")).toContainText(
+      "Please tell us about your group event (what it is, how many people, and anything we should know).",
+    );
+    await expect(page.locator("#booking-notes")).toBeFocused();
+    expect(posts).toEqual([]);
+  });
+
+  test("a whitespace-only group description is blocked", async ({ page }) => {
+    const posts = await installMocks(page);
+    await page.goto("/");
+    await page.locator("#trip-type").selectOption("group");
+    await fillIdentity(page);
+    await page.locator("#group-hours").fill("2");
+    await page
+      .locator("#booking-pickup")
+      .fill("123 Main Street, Denver NC 28037");
+    await page.locator("#booking-notes").fill("   \n\t  ");
+    await page.locator("#rule-age").check();
+    await page.locator("#rule-smoke").check();
+    await page.locator("#rule-damage").check();
+    await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
+    await expect(page.locator("#booking-success")).toContainText(
+      "Please tell us about your group event (what it is, how many people, and anything we should know).",
+    );
+    await expect(page.locator("#booking-notes")).toBeFocused();
+    expect(posts).toEqual([]);
+  });
+
+  test("a group description is sent with the request", async ({ page }) => {
+    const posts = await installMocks(page);
+    const bodies = [];
+    page.on("request", (request) => {
+      if (request.method() === "POST") bodies.push(request.postData() || "");
+    });
+    await page.goto("/");
+    await page.locator("#trip-type").selectOption("group");
+    await fillIdentity(page);
+    await page.locator("#group-hours").fill("2");
+    await page
+      .locator("#booking-pickup")
+      .fill("123 Main Street, Denver NC 28037");
+    await page.locator("#booking-notes").fill("birthday dinner for 6");
+    await page.locator("#rule-age").check();
+    await page.locator("#rule-smoke").check();
+    await page.locator("#rule-damage").check();
+    await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
+    await expect(page.locator("#booking-success")).toContainText(
+      "Request received",
+    );
+    expect(bodies.some((body) => body.includes("birthday dinner for 6"))).toBe(
+      true,
+    );
+  });
+
+  test("an airport ride can omit the description", async ({ page }) => {
+    const posts = await installMocks(page, { miles: 10 });
+    await page.goto("/");
+    await page.locator("#trip-type").selectOption("airport");
+    await expect(page.locator("#notes-label")).toHaveText("Special Notes");
+    await expect(page.locator("#booking-notes")).not.toHaveAttribute(
+      "required",
+    );
+    await fillIdentity(page);
+    await page.locator("#airport-choice").selectOption("CLT");
+    await page
+      .locator("#booking-pickup")
+      .fill("123 Main Street, Denver NC 28037");
+    await answerBags(page);
+    await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
+    await expect(page.locator("#booking-success")).toContainText(
+      "Request received",
+    );
+    expect(posts.length).toBeGreaterThan(0);
+  });
+
+  test("a bar ride can omit the description", async ({ page }) => {
+    const posts = await installMocks(page, { miles: 4 });
+    await page.goto("/");
+    await page.locator("#trip-type").selectOption("local");
+    await page.locator("#local-kind").selectOption("bar");
+    await expect(page.locator("#notes-label")).toHaveText("Special Notes");
+    await fillIdentity(page);
+    await page.locator("#bar-choice").selectOption("two-trees");
+    await page
+      .locator("#booking-pickup")
+      .fill("123 Main Street, Denver NC 28037");
+    await page.locator("#rule-age").check();
+    await page.locator("#rule-smoke").check();
+    await page.locator("#rule-damage").check();
+    await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
+    await expect(page.locator("#booking-success")).toContainText(
+      "Request received",
+    );
+    expect(posts.length).toBeGreaterThan(0);
+  });
+
+  test("a party ride can omit the description", async ({ page }) => {
+    const posts = await installMocks(page, { miles: 4 });
+    await page.goto("/");
+    await page.locator("#trip-type").selectOption("local");
+    await page.locator("#local-kind").selectOption("party");
+    await expect(page.locator("#notes-label")).toHaveText("Special Notes");
+    await fillIdentity(page);
+    await page.locator("#party-address").fill("200 Oak St, Sherrills Ford NC");
+    await page
+      .locator("#booking-pickup")
+      .fill("123 Main Street, Denver NC 28037");
+    await page.locator("#rule-age").check();
+    await page.locator("#rule-smoke").check();
+    await page.locator("#rule-damage").check();
+    await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
+    await expect(page.locator("#booking-success")).toContainText(
+      "Request received",
+    );
+    expect(posts.length).toBeGreaterThan(0);
+  });
+
+  test("a private airfield can omit the description", async ({ page }) => {
+    const posts = await installMocks(page, { miles: 40 });
+    await page.goto("/");
+    await page.locator("#trip-type").selectOption("airport");
+    await page.locator("#airport-choice").selectOption("PRIVATE");
+    await expect(page.locator("#booking-notes")).not.toHaveAttribute(
+      "required",
+    );
+    await fillIdentity(page);
+    await page.locator("#airfield-name").fill("Smith Field");
+    await page
+      .locator("#airfield-address")
+      .fill("100 Runway Rd, Charlotte NC 28202");
+    await page
+      .locator("#booking-pickup")
+      .fill("123 Main Street, Denver NC 28037");
+    await answerBags(page);
+    await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
+    await expect(page.locator("#booking-success")).toContainText(
+      "Request received",
+    );
+    expect(posts.length).toBeGreaterThan(0);
   });
 });
 

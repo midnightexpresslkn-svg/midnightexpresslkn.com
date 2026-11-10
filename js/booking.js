@@ -914,6 +914,7 @@
      */
     var NOTES_PLACEHOLDER = 'Anything we should know? For example, a wheelchair, a car seat, or extra luggage.';
     var RULES_MESSAGE = "Please check all three boxes: Must be 21 or older, No smoking, and If you damage anything, you are responsible.";
+    var GROUP_NOTES_MESSAGE = 'Please tell us about your group event (what it is, how many people, and anything we should know).';
 
     function fillBarChoices() {
         var select = document.getElementById('bar-choice');
@@ -979,7 +980,7 @@
             hideRideExtras();
             if (kind === 'group') {
                 setFieldLabel('address-label', 'Pickup Address *');
-                setFieldLabel('notes-label', 'Trip Description');
+                setFieldLabel('notes-label', 'Trip Description *');
                 $('#booking-notes').attr('placeholder', NOTES_PLACEHOLDER);
                 $('#group-vehicle').removeAttr('hidden').show();
                 $('#group-hours-row').removeAttr('hidden').show();
@@ -1015,6 +1016,7 @@
             hideRideExtras();
             $('#booking-quote').hide();
         }
+        $('#booking-notes').prop('required', kind === 'group');
         var airfield = tripKind() === 'airport' && $('#airport-choice').val() === 'PRIVATE';
         if (airfield) $('#airfield-place').removeAttr('hidden').show();
         else $('#airfield-place').attr('hidden', 'hidden').hide();
@@ -1921,6 +1923,13 @@
                     errors.push('Enter how many hours.');
                     $('#group-hours').closest('.form-group').addClass('has-error');
                     $('#group-hours').closest('.form-group').find('.help-block').text('Enter how many hours.').show();
+                    isValid = false;
+                }
+                if (!$.trim($('#booking-notes').val())) {
+                    errors.push(GROUP_NOTES_MESSAGE);
+                    $('#booking-notes').closest('.form-group').addClass('has-error');
+                    $('#notes-error').text(GROUP_NOTES_MESSAGE).show();
+                    document.getElementById('booking-notes').focus();
                     isValid = false;
                 }
             }
