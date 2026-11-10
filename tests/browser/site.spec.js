@@ -377,6 +377,7 @@ test.describe("booking page", () => {
       "Charlotte-Monroe Executive (EQY)",
       "Wilgrove Air Park (8A6)",
       "Little Mountain (Airport Rd, Maiden)",
+      "Private airfield",
     ]);
     await page.locator("#airport-choice").selectOption("KIPJ");
     await expect(page.locator("#booking-destination")).toHaveValue("KIPJ");
@@ -405,6 +406,64 @@ test.describe("booking page", () => {
       "don't service",
     );
     expect(posts.length).toBeGreaterThan(0);
+  });
+
+  test("a private airfield is priced like an airport from its address", async ({
+    page,
+  }) => {
+    const posts = await installMocks(page, { miles: 40 });
+    await page.goto("/");
+    await page.locator("#trip-type").selectOption("airport");
+    await page.locator("#airport-choice").selectOption("PRIVATE");
+    await expect(page.locator("#airfield-name")).toBeVisible();
+    await expect(page.locator("#airfield-address")).toBeVisible();
+    await expect(page.locator("#booking-destination")).toBeHidden();
+    await expect(page.locator("#airfield-choice")).toHaveCount(0);
+    await page.locator("#airfield-name").fill("Smith Field");
+    await page
+      .locator("#airfield-address")
+      .fill("100 Runway Rd, Charlotte NC 28202");
+    await page
+      .getByPlaceholder("123 Main Street, Denver NC 28037")
+      .fill("123 Main Street, Denver NC 28037");
+    const quote = page.locator("#quote-details");
+    await expect(quote).toContainText("One way to Smith Field");
+    await expect(quote).toContainText("Cash $105.00");
+    await expect(quote).toContainText("Card $108.15");
+    await expect(quote).not.toContainText("2.63");
+    await expect(quote).not.toContainText(/per mile/i);
+    await page.locator("#trip-type").selectOption("group");
+    await expect(page.locator("#booking-quote")).toBeHidden();
+    await expect(page.locator("#airfield-name")).toBeHidden();
+    const visible = await page.locator("#bookingForm").innerText();
+    expect(visible).not.toMatch(/price|pricing|fare|\$\d/i);
+    expect(posts).toEqual([]);
+  });
+
+  test("a private airfield over 50 miles uses the same call message", async ({
+    page,
+  }) => {
+    const posts = await installMocks(page, { miles: 55 });
+    await page.goto("/");
+    await page.locator("#trip-type").selectOption("airport");
+    await page.locator("#airport-choice").selectOption("PRIVATE");
+    await page.locator("#airfield-name").fill("Smith Field");
+    await page
+      .locator("#airfield-address")
+      .fill("100 Runway Rd, Charlotte NC 28202");
+    await page
+      .getByPlaceholder("123 Main Street, Denver NC 28037")
+      .fill("123 Main Street, Denver NC 28037");
+    const quote = page.locator("#quote-details");
+    await expect(quote).toContainText(
+      "For trips over 50 miles, please call (980) 422-9125 for your price.",
+    );
+    await expect(quote).not.toContainText("Cash");
+    await expect(quote.locator("a")).toHaveAttribute(
+      "href",
+      "tel:+19804229125",
+    );
+    expect(posts).toEqual([]);
   });
 
   test("group form still has no airport price", async ({ page }) => {

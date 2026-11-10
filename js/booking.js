@@ -114,7 +114,7 @@
         var destinationGeo = null;
         var pickupIsAirfield = endIsAirfield(pickup);
         var groupVenue = tripKind() === 'group';
-        var destinationIsAirfield = groupVenue || endIsAirfield(destination);
+        var destinationIsAirfield = groupVenue || privateAirfieldChosen() || endIsAirfield(destination);
         if (!pickupIsAirfield && api.classifyAddress(pickup).status === 'unclear') {
             pickupGeo = await censusPlace(pickup);
         }
@@ -739,6 +739,10 @@
         return tripKind() === 'airport';
     }
 
+    function privateAirfieldChosen() {
+        return tripKind() === 'airport' && ($('#airport-choice').val() || '') === 'PRIVATE';
+    }
+
     function checkingBagsChoice() {
         var chosen = $('input[name="checking-bags"]:checked').val() || '';
         return chosen === 'Yes' || chosen === 'No' ? chosen : '';
@@ -803,6 +807,7 @@
                 setFieldLabel('destination-label', 'Drop-off / venue *');
                 setCols($('#address-group, #dest-group'), false);
                 $('#airport-choice-row').hide();
+                $('#airfield-place').attr('hidden', 'hidden').hide();
                 $('#dest-group').removeClass('col-md-12').addClass('col-md-6').show();
                 $('#booking-destination').attr('placeholder', 'Bank of America Stadium');
                 setFieldLabel('notes-label', 'Trip Description');
@@ -816,6 +821,11 @@
                 setFieldLabel('destination-label', 'Destination Address *');
                 setCols($('#address-group'), false);
                 $('#airport-choice-row').show();
+                if (privateAirfieldChosen()) {
+                    $('#airfield-place').removeAttr('hidden').show();
+                } else {
+                    $('#airfield-place').attr('hidden', 'hidden').hide();
+                }
                 $('#dest-group').hide();
                 $('#booking-destination').attr('placeholder', 'CLT Airport');
                 setFieldLabel('notes-label', 'Special Notes');
@@ -826,6 +836,7 @@
         } else {
             $('#airport-fields, #group-fields').attr('hidden', 'hidden').hide();
             $('#airport-choice-row').hide();
+            $('#airfield-place').attr('hidden', 'hidden').hide();
             $('#booking-quote').hide();
         }
         updateConditionalFields();
@@ -1505,13 +1516,21 @@
             const asksTripDetails = trip === 'airport';
             const bagCount = readBagCount();
             const bagsChoice = checkingBagsChoice();
+            var destinationAddress = $('#booking-destination').val().trim();
+            if (privateAirfieldChosen()) {
+                var airfieldName = $('#airfield-name').val().trim();
+                var airfieldAddress = $('#airfield-address').val().trim();
+                destinationAddress = airfieldName && airfieldAddress
+                    ? airfieldName + ', ' + airfieldAddress
+                    : '';
+            }
             const formData = {
                 name: $('#booking-name').val().trim(),
                 phone: $('#booking-phone').data('raw-value') || $('#booking-phone').val().replace(/\D/g, ''),
                 email: $('#booking-email').val().trim(),
                 pickupDate: pickupDate,
                 pickupAddress: contactAddress,
-                destinationAddress: $('#booking-destination').val().trim(),
+                destinationAddress: destinationAddress,
                 passengers: $('#booking-passengers').val().trim(),
                 specialNotes: notes,
                 airportTrip: trip === 'airport' ? 'Yes' : 'No',
@@ -1594,7 +1613,20 @@
             // Destination address validation
             if (trip === 'airport') {
                 var airlineChoice = $('#airport-choice').val() || '';
-                if (!airlineChoice || !formData.destinationAddress) {
+                if (airlineChoice === 'PRIVATE') {
+                    if (!$('#airfield-name').val().trim()) {
+                        errors.push('Airfield name is required');
+                        $('#airfield-name').closest('.form-group').addClass('has-error');
+                        $('#airfield-name-error').text('Airfield name is required').show();
+                        isValid = false;
+                    }
+                    if (!$('#airfield-address').val().trim()) {
+                        errors.push('Airfield address is required');
+                        $('#airfield-address').closest('.form-group').addClass('has-error');
+                        $('#airfield-address-error').text('Airfield address is required').show();
+                        isValid = false;
+                    }
+                } else if (!airlineChoice || !formData.destinationAddress) {
                     errors.push('Please choose an airport');
                     $('#airport-choice').closest('.form-group').addClass('has-error');
                     $('#airport-choice-error').text('Please choose an airport').show();
@@ -1871,6 +1903,7 @@
                         $('#return-timeline-container').hide();
                         $('#other-requirement-section').hide();
                         $('#group-event-call').hide();
+                        $('#airfield-place').attr('hidden', 'hidden').hide();
                         $('#booking-quote').show();
                         $form.find('button[type="submit"]').prop('disabled', false);
                         $form.slideDown();
@@ -1967,6 +2000,13 @@
         if(rem>250) units+=1;
         return units*step;
     }
+    // Listed airports and a private airfield the customer names share this fare.
+    function airportFare(mi, rt){
+        var oneCents=Math.round(Math.max(q([59,56]),mi*q([63,35,59,62]))*100);
+        var cashCents=nearestFive(rt?oneCents*2:oneCents);
+        var cardCents=Math.round(cashCents*(1+q([61,35,61,62])));
+        return {cash:cashCents/100,card:cardCents/100};
+    }
     function lookupAirport(raw){
         var api=globalThis.MidnightServiceArea;
         return api&&api.lookupAirport?api.lookupAirport(raw):null;
@@ -2054,15 +2094,20 @@
         if(($('#trip-type').val()||'')!=='airport'){$('#booking-quote').hide();return;}
         $('#booking-quote').show();
         var pick=$.trim($('#booking-pickup').val()||'');
-        var dest=$.trim($('#booking-destination').val()||'');
         var choice=$('#airport-choice').val()||'';
-        var airport=airportFromChoice(choice)||lookupAirport(dest);
+        var privateRide=choice==='PRIVATE';
+        var dest=$.trim((privateRide?$('#airfield-address'):$('#booking-destination')).val()||'');
+        var airfieldName=$.trim($('#airfield-name').val()||'');
+        var airport=privateRide?null:(airportFromChoice(choice)||lookupAirport(dest));
         var rt=$('#booking-round-trip').is(':checked');
-        if(pick.length<6||!/\d/.test(pick)){show(ask);return;}
-        if(!choice&&!dest){show(ask);return;}
+        var privateAsk='Enter your home address and the airfield address to see your price.';
+        if(pick.length<6||!/\d/.test(pick)){show(privateRide?privateAsk:ask);return;}
+        if(privateRide){
+            if(airfieldName.length<2||dest.length<6||!/\d/.test(dest)){show(privateAsk);return;}
+        }else if(!choice&&!dest){show(ask);return;}
         var api=globalThis.MidnightServiceArea;
         var forceAirfield=api&&api.isPrivateAirfield&&api.isPrivateAirfield(dest);
-        var airfieldForQuote=!!(forceAirfield&&!airport);
+        var airfieldForQuote=privateRide||!!(forceAirfield&&!airport);
         var prelim={code:'unclear'};
         if(api){
             prelim=api.evaluateTrip({
@@ -2072,29 +2117,37 @@
             });
         }
         if(prelim.code==='outside'){show(esc(api.OUT_OF_AREA_MESSAGE));return;}
-        if(!airport){show(fb);return;}
+        if(!privateRide&&!airport){show(fb);return;}
+        var labelName=privateRide?airfieldName:airport.name;
         show('Figuring your price&hellip;');
         geocode(pick).then(function(g){
             if(my!==seq)return;
             var decision=api.evaluateTrip({
                 pickup:pick,
                 destination:dest,
+                destinationIsAirfield:airfieldForQuote,
                 pickupGeo:{city:g.city||'',state:g.state||'',zip:g.zip||''}
             });
             if(decision.code==='outside')throw 'out';
             if(!decision.ok)throw 'unclear';
             if(!inArea(g))throw 'area';
-            return driveMiles(g,airport);
+            if(!privateRide)return driveMiles(g,airport);
+            return geocode(dest).then(function(field){
+                if(my!==seq)return;
+                return driveMiles(g,{
+                    id:'airfield:'+field.lat.toFixed(5)+','+field.lon.toFixed(5),
+                    lat:field.lat,
+                    lon:field.lon
+                });
+            });
         }).then(function(mi) {
             if(my!==seq||groupEventYes()){if(groupEventYes())hideGroupQuote();return;}
             // Donald (Nov 9, 2026): no online price over 50 driving miles; same limit as Ara.
+            // Donald (Nov 10, 2026): a private airfield uses this same fare and the same cap.
             if(mi>50)throw 'far';
-            var oneCents=Math.round(Math.max(q([59,56]),mi*q([63,35,59,62]))*100);
-            var cashCents=nearestFive(rt?oneCents*2:oneCents);
-            var cardCents=Math.round(cashCents*(1+q([61,35,61,62])));
-            var cash=cashCents/100, card=cardCents/100;
-            var label=rt?'Round trip, '+esc(airport.name)+' and back':'One way to '+esc(airport.name);
-            show('<span class="quote-label">'+label+'</span><br><strong class="quote-total">Cash '+money(cash)+' &middot; Card '+money(card)+'</strong>');
+            var fare=airportFare(mi,rt);
+            var label=rt?'Round trip, '+esc(labelName)+' and back':'One way to '+esc(labelName);
+            show('<span class="quote-label">'+label+'</span><br><strong class="quote-total">Cash '+money(fare.cash)+' &middot; Card '+money(fare.card)+'</strong>');
         }).catch(function(err) {
             if(my!==seq)return;
             if(groupEventYes()){hideGroupQuote();return;}
@@ -2116,6 +2169,10 @@
             opt.textContent=item.menu;
             airline.appendChild(opt);
         }
+        var custom=document.createElement('option');
+        custom.value='PRIVATE';
+        custom.textContent='Private airfield';
+        airline.appendChild(custom);
         airline.setAttribute('data-ready','yes');
     }
     function chosenAirport(id){
@@ -2131,6 +2188,13 @@
         $('#airport-choice').on('change', function(){
             var id=$(this).val()||'';
             if(($('#trip-type').val()||'')==='airport')$('#dest-group').hide();
+            if(id==='PRIVATE'){
+                $('#airfield-place').removeAttr('hidden').show();
+                $('#booking-destination').val('');
+                refresh();
+                return;
+            }
+            $('#airfield-place').attr('hidden','hidden').hide();
             if(!id){
                 $('#booking-destination').val('').trigger('input');
                 return;
@@ -2139,7 +2203,7 @@
             if(!found)return;
             $('#booking-destination').val(found.typed).trigger('input');
         });
-        $('#booking-pickup, #booking-destination').on('input', later).on('change blur', function(){clearTimeout(timer);refresh();});
+        $('#booking-pickup, #booking-destination, #airfield-name, #airfield-address').on('input', later).on('change blur', function(){clearTimeout(timer);refresh();});
         $('#booking-round-trip, #trip-type').on('change', function() {
             setTimeout(refresh, 50);
         });

@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { afterEach, describe, it } from "vitest";
 import { hostnameOf } from "./helpers/hostname.js";
 import { SOURCE } from "./helpers/source-line.js";
@@ -10,6 +11,7 @@ import {
   fillValid,
   renderBooking,
   resultText,
+  showAirfieldQuote,
   showQuote,
   submitForm,
 } from "./helpers/render-booking.js";
@@ -575,6 +577,7 @@ describe("booking", () => {
             "Charlotte-Monroe Executive (EQY)",
             "Wilgrove Air Park (8A6)",
             "Little Mountain (Airport Rd, Maiden)",
+            "Private airfield",
           ],
           {
             label: "airport menu lists every field in order",
@@ -594,6 +597,7 @@ describe("booking", () => {
             "EQY",
             "8A6",
             "LITTLE-MOUNTAIN",
+            "PRIVATE",
           ],
           {
             label: "airport menu keeps the existing option values",
@@ -658,6 +662,545 @@ describe("booking", () => {
             loaded: script,
           },
         );
+      });
+
+      it("keeps the airport fare formula in one place", () => {
+        const source = fs.readFileSync("js/booking.js", "utf8");
+        check(source.split("function airportFare(").length - 1, 1, {
+          label: "one airport fare function",
+          source: SOURCE.quote,
+          loaded: script,
+        });
+        check(source.split("q([63,35,59,62])").length - 1, 1, {
+          label: "the per-mile rate is not copied for airfields",
+          source: SOURCE.quote,
+          loaded: script,
+        });
+      });
+
+      it("prices a typed private airfield with the airport fare", async () => {
+        const home = "123 Main Street, Denver NC 28037";
+        const address = "100 Runway Rd, Charlotte NC 28202";
+        const name = "Smith Field";
+        const milesList = [1, 10, 27.2, 40, 50, 8500 / 263];
+        for (const miles of milesList) {
+          const view = await renderBooking(script, {
+            miles,
+            places: {
+              [home]: {
+                lat: 35.53,
+                lon: -81.03,
+                city: "Denver",
+                state: "NC",
+                zip: "28037",
+                miles,
+              },
+              [address]: {
+                lat: 35.71,
+                lon: -80.89,
+                city: "Charlotte",
+                state: "NC",
+                zip: "28202",
+                miles: 999,
+              },
+            },
+          });
+          await showAirfieldQuote(view, { pickup: home, name, address });
+          const expected = totals(miles);
+          check(
+            quoteTotal(view.document),
+            `Cash $${expected.cash} · Card $${expected.card}`,
+            {
+              label: `private airfield fare for ${miles} miles`,
+              actual: quoteTotal(view.document),
+              source: SOURCE.quote,
+              loaded: script,
+            },
+          );
+          check(quoteLabel(view.document), `One way to ${name}`, {
+            label: `private airfield label for ${miles} miles`,
+            source: SOURCE.quote,
+            loaded: script,
+          });
+          const routes = view.state.requests.filter(
+            (request) => hostnameOf(request.url) === "router.project-osrm.org",
+          );
+          const route = routes[routes.length - 1].url;
+          check(route.includes("-81.03,35.53;-80.89,35.71"), true, {
+            label:
+              "distance runs from the home address to the airfield address",
+            actual: route,
+            source: SOURCE.quote,
+            loaded: script,
+          });
+          check(route.includes("-80.9423,35.2224"), false, {
+            label: "a typed airfield does not use the CLT door",
+            actual: route,
+            source: SOURCE.quote,
+            loaded: script,
+          });
+        }
+      });
+
+      it("prices a private airfield round trip and stops at 50 miles", async () => {
+        const home = "123 Main Street, Denver NC 28037";
+        const address = "100 Runway Rd, Charlotte NC 28202";
+        const round = await renderBooking(script, { miles: 10 });
+        await showAirfieldQuote(round, {
+          pickup: home,
+          name: "Smith Field",
+          address,
+          roundTrip: true,
+        });
+        check(quoteTotal(round.document), "Cash $130.00 · Card $133.90", {
+          label: "private airfield round trip doubles cash before the card fee",
+          source: SOURCE.quote,
+          loaded: script,
+        });
+        check(quoteLabel(round.document), "Round trip, Smith Field and back", {
+          label: "private airfield round trip label",
+          source: SOURCE.quote,
+          loaded: script,
+        });
+        for (const miles of [50.01, 55, 150]) {
+          const view = await renderBooking(script, { miles });
+          const text = await showAirfieldQuote(view, {
+            pickup: home,
+            name: "Smith Field",
+            address,
+          });
+          check(
+            text,
+            "For trips over 50 miles, please call (980) 422-9125 for your price.",
+            {
+              label: `${miles} mile airfield shows the same too-far message`,
+              source: SOURCE.quote,
+              loaded: script,
+            },
+          );
+          check(
+            view.document
+              .querySelector("#quote-details a")
+              ?.getAttribute("href"),
+            "tel:+19804229125",
+            {
+              label: `${miles} mile airfield call link`,
+              source: SOURCE.quote,
+              loaded: script,
+            },
+          );
+        }
+      });
+
+      it("uses the typed address even when the airfield name matches a listed airport", async () => {
+        const home = "123 Main Street, Denver NC 28037";
+        const address = "100 Runway Rd, Charlotte NC 28202";
+        const view = await renderBooking(script, {
+          miles: 40,
+          places: {
+            [home]: {
+              lat: 35.53,
+              lon: -81.03,
+              city: "Denver",
+              state: "NC",
+              zip: "28037",
+              miles: 40,
+            },
+            [address]: {
+              lat: 35.71,
+              lon: -80.89,
+              city: "Charlotte",
+              state: "NC",
+              zip: "28202",
+              miles: 999,
+            },
+          },
+        });
+        await showAirfieldQuote(view, {
+          pickup: home,
+          name: "EQY",
+          address,
+        });
+        check(quoteLabel(view.document), "One way to EQY", {
+          label: "the quote uses the name the customer typed",
+          source: SOURCE.quote,
+          loaded: script,
+        });
+        check(quoteTotal(view.document), "Cash $105.00 · Card $108.15", {
+          label: "the named airfield still uses the address distance",
+          source: SOURCE.quote,
+          loaded: script,
+        });
+        const routes = view.state.requests.filter(
+          (request) => hostnameOf(request.url) === "router.project-osrm.org",
+        );
+        const route = routes[routes.length - 1].url;
+        check(route.includes("-80.89,35.71"), true, {
+          label: "EQY as a name still routes to the typed address",
+          actual: route,
+          source: SOURCE.quote,
+          loaded: script,
+        });
+        check(route.includes("-80.620083,35.016833"), false, {
+          label: "EQY as a name does not use the listed EQY door",
+          actual: route,
+          source: SOURCE.quote,
+          loaded: script,
+        });
+      });
+
+      it("asks for the airfield address and does not keep an old airport fare", async () => {
+        const view = await renderBooking(script, { miles: 10 });
+        await showQuote(view, {
+          pickup: "123 Main Street, Denver NC 28037",
+          destination: "CLT",
+        });
+        const choice = view.document.querySelector("#airport-choice");
+        choice.value = "PRIVATE";
+        view.window.jQuery(choice).trigger("change");
+        check(
+          view.document.querySelector("#quote-details").textContent,
+          "Enter your home address and the airfield address to see your price.",
+          {
+            label: "choosing private airfield drops the previous airport fare",
+            source: SOURCE.quote,
+            loaded: script,
+          },
+        );
+        check(shown(view.document.querySelector("#airfield-name")), true, {
+          label: "private airfield asks for a name",
+          source: SOURCE.airport,
+          loaded: script,
+        });
+        check(shown(view.document.querySelector("#airfield-address")), true, {
+          label: "private airfield asks for an address",
+          source: SOURCE.airport,
+          loaded: script,
+        });
+        check(
+          shown(view.document.querySelector("#booking-destination")),
+          false,
+          {
+            label: "the airport destination box stays hidden",
+            source: SOURCE.airport,
+            loaded: script,
+          },
+        );
+        view.window.jQuery("#airfield-name").val("A").trigger("blur");
+        view.window
+          .jQuery("#airfield-address")
+          .val("Main Street")
+          .trigger("blur");
+        check(
+          view.document.querySelector("#quote-details").textContent,
+          "Enter your home address and the airfield address to see your price.",
+          {
+            label: "a name and address that cannot be routed stay unpriced",
+            source: SOURCE.quote,
+            loaded: script,
+          },
+        );
+        view.window.jQuery("#booking-pickup").val("12").trigger("blur");
+        check(
+          view.document.querySelector("#quote-details").textContent,
+          "Enter your home address and the airfield address to see your price.",
+          {
+            label: "a short home address asks for the airfield address",
+            source: SOURCE.quote,
+            loaded: script,
+          },
+        );
+      });
+
+      it("does not price a private airfield outside the service area or past the map", async () => {
+        const outside = await renderBooking(script, { miles: 12 });
+        const outsideText = await showAirfieldQuote(outside, {
+          pickup: "100 Main St, Mooresville NC 28115",
+          name: "Smith Field",
+          address: "100 Runway Rd, Charlotte NC 28202",
+        });
+        check(outsideText, "Sorry, we don't service that area.", {
+          label: "a Mooresville pickup is still outside",
+          source: SOURCE.serviceArea,
+          loaded: script,
+        });
+        check(outsideText.includes("$"), false, {
+          label: "an outside pickup has no airfield fare",
+          source: SOURCE.quote,
+          loaded: script,
+        });
+        const unclear = await renderBooking(script, { censusMode: "miss" });
+        const unclearText = await showAirfieldQuote(unclear, {
+          pickup: "999999 Mystery Lane",
+          name: "Smith Field",
+          address: "100 Runway Rd, Charlotte NC 28202",
+        });
+        check(
+          unclearText,
+          "Please include the town and state, for example Denver, NC.",
+          {
+            label: "an airfield pickup with no town asks for the town",
+            source: SOURCE.serviceArea,
+            loaded: script,
+          },
+        );
+        const missed = await renderBooking(script, {
+          censusMode: "miss",
+          osmMode: "miss",
+        });
+        const missedText = await showAirfieldQuote(missed, {
+          pickup: "999999 Mystery Lane",
+          name: "Smith Field",
+          address: "100 Runway Rd, Charlotte NC 28202",
+        });
+        check(missedText, "We'll confirm your price when we call.", {
+          label: "a private airfield with no map result is not priced",
+          source: SOURCE.quote,
+          loaded: script,
+        });
+        const away = await renderBooking(script, {
+          lat: 40,
+          lon: -105,
+          miles: 12,
+        });
+        const awayText = await showAirfieldQuote(away, {
+          pickup: "123 Main Street, Denver NC 28037",
+          name: "Smith Field",
+          address: "100 Runway Rd, Charlotte NC 28202",
+        });
+        check(awayText, "We'll confirm your price when we call.", {
+          label: "a home pin outside the driving box is not priced",
+          source: SOURCE.quote,
+          loaded: script,
+        });
+        const noroute = await renderBooking(script, {
+          routeMode: "error",
+          miles: 12,
+        });
+        const norouteText = await showAirfieldQuote(noroute, {
+          pickup: "123 Main Street, Denver NC 28037",
+          name: "Smith Field",
+          address: "100 Runway Rd, Charlotte NC 28202",
+        });
+        check(norouteText, "We'll confirm your price when we call.", {
+          label: "a private airfield with no driving route is not priced",
+          source: SOURCE.quote,
+          loaded: script,
+        });
+      });
+
+      it("escapes the airfield name and hides the fare for a group ride", async () => {
+        const view = await renderBooking(script, { miles: 40 });
+        const payload = '<img id="airfield-xss" src=x>';
+        await showAirfieldQuote(view, {
+          pickup: "123 Main Street, Denver NC 28037",
+          name: payload,
+          address: "100 Runway Rd, Charlotte NC 28202",
+        });
+        check(view.document.getElementById("airfield-xss"), null, {
+          label: "airfield name was not inserted as HTML",
+          source: SOURCE.escape,
+          loaded: script,
+        });
+        check(quoteLabel(view.document).includes(payload), true, {
+          label: "airfield name is still visible as text",
+          source: SOURCE.quote,
+          loaded: script,
+        });
+        chooseTrip(view.document, "group");
+        const quote = view.document.querySelector("#booking-quote");
+        check(
+          quote.hidden ||
+            quote.style.display === "none" ||
+            quote.offsetParent === null,
+          true,
+          {
+            label: "a group or bar ride still has no fare",
+            actual: quote.style.display,
+            source: SOURCE.group,
+            loaded: script,
+          },
+        );
+        check(quoteTotal(view.document).includes("Cash"), false, {
+          label: "switching to group clears the airfield fare",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(shown(view.document.querySelector("#airfield-name")), false, {
+          label: "group form hides the airfield name",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        chooseTrip(view.document, "airport");
+        check(shown(view.document.querySelector("#airfield-name")), true, {
+          label:
+            "coming back to an airport trip shows the airfield fields again",
+          source: SOURCE.airport,
+          loaded: script,
+        });
+      });
+
+      it("books a private airfield in an unserved town when the home is served", async () => {
+        const view = await renderBooking(script, { miles: 18 });
+        await fillValid(view, {
+          trip: "airport",
+          airportId: "PRIVATE",
+          airfieldName: "Smith Field",
+          airfieldAddress: "100 Runway Rd, Charlotte NC 28202",
+          pickup: "123 Main Street, Denver NC 28037",
+        });
+        await submitForm(view);
+        check(resultText(view.document).includes("Request received"), true, {
+          label: "a private airfield request is accepted",
+          actual: resultText(view.document),
+          source: SOURCE.serviceArea,
+          loaded: script,
+        });
+        const payload = calendarPayload(view);
+        check(
+          payload.destinationAddress,
+          "Smith Field, 100 Runway Rd, Charlotte NC 28202",
+          {
+            label: "calendar destination is the airfield name and address",
+            actual: payload.destinationAddress,
+            source: SOURCE.airport,
+            loaded: script,
+          },
+        );
+        check(payload.airportTrip, "Yes", {
+          label: "a private airfield is still an airport trip",
+          actual: payload.airportTrip,
+          source: SOURCE.airport,
+          loaded: script,
+        });
+        check(payload.pickupAddress, "123 Main Street, Denver NC 28037", {
+          label: "calendar pickup stays the home address",
+          actual: payload.pickupAddress,
+          source: SOURCE.airport,
+          loaded: script,
+        });
+        const form = bookingPosts(view.state).find((request) =>
+          request.url.includes("docs.google.com"),
+        );
+        const destination = form.formEntries.find(
+          (entry) => entry[0] === "entry.814545959",
+        );
+        check(
+          destination[1],
+          "Smith Field, 100 Runway Rd, Charlotte NC 28202",
+          {
+            label: "the form receives the airfield name and address",
+            actual: destination && destination[1],
+            source: SOURCE.airport,
+            loaded: script,
+          },
+        );
+      });
+
+      it("ignores an airfield lookup that finishes after the address changes", async () => {
+        const address = "100 Runway Rd, Charlotte NC 28202";
+        const view = await renderBooking(script, { miles: 12 });
+        const ajax = view.window.jQuery.ajax;
+        let bumped = false;
+        view.window.jQuery.ajax = (settings) => {
+          const typed = settings.data && settings.data.address;
+          if (!bumped && typed === address) {
+            bumped = true;
+            view.window.jQuery("#airfield-address").val("12");
+            view.window.jQuery("#airfield-address").trigger("blur");
+          }
+          return ajax(settings);
+        };
+        const text = await showAirfieldQuote(view, {
+          pickup: "123 Main Street, Denver NC 28037",
+          name: "Smith Field",
+          address,
+        });
+        check(
+          text,
+          "Enter your home address and the airfield address to see your price.",
+          {
+            label: "a late airfield lookup does not bring back a fare",
+            source: SOURCE.quote,
+            loaded: script,
+          },
+        );
+        check(bumped, true, {
+          label: "the airfield address was sent to the map",
+          source: SOURCE.quote,
+          loaded: script,
+        });
+      });
+
+      it("requires the airfield name and address before it sends a request", async () => {
+        const missingName = await renderBooking(script);
+        await fillValid(missingName, {
+          trip: "airport",
+          airportId: "PRIVATE",
+          airfieldName: "",
+          airfieldAddress: "100 Runway Rd, Charlotte NC 28202",
+        });
+        await submitForm(missingName);
+        check(
+          resultText(missingName.document).includes(
+            "Airfield name is required",
+          ),
+          true,
+          {
+            label: "submit requires the airfield name",
+            actual: resultText(missingName.document),
+            source: SOURCE.airport,
+            loaded: script,
+          },
+        );
+        check(bookingPosts(missingName.state).length, 0, {
+          label: "a missing airfield name sends no booking",
+          source: SOURCE.airport,
+          loaded: script,
+        });
+        const missingAddress = await renderBooking(script);
+        await fillValid(missingAddress, {
+          trip: "airport",
+          airportId: "PRIVATE",
+          airfieldName: "Smith Field",
+          airfieldAddress: "",
+        });
+        await submitForm(missingAddress);
+        check(
+          resultText(missingAddress.document).includes(
+            "Airfield address is required",
+          ),
+          true,
+          {
+            label: "submit requires the airfield address",
+            actual: resultText(missingAddress.document),
+            source: SOURCE.airport,
+            loaded: script,
+          },
+        );
+        const homeOutside = await renderBooking(script);
+        await fillValid(homeOutside, {
+          trip: "airport",
+          airportId: "PRIVATE",
+          pickup: "100 Main St, Charlotte NC",
+          airfieldName: "Smith Field",
+          airfieldAddress: "100 Runway Rd, Charlotte NC 28202",
+        });
+        await submitForm(homeOutside);
+        check(
+          resultText(homeOutside.document),
+          "Sorry, we don't service that area.",
+          {
+            label: "a Charlotte home is still outside for an airfield ride",
+            source: SOURCE.serviceArea,
+            loaded: script,
+          },
+        );
+        check(bookingPosts(homeOutside.state).length, 0, {
+          label: "an outside home sends no airfield booking",
+          source: SOURCE.serviceArea,
+          loaded: script,
+        });
       });
 
       it("refuses an airport trip until one menu is chosen", async () => {
