@@ -2189,6 +2189,7 @@
                         $('#return-timeline-container').hide();
                         $('#other-requirement-section').hide();
                         $('#group-event-call').hide();
+                        $('#airfield-place').attr('hidden', 'hidden').hide();
                         $('#booking-quote').show();
                         $form.find('button[type="submit"]').prop('disabled', false);
                         $form.slideDown();
@@ -2284,6 +2285,13 @@
         var step=500, units=Math.floor(cents/step), rem=cents%step;
         if(rem>250) units+=1;
         return units*step;
+    }
+    // Listed airports and a private airfield the customer names share this fare.
+    function airportFare(mi, rt){
+        var oneCents=Math.round(Math.max(q([59,56]),mi*q([63,35,59,62]))*100);
+        var cashCents=nearestFive(rt?oneCents*2:oneCents);
+        var cardCents=Math.round(cashCents*(1+q([61,35,61,62])));
+        return {cash:cashCents/100,card:cardCents/100};
     }
     function lookupAirport(raw){
         var api=globalThis.MidnightServiceArea;
@@ -2649,12 +2657,9 @@
             // Donald (Nov 9, 2026): no online price over 50 driving miles; same limit as Ara.
             // Donald (Nov 10, 2026): a private airfield uses this same fare and the same cap.
             if(mi>50)throw 'far';
-            var oneCents=Math.round(Math.max(q([59,56]),mi*q([63,35,59,62]))*100);
-            var cashCents=nearestFive(rt?oneCents*2:oneCents);
-            var cardCents=Math.round(cashCents*(1+q([61,35,61,62])));
-            var cash=cashCents/100, card=cardCents/100;
+            var fare=airportFare(mi,rt);
             var label=rt?'Round trip, '+esc(labelName)+' and back':'One way to '+esc(labelName);
-            show('<span class="quote-label">'+label+'</span><br><strong class="quote-total">Cash '+money(cash)+' &middot; Card '+money(card)+'</strong>');
+            show('<span class="quote-label">'+label+'</span><br><strong class="quote-total">Cash '+money(fare.cash)+' &middot; Card '+money(fare.card)+'</strong>');
         }).catch(function(err) {
             if(my!==seq)return;
             var kindNow=tripNow();

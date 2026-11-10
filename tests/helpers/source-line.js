@@ -24,7 +24,7 @@ export const SOURCE = {
   quote: () =>
     sourceLine(
       "js/booking.js",
-      "var oneCents=Math.round(Math.max(q([59,56]),mi*q([63,35,58,56]))*100);",
+      "var oneCents=Math.round(Math.max(q([59,56]),mi*q([63,35,59,62]))*100);",
     ),
   airport: () => sourceLine("js/booking.js", "function whichAirport(raw)"),
   excluded: () =>
