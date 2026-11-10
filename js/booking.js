@@ -61,7 +61,7 @@
     var GROUP_MAX_PASSENGERS = 6;
     var GROUP_VEHICLE = "2026 Toyota Sienna Platinum";
     var BARS = [
-        { id: "two-trees", name: "Two Trees", address: "5242 Slanting Bridge Rd, Denver, NC 28037", lat: 35.552237, lon: -80.994465 },
+        { id: "two-trees", name: "Two Trees", address: "5242 Slanting Bridge Rd, Denver, NC 28037", lat: 35.552237, lon: -80.994465, maxMiles: 10 },
         { id: "bourbon-bobber", name: "Bourbon & Bobbers", address: "3746 Mount Pleasant Road, Sherrills Ford, NC 28673", lat: 35.589826, lon: -81.019457 },
         { id: "joeys-sherrills-ford", name: "Joey's (Hwy 150)", address: "7600 East NC Hwy 150, Sherrills Ford, NC 28673", lat: 35.578943, lon: -80.998957 },
         { id: "joeys-denver", name: "Joey's (Natalie Commons)", address: "7913 Natalie Commons Dr, Denver, NC 28037", lat: 35.482131, lon: -80.996916 },
@@ -86,6 +86,10 @@
             if (bar.address && text === bar.address.toLowerCase()) return bar;
         }
         return null;
+    }
+
+    function overVenueMiles(bar, miles) {
+        return typeof bar.maxMiles === 'number' && miles > bar.maxMiles;
     }
 
     function localFare(miles, roundTrip) {
@@ -151,6 +155,7 @@
         GROUP_DEPOSIT_RATE: GROUP_DEPOSIT_RATE,
         GROUP_HOURLY_CENTS: GROUP_HOURLY_CENTS,
         listedBar: listedBar,
+        overVenueMiles: overVenueMiles,
         localFare: localFare,
         groupFare: groupFare,
         mapKey: mapKey,
@@ -1887,6 +1892,15 @@
                     $('#party-address-error').text('Party address is required').show();
                     isValid = false;
                 }
+                if (chosenBar && typeof chosenBar.maxMiles === 'number' && formData.pickupAddress) {
+                    var venueMiles = await globalThis.MidnightRides.roadMiles(chosenBar);
+                    if (overVenueMiles(chosenBar, venueMiles)) {
+                        errors.push(LOCAL_DENIAL);
+                        $('#bar-choice').closest('.form-group').addClass('has-error');
+                        $('#bar-choice-error').text(LOCAL_DENIAL).show();
+                        isValid = false;
+                    }
+                }
             } else if (trip !== 'group' && !formData.destinationAddress) {
                 errors.push('Destination address is required');
                 $('#booking-destination').closest('.form-group').addClass('has-error');
@@ -2481,6 +2495,12 @@
             return road.miles;
         }).catch(function(){return fallback();});
     }
+    globalThis.MidnightRides.roadMiles = function(stop) {
+        var pick = $.trim($('#booking-pickup').val()||'');
+        return geocode(pick).then(function(g) {
+            return roadBetween(g, pick, stop);
+        });
+    };
     function show(html){
         var $d=$('#quote-details');
         $d.html(html);
@@ -2554,6 +2574,7 @@
             return roadBetween(g, pick, stop);
         }).then(function(mi){
             if(my!==seq||tripNow()!=='local'||typeof mi!=='number')return;
+            if(mode==='bar'&&rides.overVenueMiles(stop, mi)){hideMap();show(esc(rides.LOCAL_DENIAL));return;}
             var fare=rides.localFare(mi, rt);
             var name=mode==='party'?'the party':stop.name;
             var label=rt?'Round trip, '+esc(name)+' and back':'One way to '+esc(name);

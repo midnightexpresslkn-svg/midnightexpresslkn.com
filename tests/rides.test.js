@@ -328,6 +328,74 @@ describe.each(scripts)("local bars and group %s", (script) => {
     },
   );
 
+  it("limits Two Trees to 10 road miles and leaves other venues open", async () => {
+    const inside = await renderBooking(script, { miles: 9.99 });
+    const insideText = await priceBar(inside, 9.99);
+    check(insideText.includes("Cash $29.97 · Card $30.87"), true, {
+      label: "9.99 miles from Two Trees is still quoted",
+      actual: insideText,
+      source: "js/booking.js",
+      loaded: script,
+    });
+    check(insideText.includes("out of our service area."), false, {
+      label: "9.99 miles is not the service-area denial",
+      actual: insideText,
+      source: "js/booking.js",
+      loaded: script,
+    });
+    const edge = await renderBooking(script, { miles: 10 });
+    const edgeText = await priceBar(edge, 10);
+    check(edgeText.includes("Cash $30.00 · Card $30.90"), true, {
+      label: "exactly 10.00 miles from Two Trees is quoted",
+      actual: edgeText,
+      source: "js/booking.js",
+      loaded: script,
+    });
+    const over = await renderBooking(script, { miles: 10.01 });
+    const overText = await priceBar(over, 10.01);
+    check(overText, "out of our service area.", {
+      label: "10.01 miles from Two Trees uses the off-list denial",
+      actual: overText,
+      source: "js/booking.js",
+      loaded: script,
+    });
+    await fillValid(over, { trip: "local" });
+    await submitForm(over);
+    check(
+      resultText(over.document).includes("out of our service area."),
+      true,
+      {
+        label: "a Two Trees ride past 10 miles cannot be submitted",
+        actual: resultText(over.document),
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    check(bookingPosts(over.state).length, 0, {
+      label: "a Two Trees ride past 10 miles sends no booking",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    const open = await renderBooking(script, { miles: 12 });
+    const openText = await priceBar(open, 12, { bar: "bourbon-bobber" });
+    check(openText.includes("Cash $36.00 · Card $37.08"), true, {
+      label: "a venue without maxMiles is quoted past 10 miles",
+      actual: openText,
+      source: "js/booking.js",
+      loaded: script,
+    });
+    check(open.window.MidnightRides.BARS[0].maxMiles, 10, {
+      label: "Two Trees stores the limit on the venue",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    check(open.window.MidnightRides.BARS[1].maxMiles, undefined, {
+      label: "other venues have no mile limit yet",
+      source: "js/booking.js",
+      loaded: script,
+    });
+  });
+
   it("prices a party address with the same formula", async () => {
     const view = await renderBooking(script, { miles: 10 });
     chooseTrip(view.document, "local");
