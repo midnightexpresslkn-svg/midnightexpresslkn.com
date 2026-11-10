@@ -1192,11 +1192,26 @@ section button.btn {
 
 /* Route map and the ride notices. Full width on a 375px phone. */
 #ride-map-slot,
+#local-intro,
+#local-bar-list,
 #local-kind,
 #bar-choice,
 #party-address,
 #group-hours {
   max-width: 100%;
+}
+
+#local-intro {
+  margin: 0 0 8px;
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+#local-bar-list {
+  margin: 0 0 12px;
+  padding-left: 1.25em;
+  font-size: 16px;
+  line-height: 1.35;
 }
 
 #ride-map {

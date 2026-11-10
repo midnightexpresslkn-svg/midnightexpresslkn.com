@@ -61,18 +61,18 @@
     var GROUP_MAX_PASSENGERS = 6;
     var GROUP_VEHICLE = "2026 Toyota Sienna Platinum";
     var BARS = [
-        { id: "two-trees", name: "Two Trees Bar and Grill (Denver)", address: "5242 Slanting Bridge Rd, Denver, NC 28037", lat: 35.552237, lon: -80.994465 },
-        { id: "bourbon-bobber", name: "Bourbon & Bobber Saloon and Smokehouse (Sherrills Ford)", address: "3746 Mount Pleasant Road, Sherrills Ford, NC 28673", lat: 35.589826, lon: -81.019457 },
-        { id: "joeys-sherrills-ford", name: "Joey's of Sherrills Ford", address: "7600 East NC Hwy 150, Sherrills Ford, NC 28673", lat: 35.578943, lon: -80.998957 },
-        { id: "joeys-denver", name: "Joey's of Denver", address: "7913 Natalie Commons Dr, Denver, NC 28037", lat: 35.482131, lon: -80.996916 },
-        { id: "sixteen-prime", name: "16 Prime Steak and Seafood (7925 Natalie Commons Dr, Denver, NC 28037)", address: "7925 Natalie Commons Dr, Denver, NC 28037", lat: 35.482212, lon: -80.996526 },
+        { id: "two-trees", name: "Two Trees", address: "5242 Slanting Bridge Rd, Denver, NC 28037", lat: 35.552237, lon: -80.994465 },
+        { id: "bourbon-bobber", name: "Bourbon & Bobbers", address: "3746 Mount Pleasant Road, Sherrills Ford, NC 28673", lat: 35.589826, lon: -81.019457 },
+        { id: "joeys-sherrills-ford", name: "Joey's (Hwy 150)", address: "7600 East NC Hwy 150, Sherrills Ford, NC 28673", lat: 35.578943, lon: -80.998957 },
+        { id: "joeys-denver", name: "Joey's (Natalie Commons)", address: "7913 Natalie Commons Dr, Denver, NC 28037", lat: 35.482131, lon: -80.996916 },
+        { id: "sixteen-prime", name: "16 Prime Steak and Seafood", address: "7925 Natalie Commons Dr, Denver, NC 28037", lat: 35.482212, lon: -80.996526 },
         { id: "lake-norman-brewery", name: "Lake Norman Brewery", address: "1753 Triangle Circle, Denver, NC 28037", lat: 35.478126, lon: -80.994672 },
-        { id: "latitudes", name: "Latitudes Bar & Grill", address: "2495 Hwy 16, Denver, NC 28037", lat: 35.509516, lon: -81.002903 },
-        { id: "lobster-dog", name: "Lobster Dog Food Truck and Pub", address: "1219 NC-16 Business, Denver, NC 28037", lat: 35.476092, lon: -80.99367 },
+        { id: "latitudes", name: "Latitudes", address: "2495 Hwy 16, Denver, NC 28037", lat: 35.509516, lon: -81.002903 },
+        { id: "lobster-dog", name: "Lobster Dogs", address: "1219 NC-16 Business, Denver, NC 28037", lat: 35.476092, lon: -80.99367 },
         { id: "safari-miles", name: "Safari Miles", address: "390 NC-16 Business, Denver, NC 28037", lat: 35.45131, lon: -80.993633 },
-        { id: "royal-bliss", name: "Royal Bliss Brewing", address: "7532 Royal Bliss Court, Denver, NC 28037", lat: null, lon: null },
+        { id: "royal-bliss", name: "Royal Bliss", address: "7532 Royal Bliss Court, Denver, NC 28037", lat: null, lon: null },
         { id: "sports-bar-grill", name: "Sports Bar and Grill", address: "", lat: null, lon: null },
-        { id: "blue-parrot", name: "Blue Parrot Grill", address: "169 Pinnacle Lane, Mooresville, NC 28117", lat: 35.608132, lon: -80.936035 },
+        { id: "blue-parrot", name: "Blue Parrot", address: "169 Pinnacle Lane, Mooresville, NC 28117", lat: 35.608132, lon: -80.936035 },
         { id: "toucans", name: "Toucan's", address: "167 Pinnacle Lane, Mooresville, NC 28117", lat: 35.608097, lon: -80.935983 },
         { id: "invicta", name: "Invicta", address: "", lat: null, lon: null }
     ];
@@ -913,17 +913,21 @@
     function fillBarChoices() {
         var select = document.getElementById('bar-choice');
         if (!select || select.getAttribute('data-ready') === 'yes') return;
+        var list = document.getElementById('local-bar-list');
         for (var i = 0; i < BARS.length; i++) {
             var opt = document.createElement('option');
             opt.value = BARS[i].id;
             opt.textContent = BARS[i].name;
             select.appendChild(opt);
+            var item = document.createElement('li');
+            item.textContent = BARS[i].name;
+            list.appendChild(item);
         }
         select.setAttribute('data-ready', 'yes');
     }
 
     function hideRideExtras() {
-        $('#local-kind-row, #bar-choice-row, #party-address-row, #ride-rules, #group-vehicle, #group-hours-row').attr('hidden', 'hidden').hide();
+        $('#local-intro, #local-bar-list, #local-kind-row, #bar-choice-row, #party-address-row, #ride-rules, #group-vehicle, #group-hours-row').attr('hidden', 'hidden').hide();
     }
 
     function showLocalPickers() {
@@ -982,11 +986,12 @@
                 setFieldLabel('address-label', 'Address *');
                 setFieldLabel('notes-label', 'Special Notes');
                 $('#booking-notes').attr('placeholder', NOTES_PLACEHOLDER);
+                $('#local-intro, #local-bar-list').removeAttr('hidden').show();
                 showLocalPickers();
                 $('#ride-rules').removeAttr('hidden').show();
                 $('#booking-quote').show();
                 if (!$('#local-kind').val()) {
-                    $('#quote-details').html('Choose Bar or Party to see your price.');
+                    $('#quote-details').html('Choose a bar, restaurant, or party to see your price.');
                 }
             } else {
                 setFieldLabel('address-label', 'Home address *');
@@ -1728,7 +1733,7 @@
                 }
             } else if (trip === 'local' && mode === 'bar' && chosenBar) {
                 destinationAddress = chosenBar.address || chosenBar.name;
-                notes = (notes ? 'Bar ride to ' + chosenBar.name + '. ' + notes : 'Bar ride to ' + chosenBar.name + '.');
+                notes = (notes ? 'Bar or restaurant ride to ' + chosenBar.name + '. ' + notes : 'Bar or restaurant ride to ' + chosenBar.name + '.');
             } else if (trip === 'local' && mode === 'party') {
                 destinationAddress = partyAddress;
                 notes = notes ? 'Party ride. ' + notes : 'Party ride.';
@@ -1856,9 +1861,9 @@
                 }
             } else if (trip === 'local') {
                 if (mode !== 'bar' && mode !== 'party') {
-                    errors.push('Please choose Bar or Party');
+                    errors.push('Please choose a bar, restaurant, or party');
                     $('#local-kind').closest('.form-group').addClass('has-error');
-                    $('#local-kind-error').text('Please choose Bar or Party').show();
+                    $('#local-kind-error').text('Please choose a bar, restaurant, or party').show();
                     isValid = false;
                 } else if (mode === 'bar') {
                     var barValue = $('#bar-choice').val() || '';
@@ -1871,9 +1876,9 @@
                         $('#bar-choice-error').text(LOCAL_DENIAL).show();
                         isValid = false;
                     } else if (!chosenBar) {
-                        errors.push('Please choose a bar');
+                        errors.push('Please choose a bar or restaurant');
                         $('#bar-choice').closest('.form-group').addClass('has-error');
-                        $('#bar-choice-error').text('Please choose a bar').show();
+                        $('#bar-choice-error').text('Please choose a bar or restaurant').show();
                         isValid = false;
                     }
                 } else if (!partyAddress) {
@@ -2519,11 +2524,11 @@
         var pick=$.trim($('#booking-pickup').val()||'');
         var rt=$('#booking-round-trip').is(':checked');
         if(mode==='bar'&&barDenied()){hideMap();show(esc(rides.LOCAL_DENIAL));return;}
-        if(mode!=='bar'&&mode!=='party'){hideMap();show('Choose Bar or Party to see your price.');return;}
+        if(mode!=='bar'&&mode!=='party'){hideMap();show('Choose a bar, restaurant, or party to see your price.');return;}
         var stop=null;
         if(mode==='bar'){
             stop=rides.listedBar($('#bar-choice').val());
-            if(!stop){hideMap();show('Choose a bar to see your price.');return;}
+            if(!stop){hideMap();show('Choose a bar or restaurant to see your price.');return;}
             if(!stop.address&&stop.lat==null){hideMap();show(fb);return;}
         }
         var party=$.trim($('#party-address').val()||'');

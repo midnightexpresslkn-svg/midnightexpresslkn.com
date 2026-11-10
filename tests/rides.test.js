@@ -13,20 +13,29 @@ import {
 
 const scripts = ["js/booking.js", "js/booking.min.js"];
 const BAR_NAMES = [
-  "Two Trees Bar and Grill (Denver)",
-  "Bourbon & Bobber Saloon and Smokehouse (Sherrills Ford)",
-  "Joey's of Sherrills Ford",
-  "Joey's of Denver",
-  "16 Prime Steak and Seafood (7925 Natalie Commons Dr, Denver, NC 28037)",
+  "Two Trees",
+  "Bourbon & Bobbers",
+  "Joey's (Hwy 150)",
+  "Joey's (Natalie Commons)",
+  "16 Prime Steak and Seafood",
   "Lake Norman Brewery",
-  "Latitudes Bar & Grill",
-  "Lobster Dog Food Truck and Pub",
+  "Latitudes",
+  "Lobster Dogs",
   "Safari Miles",
-  "Royal Bliss Brewing",
+  "Royal Bliss",
   "Sports Bar and Grill",
-  "Blue Parrot Grill",
+  "Blue Parrot",
   "Toucan's",
   "Invicta",
+];
+const BAR_TOWNS = [
+  "Denver",
+  "Sherrills Ford",
+  "Mooresville",
+  "Cornelius",
+  "Huntersville",
+  "Terrell",
+  "Catawba",
 ];
 
 afterEach(() => {
@@ -142,9 +151,27 @@ describe.each(scripts)("local bars and group %s", (script) => {
     });
     check(
       view.document.querySelector("#local-kind-row").nextElementSibling.id,
-      "bar-choice-row",
+      "local-intro",
       {
-        label: "the bar list is directly under Bar or Party",
+        label: "the intro line sits under Bar, restaurant, or party",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    check(
+      view.document.querySelector("#local-intro").textContent,
+      "Transportation to local bars, restaurants, and private parties, plus hourly group events.",
+      {
+        label: "the local intro uses Donald's line",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    check(
+      view.document.querySelector("#local-intro").nextElementSibling.id,
+      "local-bar-list",
+      {
+        label: "the 14 bars follow the intro line",
         source: "js/booking.js",
         loaded: script,
       },
@@ -161,17 +188,40 @@ describe.each(scripts)("local bars and group %s", (script) => {
       source: "js/booking.js",
       loaded: script,
     });
-    check(
-      [...view.document.querySelector("#bar-choice").options]
-        .slice(1)
-        .map((option) => option.textContent),
-      BAR_NAMES,
-      {
-        label: "bar list order",
-        source: "js/booking.js",
-        loaded: script,
-      },
+    const listed = [
+      ...view.document.querySelectorAll("#local-bar-list li"),
+    ].map((item) => item.textContent);
+    const menu = [...view.document.querySelector("#bar-choice").options]
+      .slice(1)
+      .map((option) => option.textContent);
+    check(listed, BAR_NAMES, {
+      label: "bar list order",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    check(menu, BAR_NAMES, {
+      label: "bar menu uses the same names",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    const towns = BAR_TOWNS.filter((town) =>
+      [...listed, ...menu].some((label) =>
+        label.toLowerCase().includes(town.toLowerCase()),
+      ),
     );
+    check(towns, [], {
+      label: "no bar label contains a town name",
+      actual: towns,
+      source: "js/booking.js",
+      loaded: script,
+    });
+    const twoTrees = view.window.MidnightRides.BARS[0];
+    check(twoTrees.address, "5242 Slanting Bridge Rd, Denver, NC 28037", {
+      label: "the Two Trees street address is unchanged",
+      actual: twoTrees.address,
+      source: "js/booking.js",
+      loaded: script,
+    });
     kind.value = "party";
     view.window.jQuery(kind).trigger("change");
     check(shown(view.document.querySelector("#party-address")), true, {
@@ -259,18 +309,12 @@ describe.each(scripts)("local bars and group %s", (script) => {
         loaded: script,
       });
       if (roundTrip) {
-        check(
-          text.includes(
-            "Round trip, Two Trees Bar and Grill (Denver) and back",
-          ),
-          true,
-          {
-            label: "round trip names the bar",
-            actual: text,
-            source: "js/booking.js",
-            loaded: script,
-          },
-        );
+        check(text.includes("Round trip, Two Trees and back"), true, {
+          label: "round trip names the bar",
+          actual: text,
+          source: "js/booking.js",
+          loaded: script,
+        });
         check(
           shown(view.document.querySelector("#booking-return-date")),
           false,
@@ -1120,7 +1164,9 @@ describe.each(scripts)("local bars and group %s", (script) => {
     neither.document.querySelector("#booking-round-trip").checked = true;
     await submitForm(neither);
     check(
-      resultText(neither.document).includes("Please choose Bar or Party"),
+      resultText(neither.document).includes(
+        "Please choose a bar, restaurant, or party",
+      ),
       true,
       {
         label: "local submit requires Bar or Party",
@@ -1430,12 +1476,16 @@ describe.each(scripts)("local bars and group %s", (script) => {
   it("asks the rider to finish a local quote before it shows a fare", async () => {
     const view = await renderBooking(script);
     chooseTrip(view.document, "local");
-    check((await waitQuote(view)).includes("Choose Bar or Party"), true, {
-      label: "local form waits for Bar or Party",
-      actual: quoteText(view.document),
-      source: "js/booking.js",
-      loaded: script,
-    });
+    check(
+      (await waitQuote(view)).includes("Choose a bar, restaurant, or party"),
+      true,
+      {
+        label: "local form waits for Bar or Party",
+        actual: quoteText(view.document),
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
     const kind = view.document.querySelector("#local-kind");
     kind.value = "bar";
     view.window.jQuery(kind).trigger("change");
@@ -1516,12 +1566,16 @@ describe.each(scripts)("local bars and group %s", (script) => {
     failed.window.jQuery("#booking-destination").trigger("blur");
     failed.document.querySelector("#trip-type").value = "local";
     await new Promise((resolve) => setTimeout(resolve, 40));
-    check(quoteText(failed.document).includes("Choose Bar or Party"), true, {
-      label: "a failed airport fare becomes the local quote",
-      actual: quoteText(failed.document),
-      source: "js/booking.js",
-      loaded: script,
-    });
+    check(
+      quoteText(failed.document).includes("Choose a bar, restaurant, or party"),
+      true,
+      {
+        label: "a failed airport fare becomes the local quote",
+        actual: quoteText(failed.document),
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
     const moved = await renderBooking(script, {
       miles: 8,
       mapsKey: "test-browser-key",

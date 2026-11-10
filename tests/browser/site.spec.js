@@ -520,6 +520,9 @@ test.describe("new rides on a 375px phone", () => {
     await page
       .locator("#booking-pickup")
       .fill("123 Main Street, Denver NC 28037");
+    await expect(page.locator("#quote-details")).toContainText(
+      "One way to Two Trees",
+    );
     await expect(page.locator("#quote-details")).toContainText("Cash $15.00");
     await expect(page.locator("#quote-details")).toContainText("Card $15.45");
     await fillIdentity(page);
@@ -533,6 +536,66 @@ test.describe("new rides on a 375px phone", () => {
     await expect(page.locator("#rule-age")).toBeChecked();
     await expect(page.locator("#rule-smoke")).toBeChecked();
     await expect(page.locator("#rule-damage")).toBeChecked();
+    expect(posts).toEqual([]);
+  });
+
+  test("the intro and bar names render at 375px with no town in a label", async ({
+    page,
+  }) => {
+    const posts = await installMocks(page);
+    const names = [
+      "Two Trees",
+      "Bourbon & Bobbers",
+      "Joey's (Hwy 150)",
+      "Joey's (Natalie Commons)",
+      "16 Prime Steak and Seafood",
+      "Lake Norman Brewery",
+      "Latitudes",
+      "Lobster Dogs",
+      "Safari Miles",
+      "Royal Bliss",
+      "Sports Bar and Grill",
+      "Blue Parrot",
+      "Toucan's",
+      "Invicta",
+    ];
+    const towns = [
+      "Denver",
+      "Sherrills Ford",
+      "Mooresville",
+      "Cornelius",
+      "Huntersville",
+      "Terrell",
+      "Catawba",
+    ];
+    await page.goto("/");
+    await page.locator("#trip-type").selectOption("local");
+    const intro = page.locator("#local-intro");
+    await expect(intro).toBeVisible();
+    await expect(intro).toHaveText(
+      "Transportation to local bars, restaurants, and private parties, plus hourly group events.",
+    );
+    const list = page.locator("#local-bar-list");
+    await expect(list).toBeVisible();
+    await expect(list.locator("li")).toHaveText(names);
+    const introBox = await intro.boundingBox();
+    const listBox = await list.boundingBox();
+    expect(listBox.y).toBeGreaterThan(introBox.y);
+    await page.locator("#local-kind").selectOption("bar");
+    const menu = await page.locator("#bar-choice option").allTextContents();
+    expect(menu.slice(1)).toEqual(names);
+    const barBox = await page.locator("#bar-choice").boundingBox();
+    expect(barBox.y).toBeGreaterThan(listBox.y);
+    const labels = [...names, ...menu.slice(1)];
+    const hits = towns.filter((town) =>
+      labels.some((label) => label.toLowerCase().includes(town.toLowerCase())),
+    );
+    expect(hits).toEqual([]);
+    const fit = await page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+    }));
+    expect(fit.scrollWidth).toBeLessThanOrEqual(fit.clientWidth + 1);
     expect(posts).toEqual([]);
   });
 
