@@ -169,6 +169,12 @@ export async function renderBooking(script, options = {}) {
   document.body.innerHTML = pageBody;
   const state = {
     miles: options.miles ?? 10,
+    googleMiles: options.googleMiles ?? null,
+    googleMinutes: options.googleMinutes ?? 18,
+    googleMode: options.googleMode ?? "ok",
+    polyline: options.polyline ?? "_p~iF~ps|U_ulLnnqC_mqNvxq`@",
+    placeSuggestions: options.placeSuggestions ?? [],
+    placesMode: options.placesMode ?? "ok",
     bookings: options.bookings ?? [],
     censusCity: options.censusCity ?? "Denver",
     censusState: options.censusState ?? "NC",
@@ -294,6 +300,29 @@ export async function renderBooking(script, options = {}) {
         })),
       });
     }
+    if (host === "routes.googleapis.com") {
+      if (state.googleMode === "throw") throw new Error("google routes down");
+      if (state.googleMode === "empty") return jsonResponse({ routes: [] });
+      const miles = state.googleMiles ?? state.miles;
+      const minutes = state.googleMinutes ?? 18;
+      return jsonResponse({
+        routes: [
+          {
+            distanceMeters: miles * 1609.344,
+            duration:
+              state.googleMode === "blank-duration" ? "" : `${minutes * 60}s`,
+            ...(state.googleMode === "no-line"
+              ? {}
+              : { polyline: { encodedPolyline: state.polyline } }),
+          },
+        ],
+      });
+    }
+    if (host === "places.googleapis.com") {
+      if (state.placesMode === "throw") throw new Error("places down");
+      if (state.placesMode === "bare") return jsonResponse(null);
+      return jsonResponse({ suggestions: state.placeSuggestions || [] });
+    }
     if (host === "nominatim.openstreetmap.org") {
       if (state.osmMode === "miss") return jsonResponse([]);
       return jsonResponse([{ lat: String(state.lat), lon: String(state.lon) }]);
@@ -326,6 +355,9 @@ export async function renderBooking(script, options = {}) {
   console.info = quiet;
   console.warn = quiet;
 
+  window.MIDNIGHT_MAPS = { key: options.mapsKey || "" };
+  if (options.googleMaps) window.google = options.googleMaps;
+  else delete window.google;
   window.history.replaceState(null, "", options.url || "/");
   if (options.withoutForm) document.querySelector("#bookingForm")?.remove();
   await runCovered(serviceAreaSource, "js/service-area.js");
@@ -423,7 +455,23 @@ export async function fillValid(view, overrides = {}) {
     overrides.destination ??
     (trip === "group" ? "200 Oak St, Sherrills Ford NC" : "CLT");
   if (trip === "group") {
-    setControl(doc.querySelector("#booking-destination"), destination);
+    const hours = doc.querySelector("#group-hours");
+    if (hours) setControl(hours, overrides.hours ?? "3");
+  } else if (trip === "local") {
+    const kind = doc.querySelector("#local-kind");
+    const localKind = overrides.localKind || "bar";
+    kind.value = localKind;
+    window.jQuery(kind).trigger("change");
+    if (localKind === "party") {
+      setControl(
+        doc.querySelector("#party-address"),
+        overrides.party || "200 Oak St, Sherrills Ford NC",
+      );
+    } else if (overrides.bar !== "") {
+      const bar = doc.querySelector("#bar-choice");
+      bar.value = overrides.bar || "two-trees";
+      window.jQuery(bar).trigger("change");
+    }
   } else if (overrides.airportId === "PRIVATE") {
     const airline = doc.querySelector("#airport-choice");
     airline.value = "PRIVATE";
@@ -493,6 +541,18 @@ export async function fillValid(view, overrides = {}) {
     if (count) {
       count.value = overrides.bagCount ?? (overrides.bags ? "2" : "0");
       window.jQuery(count).trigger("input");
+    }
+  }
+  if (trip === "group" || trip === "local") {
+    const rules = overrides.rules ?? ["age", "smoke", "damage"];
+    for (const [id, key] of [
+      ["rule-age", "age"],
+      ["rule-smoke", "smoke"],
+      ["rule-damage", "damage"],
+    ]) {
+      const box = doc.querySelector(`#${id}`);
+      box.checked = rules.includes(key);
+      window.jQuery(box).trigger("change");
     }
   }
   if (overrides.roundTrip) {

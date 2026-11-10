@@ -89,6 +89,39 @@ test.describe("mobile page fits the screen", () => {
         airfield.clientWidth + 1,
       );
       expect(airfield.found).toEqual([]);
+
+      await page.locator("#trip-type").selectOption("local");
+      await page.locator("#local-kind").selectOption("bar");
+      const kindBox = await page.locator("#local-kind").boundingBox();
+      const barBox = await page.locator("#bar-choice").boundingBox();
+      expect(barBox.y).toBeGreaterThan(kindBox.y);
+      await expect(page.locator("#ride-map-slot")).toBeHidden();
+      await expect(page.locator("#rule-age")).toBeVisible();
+      await expect(page.locator("#ride-rules")).toContainText("No smoking");
+      await expect(page.locator("#ride-rules")).toContainText(
+        "If you damage anything, you are responsible.",
+      );
+      const local = await offenders(page);
+      expect(local.scrollWidth).toBeLessThanOrEqual(local.clientWidth + 1);
+      expect(local.found).toEqual([]);
+      await page.locator("#local-kind").selectOption("party");
+      await expect(page.locator("#party-address")).toBeVisible();
+      const party = await offenders(page);
+      expect(party.found).toEqual([]);
+
+      await page.locator("#trip-type").selectOption("group");
+      await expect(page.locator("#group-vehicle")).toBeVisible();
+      await expect(page.locator("#group-hours")).toBeVisible();
+      await page.locator("#group-hours").fill("1");
+      await page.locator("#group-hours").blur();
+      await expect(page.locator("#quote-details")).toContainText(
+        "2-hour minimum",
+      );
+      await expect(page.locator("#quote-details")).toContainText("$250.00");
+      await expect(page.locator("#quote-details")).toContainText("$64.38");
+      const group = await offenders(page);
+      expect(group.scrollWidth).toBeLessThanOrEqual(group.clientWidth + 1);
+      expect(group.found).toEqual([]);
     });
   }
 });

@@ -53,6 +53,114 @@
 
     var OUT_OF_AREA_MESSAGE = "Sorry, we don't service that area.";
     var UNCLEAR_AREA_MESSAGE = "Please include the town and state, for example Denver, NC.";
+    var LOCAL_DENIAL = "out of our service area.";
+    // Donald, Nov 10, 2026. One config value each.
+    var GROUP_HOURLY_CENTS = 12500;
+    var GROUP_MIN_HOURS = 2;
+    var GROUP_DEPOSIT_RATE = 0.25;
+    var GROUP_MAX_PASSENGERS = 6;
+    var GROUP_VEHICLE = "2026 Toyota Sienna Platinum";
+    var BARS = [
+        { id: "two-trees", name: "Two Trees", address: "5242 Slanting Bridge Rd, Denver, NC 28037", lat: 35.552237, lon: -80.994465, maxMiles: 10 },
+        { id: "bourbon-bobber", name: "Bourbon & Bobbers", address: "3746 Mount Pleasant Road, Sherrills Ford, NC 28673", lat: 35.589826, lon: -81.019457 },
+        { id: "joeys-sherrills-ford", name: "Joey's (Hwy 150)", address: "7600 East NC Hwy 150, Sherrills Ford, NC 28673", lat: 35.578943, lon: -80.998957 },
+        { id: "joeys-denver", name: "Joey's (Natalie Commons)", address: "7913 Natalie Commons Dr, Denver, NC 28037", lat: 35.482131, lon: -80.996916 },
+        { id: "sixteen-prime", name: "16 Prime Steak and Seafood", address: "7925 Natalie Commons Dr, Denver, NC 28037", lat: 35.482212, lon: -80.996526 },
+        { id: "lake-norman-brewery", name: "Lake Norman Brewery", address: "1753 Triangle Circle, Denver, NC 28037", lat: 35.478126, lon: -80.994672 },
+        { id: "latitudes", name: "Latitudes", address: "2495 Hwy 16, Denver, NC 28037", lat: 35.509516, lon: -81.002903 },
+        { id: "lobster-dog", name: "Lobster Dogs", address: "1219 NC-16 Business, Denver, NC 28037", lat: 35.476092, lon: -80.99367 },
+        { id: "safari-miles", name: "Safari Miles", address: "390 NC-16 Business, Denver, NC 28037", lat: 35.45131, lon: -80.993633 },
+        { id: "royal-bliss", name: "Royal Bliss", address: "7532 Royal Bliss Court, Denver, NC 28037", lat: null, lon: null },
+        { id: "sports-bar-grill", name: "Sports Bar and Grill", address: "", lat: null, lon: null },
+        { id: "blue-parrot", name: "Blue Parrot", address: "169 Pinnacle Lane, Mooresville, NC 28117", lat: 35.608132, lon: -80.936035 },
+        { id: "toucans", name: "Toucan's", address: "167 Pinnacle Lane, Mooresville, NC 28117", lat: 35.608097, lon: -80.935983 },
+        { id: "invicta", name: "Invicta", address: "", lat: null, lon: null }
+    ];
+
+    function listedBar(raw) {
+        var text = String(raw || "").trim().toLowerCase();
+        if (!text) return null;
+        for (var i = 0; i < BARS.length; i++) {
+            var bar = BARS[i];
+            if (text === bar.id || text === bar.name.toLowerCase()) return bar;
+            if (bar.address && text === bar.address.toLowerCase()) return bar;
+        }
+        return null;
+    }
+
+    function overVenueMiles(bar, miles) {
+        return typeof bar.maxMiles === 'number' && miles > bar.maxMiles;
+    }
+
+    function localFare(miles, roundTrip) {
+        var one = miles <= 2 ? 1000 : Math.max(1500, Math.round(miles * 300));
+        var cash = roundTrip ? one * 2 : one;
+        return { cashCents: cash, cardCents: Math.round(cash * 1.03) };
+    }
+
+    function groupFare(hours) {
+        var entered = Number(hours);
+        var minimum = entered < GROUP_MIN_HOURS;
+        var billed = minimum ? GROUP_MIN_HOURS : entered;
+        var cash = Math.round(billed * GROUP_HOURLY_CENTS);
+        var card = Math.round(cash * 1.03);
+        return {
+            entered: entered,
+            billed: billed,
+            minimum: minimum,
+            cashCents: cash,
+            cardCents: card,
+            depositCashCents: Math.round(cash * GROUP_DEPOSIT_RATE),
+            depositCardCents: Math.round(card * GROUP_DEPOSIT_RATE)
+        };
+    }
+
+    function mapKey() {
+        var cfg = globalThis.MIDNIGHT_MAPS;
+        if (!cfg || cfg.key == null) return "";
+        return String(cfg.key).trim();
+    }
+
+    function urlParam(name) {
+        try {
+            return new URLSearchParams(window.location.search).get(name) || "";
+        } catch (err) {
+            void err;
+            return "";
+        }
+    }
+
+    function rulesState() {
+        return {
+            mustBe21: $("#rule-age").is(":checked") ? "Yes" : "No",
+            noSmoking: $("#rule-smoke").is(":checked") ? "Yes" : "No",
+            damageResponsibility: $("#rule-damage").is(":checked") ? "Yes" : "No"
+        };
+    }
+
+    function rulesLine(state) {
+        return "Must be 21 or older: " + state.mustBe21 + ". No smoking: " + state.noSmoking + ". If you damage anything, you are responsible: " + state.damageResponsibility + ".";
+    }
+
+    function rulesComplete(state) {
+        return state.mustBe21 === "Yes" && state.noSmoking === "Yes" && state.damageResponsibility === "Yes";
+    }
+
+    globalThis.MidnightRides = {
+        BARS: BARS,
+        LOCAL_DENIAL: LOCAL_DENIAL,
+        GROUP_VEHICLE: GROUP_VEHICLE,
+        GROUP_MIN_HOURS: GROUP_MIN_HOURS,
+        GROUP_MAX_PASSENGERS: GROUP_MAX_PASSENGERS,
+        GROUP_DEPOSIT_RATE: GROUP_DEPOSIT_RATE,
+        GROUP_HOURLY_CENTS: GROUP_HOURLY_CENTS,
+        listedBar: listedBar,
+        overVenueMiles: overVenueMiles,
+        localFare: localFare,
+        groupFare: groupFare,
+        mapKey: mapKey,
+        urlParam: urlParam
+    };
 
     function escapeHtml(value) {
         return String(value).replace(/[&<>"']/g, function (ch) {
@@ -114,7 +222,8 @@
         var destinationGeo = null;
         var pickupIsAirfield = endIsAirfield(pickup);
         var groupVenue = tripKind() === 'group';
-        var destinationIsAirfield = groupVenue || privateAirfieldChosen() || endIsAirfield(destination);
+        var listedStop = Boolean(listedBar(destination));
+        var destinationIsAirfield = groupVenue || listedStop || privateAirfieldChosen() || endIsAirfield(destination);
         if (!pickupIsAirfield && api.classifyAddress(pickup).status === 'unclear') {
             pickupGeo = await censusPlace(pickup);
         }
@@ -707,6 +816,15 @@
             durationMinutes: formData.durationMinutes,
             contactAddress: formData.contactAddress
         };
+        if (formData.mustBe21) {
+            payload.mustBe21 = formData.mustBe21;
+            payload.noSmoking = formData.noSmoking;
+            payload.damageResponsibility = formData.damageResponsibility;
+        }
+        if (formData.hoursBilled) {
+            payload.hoursEntered = formData.hoursEntered;
+            payload.hoursBilled = formData.hoursBilled;
+        }
         return fetch(NEW_SCRIPT_URL, {
             method: 'POST',
             mode: 'no-cors',
@@ -728,7 +846,16 @@
 
     function tripKind() {
         var value = $('#trip-type').val();
-        return value === 'airport' || value === 'group' ? value : '';
+        if (value === 'airport' || value === 'local' || value === 'group') return value;
+        return '';
+    }
+
+    function isLocalTrip() {
+        return tripKind() === 'local';
+    }
+
+    function localMode() {
+        return isLocalTrip() ? ($('#local-kind').val() || '') : '';
     }
 
     function isGroupEvent() {
@@ -740,7 +867,7 @@
     }
 
     function privateAirfieldChosen() {
-        return tripKind() === 'airport' && ($('#airport-choice').val() || '') === 'PRIVATE';
+        return tripKind() === 'airport' && $('#airport-choice').val() === 'PRIVATE';
     }
 
     function checkingBagsChoice() {
@@ -769,7 +896,8 @@
         } catch (err) {
             void err;
         }
-        return presetTrip === 'airport' || presetTrip === 'group' ? presetTrip : '';
+        if (presetTrip === 'airport' || presetTrip === 'local' || presetTrip === 'group') return presetTrip;
+        return '';
     }
 
     function setCols($group, wide) {
@@ -781,52 +909,100 @@
     }
 
     /**
-     * One trip-type dropdown. Airport keeps today's fields. Group uses the
-     * same name, address, phone, and email inputs, then its own fields.
-     * Group rides do not show a fare.
+     * One trip-type dropdown. Airport keeps today's fields.
+     * Local Bars and Parties and Group reuse the same contact fields.
      */
     var NOTES_PLACEHOLDER = 'Anything we should know? For example, a wheelchair, a car seat, or extra luggage.';
+    var RULES_MESSAGE = "Please check all three boxes: Must be 21 or older, No smoking, and If you damage anything, you are responsible.";
+
+    function fillBarChoices() {
+        var select = document.getElementById('bar-choice');
+        if (!select || select.getAttribute('data-ready') === 'yes') return;
+        var list = document.getElementById('local-bar-list');
+        for (var i = 0; i < BARS.length; i++) {
+            var opt = document.createElement('option');
+            opt.value = BARS[i].id;
+            opt.textContent = BARS[i].name;
+            select.appendChild(opt);
+            var item = document.createElement('li');
+            item.textContent = BARS[i].name;
+            list.appendChild(item);
+        }
+        select.setAttribute('data-ready', 'yes');
+    }
+
+    function hideRideExtras() {
+        $('#local-intro, #local-bar-list, #local-kind-row, #bar-choice-row, #party-address-row, #ride-rules, #group-vehicle, #group-hours-row').attr('hidden', 'hidden').hide();
+    }
+
+    function showLocalPickers() {
+        var mode = $('#local-kind').val() || '';
+        $('#local-kind-row').removeAttr('hidden').show();
+        if (mode === 'bar') {
+            $('#bar-choice-row').removeAttr('hidden').show();
+            $('#party-address-row').attr('hidden', 'hidden').hide();
+            var preset = urlParam('bar') || urlParam('venue');
+            var found = listedBar(preset);
+            var select = document.getElementById('bar-choice');
+            if (found && select && !select.value) {
+                select.value = found.id;
+                $('#booking-destination').val(found.address || found.name);
+            }
+        } else if (mode === 'party') {
+            $('#bar-choice-row').attr('hidden', 'hidden').hide();
+            $('#party-address-row').removeAttr('hidden').show();
+        } else {
+            $('#bar-choice-row, #party-address-row').attr('hidden', 'hidden').hide();
+        }
+    }
 
     function updateTripLayout() {
         var kind = tripKind();
         var $submit = $('#bookingForm button[type="submit"]');
         $submit.prop('disabled', false);
-        if (kind === 'group' || kind === 'airport') {
+        fillBarChoices();
+        if (kind === 'group' || kind === 'airport' || kind === 'local') {
             setCols($('#name-group, #phone-group, #email-group, #passengers-group, #date-group, #time-group, #address-group'), false);
             $('#a-name-phone').append($('#name-group'), $('#phone-group'));
             $('#a-email-people').append($('#email-group'), $('#passengers-group'));
             $('#a-when').append($('#date-group'), $('#time-group'));
-            $('#a-places').append($('#address-group'), $('#dest-group'));
+            $('#a-places').append($('#ride-map-slot'), $('#address-group'), $('#dest-group'));
             setFieldLabel('date-label', 'Pickup Date *');
             setFieldLabel('time-label', 'Pickup Time *');
             setFieldLabel('passengers-label', 'Number of Passengers *');
             $('#group-fields').attr('hidden', 'hidden').hide();
             $('#airport-fields').removeAttr('hidden').show();
+            $('#airport-choice-row').hide();
+            $('#dest-group').hide();
+            $('#special-requirements-section').hide();
+            $('#booking-wheelchair, #booking-carseat').prop('checked', false);
+            hideRideExtras();
             if (kind === 'group') {
                 setFieldLabel('address-label', 'Pickup Address *');
-                setFieldLabel('destination-label', 'Drop-off / venue *');
-                setCols($('#address-group, #dest-group'), false);
-                $('#airport-choice-row').hide();
-                $('#airfield-place').attr('hidden', 'hidden').hide();
-                $('#dest-group').removeClass('col-md-12').addClass('col-md-6').show();
-                $('#booking-destination').attr('placeholder', 'Bank of America Stadium');
                 setFieldLabel('notes-label', 'Trip Description');
                 $('#booking-notes').attr('placeholder', NOTES_PLACEHOLDER);
-                $('#special-requirements-section').hide();
-                $('#booking-wheelchair, #booking-carseat').prop('checked', false);
-                $('#booking-quote').hide();
-                $('#quote-details').empty();
+                $('#group-vehicle').removeAttr('hidden').show();
+                $('#group-hours-row').removeAttr('hidden').show();
+                $('#a-when').after($('#group-hours-row'));
+                $('#ride-rules').removeAttr('hidden').show();
+                $('#booking-quote').show();
+                $('#quote-details').html('Enter how many hours to see your price.');
+            } else if (kind === 'local') {
+                setFieldLabel('address-label', 'Address *');
+                setFieldLabel('notes-label', 'Special Notes');
+                $('#booking-notes').attr('placeholder', NOTES_PLACEHOLDER);
+                $('#local-intro, #local-bar-list').removeAttr('hidden').show();
+                showLocalPickers();
+                $('#ride-rules').removeAttr('hidden').show();
+                $('#booking-quote').show();
+                if (!$('#local-kind').val()) {
+                    $('#quote-details').html('Choose a bar, restaurant, or party to see your price.');
+                }
             } else {
                 setFieldLabel('address-label', 'Home address *');
                 setFieldLabel('destination-label', 'Destination Address *');
                 setCols($('#address-group'), false);
                 $('#airport-choice-row').show();
-                if (privateAirfieldChosen()) {
-                    $('#airfield-place').removeAttr('hidden').show();
-                } else {
-                    $('#airfield-place').attr('hidden', 'hidden').hide();
-                }
-                $('#dest-group').hide();
                 $('#booking-destination').attr('placeholder', 'CLT Airport');
                 setFieldLabel('notes-label', 'Special Notes');
                 $('#booking-notes').attr('placeholder', NOTES_PLACEHOLDER);
@@ -836,9 +1012,12 @@
         } else {
             $('#airport-fields, #group-fields').attr('hidden', 'hidden').hide();
             $('#airport-choice-row').hide();
-            $('#airfield-place').attr('hidden', 'hidden').hide();
+            hideRideExtras();
             $('#booking-quote').hide();
         }
+        var airfield = tripKind() === 'airport' && $('#airport-choice').val() === 'PRIVATE';
+        if (airfield) $('#airfield-place').removeAttr('hidden').show();
+        else $('#airfield-place').attr('hidden', 'hidden').hide();
         updateConditionalFields();
         updatePassengerCapacity();
     }
@@ -853,7 +1032,7 @@
      */
     function placeFlightField() {
         var $flight = $('#flight-group');
-        if (isGroupEvent()) {
+        if (isGroupEvent() || isLocalTrip()) {
             $flight.hide();
             $('#flight-slot').hide();
             $('#booking-flight').val('');
@@ -869,9 +1048,15 @@
     function updateConditionalFields() {
         const roundTrip = $('#booking-round-trip').is(':checked');
 
-        // Bags and a return trip are airport fields. The group form does not ask.
+        // Bags and a return flight are airport fields. Local keeps round trip for the fare only.
         if (isAirportTrip()) {
             $('#checking-bags-section').slideDown();
+            $('#round-trip-section').show();
+        } else if (isLocalTrip()) {
+            $('#checking-bags-section').hide();
+            $('input[name="checking-bags"]').prop('checked', false);
+            $('#booking-bag-count').val('');
+            $('#checking-bags-error, #bag-count-error').text('').hide();
             $('#round-trip-section').show();
         } else {
             $('#checking-bags-section').hide();
@@ -882,8 +1067,8 @@
             $('#booking-round-trip').prop('checked', false);
         }
 
-        // Return date and time whenever a round trip is requested.
-        if (roundTrip) {
+        // Return date and time only for an airport round trip.
+        if (roundTrip && isAirportTrip()) {
             $('#return-flight-section').slideDown();
             $('#return-timeline-container').slideDown();
         } else {
@@ -964,9 +1149,9 @@
 
         const maxCapacity = calculatePassengerCapacity(requirements);
         const callMsg = isGroupEvent()
-            ? 'Please call (980) 422-9125 to book a group that size.'
+            ? 'The ' + GROUP_VEHICLE + ' seats ' + GROUP_MAX_PASSENGERS + '. For more than ' + GROUP_MAX_PASSENGERS + ' passengers, please call (980) 422-9125.'
             : 'For more than ' + maxCapacity + ' passengers, please call (980) 422-9125.';
-        const limit = isGroupEvent() ? 6 : maxCapacity;
+        const limit = isGroupEvent() ? GROUP_MAX_PASSENGERS : maxCapacity;
 
         // Update or create capacity message
         let $capacityMsg = $('#passenger-capacity-message');
@@ -1049,7 +1234,7 @@
         console.log('Created outbound submission');
 
         // Create return submission if round trip
-        if (bookingData.roundTrip === 'Yes') {
+        if (bookingData.roundTrip === 'Yes' && bookingData.airportTrip === 'Yes') {
             console.log('Creating return submission...');
             const returnSubmission = {
                 name: bookingData.name,
@@ -1457,6 +1642,23 @@
             updateTripLayout();
         });
 
+        $('#local-kind').on('change', function() {
+            $('#local-kind-error').text('').hide();
+            $(this).closest('.form-group').removeClass('has-error');
+            updateTripLayout();
+        });
+
+        $('#bar-choice').on('change', function() {
+            $('#bar-choice-error').text('').hide();
+            $(this).closest('.form-group').removeClass('has-error');
+            var bar = listedBar($(this).val());
+            if (bar) {
+                $('#booking-destination').val(bar.address || bar.name).trigger('input');
+            } else if ($(this).val()) {
+                $('#booking-destination').val($(this).val()).trigger('input');
+            }
+        });
+
         // Clear address errors when user starts typing
         $('#booking-pickup').on('input', function() {
             if ($(this).val().trim()) {
@@ -1508,22 +1710,47 @@
             const returnTime = $('#booking-return-time').val();
 
             const trip = tripKind();
+            const mode = localMode();
             const contactAddress = $('#booking-pickup').val().trim();
+            const partyAddress = $('#party-address').val().trim();
+            const chosenBar = mode === 'bar' ? listedBar($('#bar-choice').val()) : null;
             var notes = $('#booking-notes').val().trim();
-            if (trip === 'group') {
-                notes = notes ? 'Group event. ' + notes : 'Group event.';
-            }
-            const asksTripDetails = trip === 'airport';
-            const bagCount = readBagCount();
-            const bagsChoice = checkingBagsChoice();
             var destinationAddress = $('#booking-destination').val().trim();
-            if (privateAirfieldChosen()) {
+            if (trip === 'airport' && $('#airport-choice').val() === 'PRIVATE') {
                 var airfieldName = $('#airfield-name').val().trim();
                 var airfieldAddress = $('#airfield-address').val().trim();
                 destinationAddress = airfieldName && airfieldAddress
                     ? airfieldName + ', ' + airfieldAddress
                     : '';
             }
+            var hoursEntered = '';
+            var hoursBilled = '';
+            var durationMinutes = RIDE_DURATION_MINUTES;
+            if (trip === 'group') {
+                notes = notes ? 'Group event. ' + notes : 'Group event.';
+                destinationAddress = 'Hourly charter, ' + GROUP_VEHICLE;
+                var rawHours = $.trim($('#group-hours').val() || '');
+                if (/^\d+(\.\d+)?$/.test(rawHours) && Number(rawHours) > 0) {
+                    var fare = groupFare(rawHours);
+                    hoursEntered = String(fare.entered);
+                    hoursBilled = String(fare.billed);
+                    durationMinutes = Math.round(fare.billed * 60);
+                }
+            } else if (trip === 'local' && mode === 'bar' && chosenBar) {
+                destinationAddress = chosenBar.address || chosenBar.name;
+                notes = (notes ? 'Bar or restaurant ride to ' + chosenBar.name + '. ' + notes : 'Bar or restaurant ride to ' + chosenBar.name + '.');
+            } else if (trip === 'local' && mode === 'party') {
+                destinationAddress = partyAddress;
+                notes = notes ? 'Party ride. ' + notes : 'Party ride.';
+            }
+            if (trip === 'local' && $('#booking-round-trip').is(':checked')) {
+                notes = notes ? notes + ' Round trip.' : 'Round trip.';
+            }
+            const ack = (trip === 'group' || trip === 'local') ? rulesState() : null;
+            if (ack) notes = notes ? notes + ' ' + rulesLine(ack) : rulesLine(ack);
+            const asksTripDetails = trip === 'airport';
+            const bagCount = readBagCount();
+            const bagsChoice = checkingBagsChoice();
             const formData = {
                 name: $('#booking-name').val().trim(),
                 phone: $('#booking-phone').data('raw-value') || $('#booking-phone').val().replace(/\D/g, ''),
@@ -1538,13 +1765,18 @@
                 pickupTime: pickupTime,
                 checkingBags: asksTripDetails ? bagsChoice : 'No',
                 bagCount: asksTripDetails && bagCount.filled ? bagCount.value : 0,
-                roundTrip: asksTripDetails && $('#booking-round-trip').is(':checked') ? 'Yes' : 'No',
+                roundTrip: (trip === 'airport' || trip === 'local') && $('#booking-round-trip').is(':checked') ? 'Yes' : 'No',
                 returnDate: asksTripDetails ? returnDate : '',
                 returnTime: asksTripDetails ? returnTime : '',
                 specialRequirements: trip === 'airport' ? specialRequirements : [],
                 groupEvent: trip === 'group' ? 'Yes' : 'No',
-                durationMinutes: RIDE_DURATION_MINUTES,
-                contactAddress: contactAddress
+                durationMinutes: durationMinutes,
+                contactAddress: contactAddress,
+                mustBe21: ack ? ack.mustBe21 : '',
+                noSmoking: ack ? ack.noSmoking : '',
+                damageResponsibility: ack ? ack.damageResponsibility : '',
+                hoursEntered: hoursEntered,
+                hoursBilled: hoursBilled
             };
 
             // Validation
@@ -1595,7 +1827,7 @@
 
             // Pickup address validation
             if (!formData.pickupAddress) {
-                var pickupMessage = trip === 'airport' ? 'Home address is required' : 'Pickup address is required';
+                var pickupMessage = trip === 'airport' ? 'Home address is required' : (trip === 'local' ? 'Address is required' : 'Pickup address is required');
                 errors.push(pickupMessage);
                 $('#booking-pickup').closest('.form-group').addClass('has-error');
                 $('#pickup-error').text(pickupMessage).show();
@@ -1632,17 +1864,71 @@
                     $('#airport-choice-error').text('Please choose an airport').show();
                     isValid = false;
                 }
-            } else if (!formData.destinationAddress) {
+            } else if (trip === 'local') {
+                if (mode !== 'bar' && mode !== 'party') {
+                    errors.push('Please choose a bar, restaurant, or party');
+                    $('#local-kind').closest('.form-group').addClass('has-error');
+                    $('#local-kind-error').text('Please choose a bar, restaurant, or party').show();
+                    isValid = false;
+                } else if (mode === 'bar') {
+                    var barValue = $('#bar-choice').val() || '';
+                    var typedBar = $('#booking-destination').val().trim();
+                    var urlBar = urlParam('bar') || urlParam('venue');
+                    var foreign = (barValue && !listedBar(barValue)) || (typedBar && !listedBar(typedBar)) || (urlBar && !listedBar(urlBar));
+                    if (foreign) {
+                        errors.push(LOCAL_DENIAL);
+                        $('#bar-choice').closest('.form-group').addClass('has-error');
+                        $('#bar-choice-error').text(LOCAL_DENIAL).show();
+                        isValid = false;
+                    } else if (!chosenBar) {
+                        errors.push('Please choose a bar or restaurant');
+                        $('#bar-choice').closest('.form-group').addClass('has-error');
+                        $('#bar-choice-error').text('Please choose a bar or restaurant').show();
+                        isValid = false;
+                    }
+                } else if (!partyAddress) {
+                    errors.push('Party address is required');
+                    $('#party-address').closest('.form-group').addClass('has-error');
+                    $('#party-address-error').text('Party address is required').show();
+                    isValid = false;
+                }
+                if (chosenBar && typeof chosenBar.maxMiles === 'number' && formData.pickupAddress) {
+                    var venueMiles = await globalThis.MidnightRides.roadMiles(chosenBar);
+                    if (overVenueMiles(chosenBar, venueMiles)) {
+                        errors.push(LOCAL_DENIAL);
+                        $('#bar-choice').closest('.form-group').addClass('has-error');
+                        $('#bar-choice-error').text(LOCAL_DENIAL).show();
+                        isValid = false;
+                    }
+                }
+            } else if (trip !== 'group' && !formData.destinationAddress) {
                 errors.push('Destination address is required');
                 $('#booking-destination').closest('.form-group').addClass('has-error');
                 $('#destination-error').text('Destination address is required').show();
                 isValid = false;
             }
 
-            if (trip !== 'airport' && trip !== 'group') {
+            if (trip !== 'airport' && trip !== 'group' && trip !== 'local') {
                 errors.push('Please choose a trip type');
                 $('#trip-type').closest('.form-group').addClass('has-error');
-                $('#trip-type-error').text('Please choose Airport or Group').show();
+                $('#trip-type-error').text('Please choose Airport, Local Bars and Parties, or Group').show();
+                isValid = false;
+            }
+
+            if (trip === 'group') {
+                var hourText = $.trim($('#group-hours').val() || '');
+                if (!/^\d+(\.\d+)?$/.test(hourText) || !(Number(hourText) > 0)) {
+                    errors.push('Enter how many hours.');
+                    $('#group-hours').closest('.form-group').addClass('has-error');
+                    $('#group-hours').closest('.form-group').find('.help-block').text('Enter how many hours.').show();
+                    isValid = false;
+                }
+            }
+
+            if ((trip === 'group' || trip === 'local') && !rulesComplete(rulesState())) {
+                errors.push(RULES_MESSAGE);
+                $('#ride-rules').addClass('has-error');
+                $('#ride-rules-error').text(RULES_MESSAGE).show();
                 isValid = false;
             }
 
@@ -1688,8 +1974,8 @@
                 errors.push(needMsg);
                 $('#booking-passengers').closest('.form-group').addClass('has-error').find('.help-block').text(needMsg).show();
                 isValid = false;
-            } else if (trip === 'group' && passengerCount > 6) {
-                const callMsg = 'Please call (980) 422-9125 to book a group that size.';
+            } else if (trip === 'group' && passengerCount > GROUP_MAX_PASSENGERS) {
+                const callMsg = 'The ' + GROUP_VEHICLE + ' seats ' + GROUP_MAX_PASSENGERS + '. For more than ' + GROUP_MAX_PASSENGERS + ' passengers, please call (980) 422-9125.';
                 errors.push(callMsg);
                 $('#booking-passengers').closest('.form-group').addClass('has-error').find('.help-block').text(callMsg).show();
                 isValid = false;
@@ -1700,8 +1986,8 @@
                 isValid = false;
             }
 
-            // Validate return flight fields if round trip is yes
-            if (formData.roundTrip === 'Yes') {
+            // Validate return flight fields if an airport round trip is yes
+            if (formData.roundTrip === 'Yes' && formData.airportTrip === 'Yes') {
                 // Return date validation
                 if (!formData.returnDate) {
                     errors.push('Return flight date is required for round trips');
@@ -1839,7 +2125,7 @@
                 // Clear pending bookings after a delay to allow database to catch up
                 // Keep them for 10 seconds to prevent immediate conflicts
                 setTimeout(function() {
-                    const numBookings = formData.roundTrip === 'Yes' ? 2 : 1;
+                    const numBookings = formData.roundTrip === 'Yes' && formData.airportTrip === 'Yes' ? 2 : 1;
                     pendingBookings.splice(0, numBookings);
                     console.log('Cleared pending bookings. Remaining:', pendingBookings.length);
                 }, 10000); // 10 seconds
@@ -1853,7 +2139,7 @@
                     '<h4><i class="fa fa-check-circle"></i> Request received. We\'ll call to confirm</h4>' +
                     '<p>Thank you, <strong>' + escapeHtml(formData.name) + '</strong>!</p>';
 
-                if (formData.roundTrip === 'Yes') {
+                if (formData.roundTrip === 'Yes' && formData.airportTrip === 'Yes') {
                     successHtml +=
                         '<p>Your round-trip requests were sent:</p>' +
                         '<ul class="confirm-legs">' +
@@ -1869,7 +2155,7 @@
 
                 successHtml +=
                     '<hr>' +
-                    '<p><strong>Important:</strong> Your booking' + (formData.roundTrip === 'Yes' ? 's are' : ' is') + ' not confirmed until you receive a call from us. If you don\'t hear from us within 2 hours, please call (980) 422-9125.</p>' +
+                    '<p><strong>Important:</strong> Your booking' + (formData.roundTrip === 'Yes' && formData.airportTrip === 'Yes' ? 's are' : ' is') + ' not confirmed until you receive a call from us. If you don\'t hear from us within 2 hours, please call (980) 422-9125.</p>' +
                     '</div>';
 
                 console.log('Setting success HTML and showing...');
@@ -1939,7 +2225,7 @@
                 console.error('Error stack:', error.stack);
 
                 // Clear pending bookings on error since submission failed
-                const numBookings = formData.roundTrip === 'Yes' ? 2 : 1;
+                const numBookings = formData.roundTrip === 'Yes' && formData.airportTrip === 'Yes' ? 2 : 1;
                 pendingBookings.splice(0, numBookings);
                 console.log('Cleared pending bookings due to error');
 
@@ -2056,7 +2342,7 @@
         return p;
     }
     function inArea(g){return g.lat>34.9&&g.lat<36.2&&g.lon>-81.8&&g.lon<-80.2;}
-    function driveMiles(g,airport){
+    function osrmMiles(g,airport){
         var k=g.lat.toFixed(5)+','+g.lon.toFixed(5)+'>'+airport.id;
         if(routeCache[k])return routeCache[k];
         var p=fetch('https://router.project-osrm.org/route/v1/driving/'+g.lon+','+g.lat+';'+airport.lon+','+airport.lat+'?overview=false&alternatives=3')
@@ -2074,6 +2360,155 @@
         routeCache[k]=p; p.catch(function(){delete routeCache[k];});
         return p;
     }
+    function hideMap(){
+        var slot=document.getElementById('ride-map-slot');
+        if(slot) slot.hidden=true;
+    }
+    function routeEnd(value){
+        var text=String(value).trim();
+        var comma=text.indexOf(',');
+        if(comma>0){
+            var lat=Number(text.slice(0,comma));
+            var lon=Number(text.slice(comma+1));
+            if(String(lat)!=='NaN'&&String(lon)!=='NaN'&&text===String(lat)+','+String(lon)){
+                return {location:{latLng:{latitude:lat,longitude:lon}}};
+            }
+        }
+        return {address:text};
+    }
+    function parseDuration(value){
+        var match=String(value||'').match(/(\d+(?:\.\d+)?)s/);
+        return match ? +match[1] : 0;
+    }
+    function googleRoute(origin, destination){
+        return fetch('https://routes.googleapis.com/directions/v2:computeRoutes',{
+            method:'POST',
+            headers:{
+                'Content-Type':'application/json',
+                'X-Goog-Api-Key':globalThis.MidnightRides.mapKey(),
+                'X-Goog-FieldMask':'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline'
+            },
+            body:JSON.stringify({origin:routeEnd(origin),destination:routeEnd(destination),travelMode:'DRIVE'})
+        }).then(function(r){return r.json();}).then(function(data){
+            var route=data&&data.routes&&data.routes[0];
+            if(!route||typeof route.distanceMeters!=='number'||!(route.distanceMeters>0)) return null;
+            var seconds=parseDuration(route.duration);
+            return {
+                miles:route.distanceMeters/1609.344,
+                minutes:Math.max(1, Math.round(seconds/60)),
+                polyline:route.polyline&&route.polyline.encodedPolyline||''
+            };
+        });
+    }
+    function decodePath(encoded){
+        var points=[], index=0, lat=0, lng=0, str=String(encoded||'');
+        while(index<str.length){
+            var b, shift=0, result=0;
+            do {
+                if(index>=str.length) return points;
+                b=str.charCodeAt(index++)-63;
+                result|=(b&0x1f)<<shift;
+                shift+=5;
+            } while(b>=0x20);
+            lat+=((result&1)?~(result>>1):(result>>1));
+            shift=0; result=0;
+            do {
+                if(index>=str.length) return points;
+                b=str.charCodeAt(index++)-63;
+                result|=(b&0x1f)<<shift;
+                shift+=5;
+            } while(b>=0x20);
+            lng+=((result&1)?~(result>>1):(result>>1));
+            points.push({lat:lat/1e5,lng:lng/1e5});
+        }
+        return points;
+    }
+    var mapsReady=null;
+    function ensureMaps(){
+        if(globalThis.google&&globalThis.google.maps&&globalThis.google.maps.Map) return Promise.resolve(true);
+        if(mapsReady){return mapsReady;}
+        var key=globalThis.MidnightRides.mapKey();
+        mapsReady=new Promise(function(resolve){
+            globalThis.midnightMapsReady=function(){
+                resolve(!!(globalThis.google&&globalThis.google.maps&&globalThis.google.maps.Map));
+            };
+            var script=document.createElement('script');
+            script.async=true;
+            script.src='https://maps.googleapis.com/maps/api/js?key='+encodeURIComponent(key)+'&v=weekly&callback=midnightMapsReady';
+            script.onerror=function(){resolve(false);};
+            document.head.appendChild(script);
+        });
+        return mapsReady;
+    }
+    function paintRoute(road){
+        var slot=document.getElementById('ride-map-slot');
+        var canvas=document.getElementById('ride-map');
+        var summary=document.getElementById('ride-map-summary');
+        if(!slot||!summary) return;
+        slot.hidden=false;
+        summary.textContent=(Math.round(road.miles*10)/10).toFixed(1)+' miles · '+road.minutes+' min';
+        ensureMaps().then(function(ok){
+            if(!ok||!canvas||!globalThis.google||!globalThis.google.maps){if(canvas) canvas.hidden=true;return;}
+            canvas.hidden=false;
+            var maps=globalThis.google.maps;
+            var path=decodePath(road.polyline).map(function(point){return new maps.LatLng(point.lat, point.lng);});
+            var map=new maps.Map(canvas,{disableDefaultUI:true,clickableIcons:false,gestureHandling:'cooperative'});
+            if(!path.length) return;
+            new maps.Polyline({path:path,map:map,strokeColor:'#db3040',strokeWeight:4});
+            var bounds=new maps.LatLngBounds();
+            for(var i=0;i<path.length;i++) bounds.extend(path[i]);
+            map.fitBounds(bounds);
+        });
+    }
+    function paintPoint(g){
+        var slot=document.getElementById('ride-map-slot');
+        var canvas=document.getElementById('ride-map');
+        var summary=document.getElementById('ride-map-summary');
+        if(!slot||!summary) return;
+        slot.hidden=false;
+        summary.textContent='Pickup mapped';
+        ensureMaps().then(function(ok){
+            if(!ok||!canvas){if(canvas) canvas.hidden=true;return;}
+            canvas.hidden=false;
+            var maps=globalThis.google.maps;
+            var center=new maps.LatLng(g.lat, g.lon);
+            var map=new maps.Map(canvas,{disableDefaultUI:true,center:center,zoom:14,gestureHandling:'cooperative'});
+            new maps.Marker({map:map,position:center});
+        });
+    }
+    function driveMiles(g,airport){
+        var key=globalThis.MidnightRides.mapKey();
+        var pickup=$.trim($('#booking-pickup').val());
+        if(!key){hideMap();return osrmMiles(g,airport);}
+        return googleRoute(pickup, airport.lat+','+airport.lon).then(function(road){
+            if(!road){hideMap();return osrmMiles(g,airport);}
+            paintRoute(road);
+            return road.miles;
+        }).catch(function(){hideMap();return osrmMiles(g,airport);});
+    }
+    function roadBetween(pickupGeo, pickupText, stop){
+        var key=globalThis.MidnightRides.mapKey();
+        function fallback(){
+            hideMap();
+            if(stop.lat!=null) return osrmMiles(pickupGeo,{id:stop.id,lat:stop.lat,lon:stop.lon});
+            return geocode(stop.address).then(function(dest){
+                return osrmMiles(pickupGeo,{id:stop.id,lat:dest.lat,lon:dest.lon});
+            });
+        }
+        if(!key) return fallback();
+        var dest=stop.lat!=null ? (stop.lat+','+stop.lon) : stop.address;
+        return googleRoute(pickupText, dest).then(function(road){
+            if(!road) return fallback();
+            paintRoute(road);
+            return road.miles;
+        }).catch(function(){return fallback();});
+    }
+    globalThis.MidnightRides.roadMiles = function(stop) {
+        var pick = $.trim($('#booking-pickup').val());
+        return geocode(pick).then(function(g) {
+            return roadBetween(g, pick, stop);
+        });
+    };
     function show(html){
         var $d=$('#quote-details');
         $d.html(html);
@@ -2081,17 +2516,91 @@
             globalThis.MidnightBooking.placeInView(document.getElementById('booking-quote'),'nearest');
         }
     }
-    function groupEventYes(){
-        return ($('#trip-type').val()||'')==='group';
+    function tripNow(){return $('#trip-type').val()||'';}
+    function refreshGroup(my){
+        $('#booking-quote').show();
+        var rides=globalThis.MidnightRides;
+        var hours=$.trim($('#group-hours').val()||'');
+        if(!/^\d+(\.\d+)?$/.test(hours)||!(Number(hours)>0)){
+            show('<span class="quote-label">'+esc(rides.GROUP_VEHICLE)+'</span><br>Enter how many hours to see your price.');
+        } else {
+            var fare=rides.groupFare(hours);
+            var note=fare.minimum?'<br>2-hour minimum':'';
+            show('<span class="quote-label">'+esc(rides.GROUP_VEHICLE)+'</span><br>'+fare.billed+' hours'+note+'<br><strong class="quote-total">Cash '+money(fare.cashCents/100)+' · Card '+money(fare.cardCents/100)+'</strong><br><span class="quote-deposit">Deposit '+money(fare.depositCashCents/100)+' cash · '+money(fare.depositCardCents/100)+' card</span>');
+        }
+        var pick=$.trim($('#booking-pickup').val()||'');
+        if(!rides.mapKey()||pick.length<6){hideMap();return;}
+        geocode(pick).then(function(g){
+            if(my!==seq||tripNow()!=='group')return;
+            paintPoint(g);
+        }).catch(function(){if(my===seq)hideMap();});
     }
-    function hideGroupQuote(){
-        show('');
-        $('#booking-quote').hide();
+    function barDenied(){
+        var rides=globalThis.MidnightRides;
+        var choice=$('#bar-choice').val()||'';
+        var typed=$.trim($('#booking-destination').val()||'');
+        var fromUrl=rides.urlParam('bar')||rides.urlParam('venue');
+        if(choice&&!rides.listedBar(choice)) return true;
+        if(typed&&!rides.listedBar(typed)) return true;
+        if(fromUrl&&!rides.listedBar(fromUrl)) return true;
+        return false;
+    }
+    function refreshLocal(my){
+        $('#booking-quote').show();
+        var rides=globalThis.MidnightRides;
+        var mode=$('#local-kind').val()||'';
+        var pick=$.trim($('#booking-pickup').val()||'');
+        var rt=$('#booking-round-trip').is(':checked');
+        if(mode==='bar'&&barDenied()){hideMap();show(esc(rides.LOCAL_DENIAL));return;}
+        if(mode!=='bar'&&mode!=='party'){hideMap();show('Choose a bar, restaurant, or party to see your price.');return;}
+        var stop=null;
+        if(mode==='bar'){
+            stop=rides.listedBar($('#bar-choice').val());
+            if(!stop){hideMap();show('Choose a bar or restaurant to see your price.');return;}
+            if(!stop.address&&stop.lat==null){hideMap();show(fb);return;}
+        }
+        var party=$.trim($('#party-address').val()||'');
+        if(mode==='party'&&party.length<6){hideMap();show('Enter your address and the party address to see your price.');return;}
+        if(pick.length<6||!/\d/.test(pick)){hideMap();show('Enter your address to see your price.');return;}
+        var api=globalThis.MidnightServiceArea;
+        var destText=mode==='bar'?stop.address:party;
+        var prelim=api?api.evaluateTrip({pickup:pick,destination:destText,destinationIsAirfield:mode==='bar'}):{code:'unclear'};
+        if(prelim.code==='outside'){hideMap();show(esc(api.OUT_OF_AREA_MESSAGE));return;}
+        show('Figuring your price&hellip;');
+        geocode(pick).then(function(g){
+            if(my!==seq||tripNow()!=='local')return;
+            var decision=api.evaluateTrip({
+                pickup:pick,
+                destination:destText,
+                destinationIsAirfield:mode==='bar',
+                pickupGeo:{city:g.city||'',state:g.state||'',zip:g.zip||''}
+            });
+            if(decision.code==='outside')throw 'out';
+            if(!decision.ok)throw 'unclear';
+            if(!inArea(g))throw 'area';
+            if(mode==='party') return roadBetween(g, pick, {id:'party', address:party, lat:null, lon:null});
+            return roadBetween(g, pick, stop);
+        }).then(function(mi){
+            if(my!==seq||tripNow()!=='local'||typeof mi!=='number')return;
+            if(mode==='bar'&&rides.overVenueMiles(stop, mi)){hideMap();show(esc(rides.LOCAL_DENIAL));return;}
+            var fare=rides.localFare(mi, rt);
+            var name=mode==='party'?'the party':stop.name;
+            var label=rt?'Round trip, '+esc(name)+' and back':'One way to '+esc(name);
+            show('<span class="quote-label">'+label+'</span><br><strong class="quote-total">Cash '+money(fare.cashCents/100)+' · Card '+money(fare.cardCents/100)+'</strong>');
+        }).catch(function(err){
+            if(my!==seq||tripNow()!=='local')return;
+            if(err==='out'&&api){hideMap();show(esc(api.OUT_OF_AREA_MESSAGE));return;}
+            if(err==='unclear'&&api){hideMap();show(esc(api.UNCLEAR_MESSAGE));return;}
+            hideMap();
+            show(fb);
+        });
     }
     function refresh(){
         var my=++seq;
-        if(groupEventYes()){hideGroupQuote();return;}
-        if(($('#trip-type').val()||'')!=='airport'){$('#booking-quote').hide();return;}
+        var kind=tripNow();
+        if(kind==='group'){refreshGroup(my);return;}
+        if(kind==='local'){refreshLocal(my);return;}
+        if(kind!=='airport'){$('#booking-quote').hide();hideMap();return;}
         $('#booking-quote').show();
         var pick=$.trim($('#booking-pickup').val()||'');
         var choice=$('#airport-choice').val()||'';
@@ -2133,7 +2642,6 @@
             if(!inArea(g))throw 'area';
             if(!privateRide)return driveMiles(g,airport);
             return geocode(dest).then(function(field){
-                if(my!==seq)return;
                 return driveMiles(g,{
                     id:'airfield:'+field.lat.toFixed(5)+','+field.lon.toFixed(5),
                     lat:field.lat,
@@ -2141,7 +2649,11 @@
                 });
             });
         }).then(function(mi) {
-            if(my!==seq||groupEventYes()){if(groupEventYes())hideGroupQuote();return;}
+            if(my!==seq)return;
+            var kindNow=tripNow();
+            if(kindNow==='group'){refreshGroup(my);return;}
+            if(kindNow==='local'){refreshLocal(my);return;}
+            if(kindNow!=='airport'){$('#booking-quote').hide();hideMap();return;}
             // Donald (Nov 9, 2026): no online price over 50 driving miles; same limit as Ara.
             // Donald (Nov 10, 2026): a private airfield uses this same fare and the same cap.
             if(mi>50)throw 'far';
@@ -2150,11 +2662,75 @@
             show('<span class="quote-label">'+label+'</span><br><strong class="quote-total">Cash '+money(fare.cash)+' &middot; Card '+money(fare.card)+'</strong>');
         }).catch(function(err) {
             if(my!==seq)return;
-            if(groupEventYes()){hideGroupQuote();return;}
+            var kindNow=tripNow();
+            if(kindNow==='group'){refreshGroup(my);return;}
+            if(kindNow==='local'){refreshLocal(my);return;}
             if(err==='out'&&api){show(esc(api.OUT_OF_AREA_MESSAGE));return;}
             if(err==='unclear'&&api){show(esc(api.UNCLEAR_MESSAGE));return;}
             if(err==='far'){show(far);return;}
             show(fb);
+        });
+    }
+    var suggestTimer=null;
+    function suggestBox(input){
+        var id=input.id+'-suggestions';
+        var box=document.getElementById(id);
+        if(box) return box;
+        box=document.createElement('div');
+        box.id=id;
+        box.className='address-suggestions';
+        box.setAttribute('role','listbox');
+        box.hidden=true;
+        input.insertAdjacentElement('afterend', box);
+        return box;
+    }
+    function clearSuggest(input){
+        var box=document.getElementById(input.id+'-suggestions');
+        if(!box) return;
+        box.innerHTML='';
+        box.hidden=true;
+    }
+    function fetchSuggest(input, query){
+        var box=suggestBox(input);
+        fetch('https://places.googleapis.com/v1/places:autocomplete',{
+            method:'POST',
+            headers:{
+                'Content-Type':'application/json',
+                'X-Goog-Api-Key':globalThis.MidnightRides.mapKey(),
+                'X-Goog-FieldMask':'suggestions.placePrediction.text.text'
+            },
+            body:JSON.stringify({input:query,includedRegionCodes:['us']})
+        }).then(function(r){return r.json();}).then(function(data){
+            var items=(data&&data.suggestions)||[];
+            box.innerHTML='';
+            if(!items.length){box.hidden=true;return;}
+            box.hidden=false;
+            for(var i=0;i<items.length;i++){
+                var label=items[i]&&items[i].placePrediction&&items[i].placePrediction.text&&items[i].placePrediction.text.text;
+                if(!label) continue;
+                var button=document.createElement('button');
+                button.type='button';
+                button.className='address-suggestion';
+                button.setAttribute('role','option');
+                button.textContent=label;
+                button.addEventListener('click', function(event){
+                    input.value=event.currentTarget.textContent;
+                    box.hidden=true;
+                    $(input).trigger('input').trigger('change');
+                });
+                box.appendChild(button);
+            }
+            if(!box.childNodes.length) box.hidden=true;
+        }).catch(function(){box.hidden=true;});
+    }
+    function bindSuggest(){
+        $('#booking-pickup, #party-address, #booking-destination').on('input', function(){
+            var input=this;
+            clearTimeout(suggestTimer);
+            if(!globalThis.MidnightRides.mapKey()){clearSuggest(input);return;}
+            var query=$.trim(input.value||'');
+            if(query.length<3){clearSuggest(input);return;}
+            suggestTimer=setTimeout(function(){fetchSuggest(input, query);},300);
         });
     }
     function later(){clearTimeout(timer);timer=setTimeout(refresh,900);}
@@ -2203,9 +2779,10 @@
             if(!found)return;
             $('#booking-destination').val(found.typed).trigger('input');
         });
-        $('#booking-pickup, #booking-destination, #airfield-name, #airfield-address').on('input', later).on('change blur', function(){clearTimeout(timer);refresh();});
-        $('#booking-round-trip, #trip-type').on('change', function() {
+        $('#booking-pickup, #booking-destination, #party-address, #group-hours, #airfield-name, #airfield-address').on('input', later).on('change blur', function(){clearTimeout(timer);refresh();});
+        $('#booking-round-trip, #trip-type, #local-kind, #bar-choice').on('change', function() {
             setTimeout(refresh, 50);
         });
+        bindSuggest();
     });
 }(window.jQuery);
