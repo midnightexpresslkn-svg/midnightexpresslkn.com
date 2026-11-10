@@ -124,18 +124,44 @@ describe.each(scripts)("booking gaps %s", (script) => {
     await expectVisible(group, "Destination address is required");
   });
 
-  it("asks for the other requirement text when that box is checked and empty", async () => {
+  it("lowers the seat count when a wheelchair or car seat is requested", async () => {
     const view = await renderBooking(script);
-    await fillValid(view, { trip: "airport" });
-    const box = view.document.createElement("input");
-    box.type = "checkbox";
-    box.id = "booking-other-requirement";
+    const box = view.document.querySelector("#booking-wheelchair");
     box.checked = true;
-    const field = view.document.createElement("input");
-    field.id = "booking-other-text";
-    field.value = "   ";
-    view.document.body.append(box, field);
-    await expectVisible(view, "Please specify your other special requirements");
+    view.window.jQuery(box).trigger("change");
+    const message = view.document.querySelector(
+      "#passenger-capacity-message",
+    ).textContent;
+    check(message.includes("reduced for mobility aid"), true, {
+      label: "a wheelchair tells the rider the seat count dropped",
+      actual: message,
+      source: "js/booking.js",
+      loaded: script,
+    });
+  });
+
+  it("still opens the form when the address bar cannot be read", async () => {
+    const Real = globalThis.URLSearchParams;
+    globalThis.URLSearchParams = class {
+      constructor() {
+        throw new Error("unreadable");
+      }
+    };
+    try {
+      const view = await renderBooking(script, { url: "/?type=airport" });
+      check(view.document.querySelector("#bookingForm") !== null, true, {
+        label: "the form still loads",
+        source: "js/booking.js",
+        loaded: script,
+      });
+      check(view.document.querySelector("#trip-type").value, "", {
+        label: "a broken address bar does not force a trip type",
+        source: "js/booking.js",
+        loaded: script,
+      });
+    } finally {
+      globalThis.URLSearchParams = Real;
+    }
   });
 
   it("requires a return date and time, and a return that is after the pickup", async () => {

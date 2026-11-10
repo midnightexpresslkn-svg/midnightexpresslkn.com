@@ -115,7 +115,12 @@ function row(values) {
 }
 
 const NOTES_HINT =
-  "Anything we should know? For example, a wheelchair or a car seat.";
+  "Anything we should know? For example, a wheelchair, a car seat, or extra luggage.";
+
+function checkBoxes(document, { wheelchair = false, carSeat = false } = {}) {
+  document.querySelector("#booking-wheelchair").checked = wheelchair;
+  document.querySelector("#booking-carseat").checked = carSeat;
+}
 
 describe("form entries", () => {
   it("keeps the published form and calendar addresses in both scripts", () => {
@@ -150,23 +155,32 @@ describe("form entries", () => {
   });
 
   describe.each(scripts)("%s", (script) => {
-    it("does not offer wheelchair or car seat fields, and the notes hint names them", async () => {
+    it("keeps wheelchair and car seat boxes and an optional notes hint", async () => {
       const view = await renderBooking(script);
-      check(view.document.querySelector("#booking-wheelchair"), null, {
-        label: "the wheelchair checkbox is gone",
+      check(
+        view.document.querySelector("#booking-wheelchair").type,
+        "checkbox",
+        {
+          label: "the wheelchair box is on the form",
+          source: "js/booking.js",
+          loaded: script,
+        },
+      );
+      check(view.document.querySelector("#booking-carseat").type, "checkbox", {
+        label: "the car seat box is on the form",
         source: "js/booking.js",
         loaded: script,
       });
-      check(view.document.querySelector("#booking-carseat"), null, {
-        label: "the car seat checkbox is gone",
+      check(view.document.querySelector("#booking-notes").required, false, {
+        label: "notes stay optional",
         source: "js/booking.js",
         loaded: script,
       });
       check(
-        view.document.querySelector("#special-requirements-section"),
-        null,
+        view.document.querySelector("#notes-hint").textContent,
+        NOTES_HINT,
         {
-          label: "the special-requirements section is gone",
+          label: "the notes hint stays visible",
           source: "js/booking.js",
           loaded: script,
         },
@@ -207,6 +221,7 @@ describe("form entries", () => {
         bags: true,
         bagCount: "2",
       });
+      checkBoxes(view.document, { wheelchair: true, carSeat: true });
       await submitForm(view);
       const forms = formRows(view);
       check(forms.length, 1, {
@@ -253,7 +268,7 @@ describe("form entries", () => {
           airportTrip: "Yes",
           flight: "",
           checkingBags: "Yes",
-          specialRequirements: "",
+          specialRequirements: "Wheelchair, Car Seat",
         }),
         {
           label: "exact form fields for a filled airport ride",
@@ -300,7 +315,7 @@ describe("form entries", () => {
           pickupAddress: "123 Main Street, Denver NC 28037",
           destinationAddress: "CLT",
           passengers: "2",
-          specialNotes: "gate note",
+          specialNotes: "gate note\nSpecial requirements: Wheelchair, Car Seat",
           airportTrip: "Yes",
           flightNumber: "AA1234",
           checkingBags: "Yes (2 bags)",
