@@ -214,7 +214,41 @@ describe.each(scripts)("live edges %s", (script) => {
       source: "js/booking.js",
       loaded: script,
     });
+    view.window.HTMLElement.prototype.getBoundingClientRect = () => ({
+      top: 400,
+      bottom: 900,
+      height: 500,
+      left: 0,
+      right: 100,
+      width: 100,
+    });
+    view.window.pageYOffset = 0;
+    view.window.MidnightBooking.placeInView(quote, "nearest");
+    check(scrolls.at(-1).top > 0, true, {
+      label: "a target below the top bar is scrolled to its place",
+      actual: scrolls.at(-1),
+      source: "js/booking.js",
+      loaded: script,
+    });
+    view.window.HTMLElement.prototype.getBoundingClientRect = previous;
+    const nav = view.document.querySelector(".navbar-fixed-top");
+    Object.defineProperty(nav, "offsetHeight", {
+      configurable: true,
+      value: 48,
+    });
+    view.window.MidnightBooking.placeInView(quote, "nearest");
+    check(scrolls.at(-1).top >= 0, true, {
+      label: "a tall top bar is included in the scroll position",
+      actual: scrolls.at(-1),
+      source: "js/booking.js",
+      loaded: script,
+    });
     view.document.querySelector(".navbar-fixed-top").remove();
+    check(view.document.querySelector(".navbar-fixed-top"), null, {
+      label: "the top bar is gone before the next scroll",
+      source: "js/booking.js",
+      loaded: script,
+    });
     view.window.innerHeight = 0;
     view.window.MidnightBooking.placeInView(quote, "nearest");
     check(scrolls.length > 1, true, {
@@ -248,6 +282,16 @@ describe.each(scripts)("live edges %s", (script) => {
     extra.value = "ZZZ";
     extra.textContent = "Not a published airport";
     menu.appendChild(extra);
+    const savedArea = globalThis.MidnightServiceArea;
+    globalThis.MidnightServiceArea = null;
+    menu.value = "CLT";
+    view.window.jQuery(menu).trigger("change");
+    globalThis.MidnightServiceArea = savedArea;
+    check(view.document.querySelector("#bookingForm") !== null, true, {
+      label: "the form stays up when the airport list cannot be read",
+      source: "js/booking.js",
+      loaded: script,
+    });
     menu.value = "ZZZ";
     view.window.jQuery(menu).trigger("change");
     check(view.document.querySelector("#booking-destination").value, "", {
@@ -347,6 +391,17 @@ describe.each(scripts)("live edges %s", (script) => {
     check(quote.includes("Cash $"), true, {
       label: "a usable route leg still shows a fare",
       actual: quote,
+      source: "js/booking.js",
+      loaded: script,
+    });
+    const longer = await renderBooking(script, { routesMiles: [12, 20] });
+    const second = await showQuote(longer, {
+      pickup: "123 Main Street, Denver NC 28037",
+      destination: "CLT",
+    });
+    check(second.includes("Cash $"), true, {
+      label: "a longer alternate route does not replace the shorter fare",
+      actual: second,
       source: "js/booking.js",
       loaded: script,
     });
@@ -486,6 +541,14 @@ describe.each(scripts)("live edges %s", (script) => {
       source: "js/booking.js",
       loaded: script,
     });
+    view.document.querySelector("#booking-success").textContent = "";
+    await submitForm(view);
+    check(resultText(view.document).length > 0, true, {
+      label: "a second request still gets an answer while the first is pending",
+      actual: resultText(view.document),
+      source: "js/booking.js",
+      loaded: script,
+    });
     await new Promise((resolve) => setTimeout(resolve, 11000));
     check(view.document.querySelector("#bookingForm") !== null, true, {
       label: "the form is still on the page after the hold ends",
@@ -497,6 +560,13 @@ describe.each(scripts)("live edges %s", (script) => {
   it("leaves a field alone when its value is cleared", async () => {
     const view = await renderBooking(script);
     await fillValid(view, { trip: "airport" });
+    view.window.jQuery("#booking-name").val("").trigger("input");
+    check(view.document.querySelector("#booking-name").value, "", {
+      label: "clearing the name leaves the box blank",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    view.window.jQuery("#booking-name").val("Jane Rider").trigger("input");
     const phone = view.document.querySelector("#booking-phone");
     phone.value = "";
     phone.dispatchEvent(new view.window.Event("input", { bubbles: true }));
@@ -538,6 +608,136 @@ describe.each(scripts)("live edges %s", (script) => {
       loaded: script,
     });
   });
+
+  it("refuses a street whose map point is in Charlotte", async () => {
+    const view = await renderBooking(script, {
+      censusCity: "Charlotte",
+      censusState: "NC",
+      censusZip: "28202",
+    });
+    const quote = await showQuote(view, {
+      pickup: "100 Main Street",
+      destination: "CLT",
+    });
+    check(quote, "Sorry, we don't service that area.", {
+      label: "a Charlotte map point is outside the service area",
+      source: "js/booking.js",
+      loaded: script,
+    });
+  });
+
+  it("does not price a private airfield that is not on the menu", async () => {
+    const view = await renderBooking(script, { miles: 12 });
+    const quote = await showQuote(view, {
+      pickup: "123 Main Street, Denver NC 28037",
+      destination: "grass airstrip",
+    });
+    check(quote, "We'll confirm your price when we call.", {
+      label: "an unlisted airfield is not given an online fare",
+      source: "js/booking.js",
+      loaded: script,
+    });
+  });
+
+  it("asks for a call when the service-area checker is missing", async () => {
+    const view = await renderBooking(script, { miles: 12 });
+    delete globalThis.MidnightServiceArea;
+    const quote = await showQuote(view, {
+      pickup: "123 Main Street, Denver NC 28037",
+      destination: "CLT",
+    });
+    check(quote, "We'll confirm your price when we call.", {
+      label: "a missing checker does not invent a fare",
+      source: "js/booking.js",
+      loaded: script,
+    });
+  });
+
+  it("hides a failed fare when the rider switches to a group", async () => {
+    const view = await renderBooking(script, { routeMode: "error" });
+    view.document.querySelector("#trip-type").value = "airport";
+    view.window.jQuery("#trip-type").trigger("change");
+    view.document.querySelector("#airport-choice").value = "CLT";
+    view.window.jQuery("#airport-choice").trigger("change");
+    view.document.querySelector("#booking-pickup").value =
+      "123 Main Street, Denver NC 28037";
+    view.window.jQuery("#booking-destination").trigger("blur");
+    view.document.querySelector("#trip-type").value = "group";
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    check(view.document.querySelector("#booking-quote").style.display, "none", {
+      label: "a group trip does not keep a fare that failed",
+      source: "js/booking.js",
+      loaded: script,
+    });
+  });
+
+  it("checks a return date that is cleared and one chosen before the pickup", async () => {
+    const view = await renderBooking(script);
+    await fillValid(view, { trip: "airport", roundTrip: true });
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const returnDate = view.document.querySelector("#booking-return-date");
+    check(Boolean(returnDate._flatpickr), true, {
+      label: "the return date picker is ready",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    returnDate._flatpickr.clear();
+    view.document.querySelector("#booking-date").value = "";
+    returnDate._flatpickr.setDate("2026-12-20", true);
+    check(
+      view.document.querySelector("#booking-return-date").value !== "",
+      true,
+      {
+        label: "the return date can be chosen before the pickup date",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+  });
+
+  it("keeps the receipt when the calendar post fails without an error", async () => {
+    const view = await renderBooking(script);
+    const realFetch = view.window.fetch;
+    view.window.fetch = async (url, init) => {
+      if (
+        String(url).includes("script.google.com") &&
+        init &&
+        String(init.method).toUpperCase() === "POST"
+      ) {
+        throw undefined;
+      }
+      return realFetch(url, init);
+    };
+    await fillValid(view, { trip: "airport" });
+    await submitForm(view);
+    check(resultText(view.document).includes("Request received"), true, {
+      label: "the form receipt stays when the calendar sends nothing back",
+      actual: resultText(view.document),
+      source: "js/booking.js",
+      loaded: script,
+    });
+  });
+
+  it("opens a fresh form when the date picker is already gone", async () => {
+    const view = await renderBooking(script);
+    await fillValid(view, { trip: "airport" });
+    await submitForm(view);
+    await new Promise((resolve) => setTimeout(resolve, 2100));
+    const date = view.document.querySelector("#booking-date");
+    const time = view.document.querySelector("#booking-time");
+    delete date._flatpickr;
+    delete time._flatpickr;
+    view.document.querySelector("#new-booking-btn").click();
+    check(
+      view.document.querySelector("#bookingForm").style.display !== "none",
+      true,
+      {
+        label: "another booking opens even without the date picker",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+  }, 10000);
 
   it("names both a wheelchair and checked bags in the seat count", async () => {
     const view = await renderBooking(script);

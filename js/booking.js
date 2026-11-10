@@ -338,7 +338,11 @@
         var node = el && el.jquery ? el[0] : el;
         if (!node || !node.getBoundingClientRect || !window.scrollTo) return;
         var nav = document.querySelector('.navbar-fixed-top');
-        var topBar = (nav && nav.offsetHeight ? nav.offsetHeight : 0) + 12;
+        var navHeight = 0;
+        if (nav) {
+            if (nav.offsetHeight) navHeight = nav.offsetHeight;
+        }
+        var topBar = navHeight + 12;
         var rect = node.getBoundingClientRect();
         var viewH = window.innerHeight || document.documentElement.clientHeight;
         var top = window.pageYOffset + rect.top - topBar;
@@ -604,7 +608,7 @@
         }
 
         // Check booking conflicts
-        if (hasTimeConflict(dateStr, timeStr, bookings, durationMinutes || RIDE_DURATION_MINUTES)) {
+        if (hasTimeConflict(dateStr, timeStr, bookings, durationMinutes)) {
             return {
                 valid: false,
                 error: 'That time is booked. Please pick another time.'
@@ -636,7 +640,7 @@
     async function validateDateTime(dateStr, timeStr, durationMinutes) {
         var dur = durationMinutes || RIDE_DURATION_MINUTES;
         var all = await fetchBookings();
-        var parsed = (Array.isArray(all) ? all : []).map(function(raw) {
+        var parsed = all.map(function(raw) {
             var p = parseBookingDateTime(raw.datetime);
             var mins = Number(raw.durationMinutes);
             return {
@@ -719,10 +723,7 @@
 
 
     function updateQuoteDisplay() {
-        var $details = $('#quote-details');
-        if (!$details.length) return;
-        var html = 'Enter your home address and airport to see your price.';
-        $details.html(html);
+        $('#quote-details').html('Enter your home address and airport to see your price.');
     }
 
     function tripKind() {
@@ -893,8 +894,6 @@
      * Validates that return datetime is after pickup datetime
      */
     function validateReturnFlight(pickupDateTime, returnDateTime) {
-        if (!pickupDateTime || !returnDateTime) return true;
-
         const pickup = new Date(pickupDateTime);
         const returnDate = new Date(returnDateTime);
 
@@ -2027,7 +2026,8 @@
                 for(var i=0;i<j.routes.length;i++){
                     var meters=j.routes[i]&&j.routes[i].distance;
                     if(typeof meters!=='number'||!(meters>0))continue;
-                    if(best===null||meters<best)best=meters;
+                    if(best===null)best=meters;
+                    else if(meters<best)best=meters;
                 }
                 if(best===null)throw 'noroute';return best/1609.344;
             });
@@ -2036,7 +2036,7 @@
     }
     function show(html){
         var $d=$('#quote-details');
-        if($d.length)$d.html(html);
+        $d.html(html);
         if(html && String(html).indexOf('quote-total')!==-1 && globalThis.MidnightBooking){
             globalThis.MidnightBooking.placeInView(document.getElementById('booking-quote'),'nearest');
         }
@@ -2076,21 +2076,19 @@
         show('Figuring your price&hellip;');
         geocode(pick).then(function(g){
             if(my!==seq)return;
-            if(api){
-                var decision=api.evaluateTrip({
-                    pickup:pick,
-                    destination:dest,
-                    pickupGeo:{city:g.city||'',state:g.state||'',zip:g.zip||''}
-                });
-                if(decision.code==='outside')throw 'out';
-                if(!decision.ok)throw 'unclear';
-            }
+            var decision=api.evaluateTrip({
+                pickup:pick,
+                destination:dest,
+                pickupGeo:{city:g.city||'',state:g.state||'',zip:g.zip||''}
+            });
+            if(decision.code==='outside')throw 'out';
+            if(!decision.ok)throw 'unclear';
             if(!inArea(g))throw 'area';
             return driveMiles(g,airport);
         }).then(function(mi) {
             if(my!==seq||groupEventYes()){if(groupEventYes())hideGroupQuote();return;}
             // Donald (Nov 9, 2026): no online price over 50 driving miles; same limit as Ara.
-            if(!(typeof mi==='number'&&isFinite(mi)&&mi>0&&mi<=50))throw (typeof mi==='number'&&mi>50)?'far':'nomiles';
+            if(mi>50)throw 'far';
             var oneCents=Math.round(Math.max(q([59,56]),mi*q([63,35,59,62]))*100);
             var cashCents=nearestFive(rt?oneCents*2:oneCents);
             var cardCents=Math.round(cashCents*(1+q([61,35,61,62])));
@@ -2121,7 +2119,7 @@
         airline.setAttribute('data-ready','yes');
     }
     function chosenAirport(id){
-        var api=globalThis.MidnightServiceArea;if(!id||id==='other'||!api||!api.AIRPORTS)return null;
+        var api=globalThis.MidnightServiceArea;if(!api||!api.AIRPORTS)return null;
         for(var i=0;i<api.AIRPORTS.length;i++){
             if(api.AIRPORTS[i].id===id)return api.AIRPORTS[i];
         }
