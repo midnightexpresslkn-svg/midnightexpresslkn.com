@@ -2496,7 +2496,7 @@
         }).catch(function(){return fallback();});
     }
     globalThis.MidnightRides.roadMiles = function(stop) {
-        var pick = $.trim($('#booking-pickup').val()||'');
+        var pick = $.trim($('#booking-pickup').val());
         return geocode(pick).then(function(g) {
             return roadBetween(g, pick, stop);
         });
