@@ -150,7 +150,7 @@ test.describe("booking page", () => {
   test("refuses a Charlotte pickup and does not create a request", async ({
     page,
   }) => {
-    const posts = await installMocks(page);
+    const posts = await installMocks(page, { miles: 16 });
     await page.goto("/");
     await page.locator("#trip-type").selectOption("group");
     await page.locator("#booking-name").fill("TEST, DO NOT BOOK");
@@ -172,7 +172,7 @@ test.describe("booking page", () => {
     });
     await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
     const result = page.locator("#booking-success");
-    await expect(result).toHaveText("Sorry, we don't service that area.");
+    await expect(result).toContainText("out of our service area.");
     await expect(result).not.toContainText("980");
     await expect(result).not.toContainText(/call/i);
     expect(posts).toEqual([]);
@@ -868,6 +868,89 @@ test.describe("group description on a 375px phone", () => {
       "Request received",
     );
     expect(posts.length).toBeGreaterThan(0);
+  });
+});
+
+test.describe("Two Trees towns and group radius at 375px", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+  });
+
+  test("Two Trees at 9 miles from Denver is quoted", async ({ page }) => {
+    const posts = await installMocks(page, { miles: 9 });
+    await page.goto("/");
+    await page.locator("#trip-type").selectOption("local");
+    await page.locator("#local-kind").selectOption("bar");
+    await page.locator("#bar-choice").selectOption("two-trees");
+    await page
+      .locator("#booking-pickup")
+      .fill("123 Main Street, Denver NC 28037");
+    await expect(page.locator("#quote-details")).toContainText("Cash $27.00");
+    await expect(page.locator("#quote-details")).toContainText("Card $27.81");
+    expect(posts).toEqual([]);
+  });
+
+  test("Two Trees from Mooresville under 10 miles is blocked", async ({
+    page,
+  }) => {
+    const posts = await installMocks(page, { miles: 8 });
+    await page.goto("/");
+    await page.locator("#trip-type").selectOption("local");
+    await page.locator("#local-kind").selectOption("bar");
+    await page.locator("#bar-choice").selectOption("two-trees");
+    await page
+      .locator("#booking-pickup")
+      .fill("123 Main St, Mooresville NC 28115");
+    await expect(page.locator("#quote-details")).toHaveText(
+      "out of our service area.",
+    );
+    expect(posts).toEqual([]);
+  });
+
+  test("Two Trees from Cornelius is blocked", async ({ page }) => {
+    const posts = await installMocks(page, { miles: 5 });
+    await page.goto("/");
+    await page.locator("#trip-type").selectOption("local");
+    await page.locator("#local-kind").selectOption("bar");
+    await page.locator("#bar-choice").selectOption("two-trees");
+    await page
+      .locator("#booking-pickup")
+      .fill("10 Main St, Cornelius NC 28031");
+    await expect(page.locator("#quote-details")).toHaveText(
+      "out of our service area.",
+    );
+    expect(posts).toEqual([]);
+  });
+
+  test("a group 14.9 miles across the lake is quoted", async ({ page }) => {
+    const posts = await installMocks(page, { miles: 14.9 });
+    await page.goto("/");
+    await page.locator("#trip-type").selectOption("group");
+    await page.locator("#group-hours").fill("2");
+    await page
+      .locator("#booking-pickup")
+      .fill("100 N Main St, Mooresville NC 28115");
+    await page.locator("#booking-pickup").blur();
+    await expect(page.locator("#quote-details")).toContainText("Cash $250.00");
+    await expect(page.locator("#quote-details")).not.toContainText(
+      "out of our service area.",
+    );
+    expect(posts).toEqual([]);
+  });
+
+  test("a group 15.1 miles away is blocked", async ({ page }) => {
+    const posts = await installMocks(page, { miles: 15.1 });
+    await page.goto("/");
+    await page.locator("#trip-type").selectOption("group");
+    await page.locator("#group-hours").fill("2");
+    await page
+      .locator("#booking-pickup")
+      .fill("100 N Main St, Mooresville NC 28115");
+    await page.locator("#booking-pickup").blur();
+    await expect(page.locator("#quote-details")).toHaveText(
+      "out of our service area.",
+    );
+    expect(posts).toEqual([]);
   });
 });
 

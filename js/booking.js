@@ -61,7 +61,7 @@
     var GROUP_MAX_PASSENGERS = 6;
     var GROUP_VEHICLE = "2026 Toyota Sienna Platinum";
     var BARS = [
-        { id: "two-trees", name: "Two Trees", address: "5242 Slanting Bridge Rd, Denver, NC 28037", lat: 35.552237, lon: -80.994465, maxMiles: 10 },
+        { id: "two-trees", name: "Two Trees", address: "5242 Slanting Bridge Rd, Denver, NC 28037", lat: 35.552237, lon: -80.994465, maxMiles: 10, groupMaxMiles: 15, blockUnservedTowns: true },
         { id: "bourbon-bobber", name: "Bourbon & Bobbers", address: "3746 Mount Pleasant Road, Sherrills Ford, NC 28673", lat: 35.589826, lon: -81.019457 },
         { id: "joeys-sherrills-ford", name: "Joey's (Hwy 150)", address: "7600 East NC Hwy 150, Sherrills Ford, NC 28673", lat: 35.578943, lon: -80.998957 },
         { id: "joeys-denver", name: "Joey's (Natalie Commons)", address: "7913 Natalie Commons Dr, Denver, NC 28037", lat: 35.482131, lon: -80.996916 },
@@ -238,6 +238,9 @@
             pickupIsAirfield: pickupIsAirfield,
             destinationIsAirfield: destinationIsAirfield
         });
+        if (groupVenue && decision.code === 'outside') {
+            decision = { ok: true, code: 'ok', message: '', pickupGeo: pickupGeo, destinationGeo: destinationGeo };
+        }
         decision.pickupGeo = pickupGeo;
         decision.destinationGeo = destinationGeo;
         return decision;
@@ -1835,11 +1838,24 @@
                 $('#pickup-error').text(pickupMessage).show();
                 isValid = false;
             }
+            var groupAreaOk = true;
             if (formData.pickupAddress && formData.destinationAddress) {
                 const area = await decideServiceArea(formData.pickupAddress, formData.destinationAddress);
                 if (!area.ok) {
-                    errors.push(area.message);
+                    var townBlock = chosenBar && chosenBar.blockUnservedTowns && area.code === 'outside';
+                    errors.push(townBlock ? LOCAL_DENIAL : area.message);
                     markServiceAreaFields(formData.pickupAddress, formData.destinationAddress, area);
+                    groupAreaOk = false;
+                    isValid = false;
+                }
+            }
+            if (trip === 'group' && formData.pickupAddress && groupAreaOk) {
+                var trees = listedBar('two-trees');
+                var groupMiles = await globalThis.MidnightRides.roadMiles(trees);
+                if (groupMiles > trees.groupMaxMiles) {
+                    errors.push(LOCAL_DENIAL);
+                    $('#booking-pickup').closest('.form-group').addClass('has-error');
+                    $('#pickup-error').text(LOCAL_DENIAL).show();
                     isValid = false;
                 }
             }
@@ -2530,19 +2546,33 @@
         $('#booking-quote').show();
         var rides=globalThis.MidnightRides;
         var hours=$.trim($('#group-hours').val()||'');
-        if(!/^\d+(\.\d+)?$/.test(hours)||!(Number(hours)>0)){
-            show('<span class="quote-label">'+esc(rides.GROUP_VEHICLE)+'</span><br>Enter how many hours to see your price.');
-        } else {
-            var fare=rides.groupFare(hours);
-            var note=fare.minimum?'<br>2-hour minimum':'';
-            show('<span class="quote-label">'+esc(rides.GROUP_VEHICLE)+'</span><br>'+fare.billed+' hours'+note+'<br><strong class="quote-total">Cash '+money(fare.cashCents/100)+' · Card '+money(fare.cardCents/100)+'</strong><br><span class="quote-deposit">Deposit '+money(fare.depositCashCents/100)+' cash · '+money(fare.depositCardCents/100)+' card</span>');
+        function paintHours(){
+            if(!/^\d+(\.\d+)?$/.test(hours)||!(Number(hours)>0)){
+                show('<span class="quote-label">'+esc(rides.GROUP_VEHICLE)+'</span><br>Enter how many hours to see your price.');
+            } else {
+                var fare=rides.groupFare(hours);
+                var note=fare.minimum?'<br>2-hour minimum':'';
+                show('<span class="quote-label">'+esc(rides.GROUP_VEHICLE)+'</span><br>'+fare.billed+' hours'+note+'<br><strong class="quote-total">Cash '+money(fare.cashCents/100)+' · Card '+money(fare.cardCents/100)+'</strong><br><span class="quote-deposit">Deposit '+money(fare.depositCashCents/100)+' cash · '+money(fare.depositCardCents/100)+' card</span>');
+            }
         }
+        paintHours();
         var pick=$.trim($('#booking-pickup').val()||'');
-        if(!rides.mapKey()||pick.length<6){hideMap();return;}
+        if(pick.length<6||!/\d/.test(pick)){hideMap();return;}
+        var trees=rides.listedBar('two-trees');
+        show('Figuring your price&hellip;');
         geocode(pick).then(function(g){
             if(my!==seq||tripNow()!=='group')return;
-            paintPoint(g);
-        }).catch(function(){if(my===seq)hideMap();});
+            return roadBetween(g, pick, trees).then(function(mi){
+                if(mi>trees.groupMaxMiles){hideMap();show(esc(rides.LOCAL_DENIAL));return;}
+                paintHours();
+                if(rides.mapKey()) paintPoint(g);
+                else hideMap();
+            });
+        }).catch(function(){
+            if(my!==seq||tripNow()!=='group')return;
+            paintHours();
+            hideMap();
+        });
     }
     function barDenied(){
         var rides=globalThis.MidnightRides;
@@ -2574,7 +2604,7 @@
         var api=globalThis.MidnightServiceArea;
         var destText=mode==='bar'?stop.address:party;
         var prelim=api?api.evaluateTrip({pickup:pick,destination:destText,destinationIsAirfield:mode==='bar'}):{code:'unclear'};
-        if(prelim.code==='outside'){hideMap();show(esc(api.OUT_OF_AREA_MESSAGE));return;}
+        if(prelim.code==='outside'){hideMap();show(esc(mode==='bar'&&stop&&stop.blockUnservedTowns?rides.LOCAL_DENIAL:api.OUT_OF_AREA_MESSAGE));return;}
         show('Figuring your price&hellip;');
         geocode(pick).then(function(g){
             if(my!==seq||tripNow()!=='local')return;
@@ -2598,7 +2628,7 @@
             show('<span class="quote-label">'+label+'</span><br><strong class="quote-total">Cash '+money(fare.cashCents/100)+' · Card '+money(fare.cardCents/100)+'</strong>');
         }).catch(function(err){
             if(my!==seq||tripNow()!=='local')return;
-            if(err==='out'&&api){hideMap();show(esc(api.OUT_OF_AREA_MESSAGE));return;}
+            if(err==='out'&&api){hideMap();show(esc(mode==='bar'&&stop&&stop.blockUnservedTowns?rides.LOCAL_DENIAL:api.OUT_OF_AREA_MESSAGE));return;}
             if(err==='unclear'&&api){hideMap();show(esc(api.UNCLEAR_MESSAGE));return;}
             hideMap();
             show(fb);
