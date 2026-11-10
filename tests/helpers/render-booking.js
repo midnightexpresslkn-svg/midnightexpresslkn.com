@@ -157,6 +157,7 @@ export async function renderBooking(script, options = {}) {
     routeMode: options.routeMode ?? "ok",
     routesMiles: options.routesMiles ?? null,
     failPost: options.failPost ?? false,
+    bookingsMode: options.bookingsMode ?? "ok",
     requests: [],
   };
 
@@ -203,7 +204,11 @@ export async function renderBooking(script, options = {}) {
           });
       }
     } else if (host === "script.google.com") {
-      settings.success && settings.success(state.bookings);
+      if (state.bookingsMode === "error") {
+        settings.error && settings.error({}, "error", "mocked");
+      } else {
+        settings.success && settings.success(state.bookings);
+      }
     } else if (settings.error) {
       settings.error({}, "error", "blocked");
     }
@@ -286,6 +291,7 @@ export async function renderBooking(script, options = {}) {
   console.warn = quiet;
 
   window.history.replaceState(null, "", options.url || "/");
+  if (options.withoutForm) document.querySelector("#bookingForm")?.remove();
   run(serviceAreaSource, "js/service-area.js");
   run(scriptSource[script], script);
   await new Promise((resolve) => nativeSetTimeout(resolve, 0));

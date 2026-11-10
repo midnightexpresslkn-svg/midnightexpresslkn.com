@@ -1409,17 +1409,13 @@ describe("booking", () => {
             loaded: script,
           },
         );
-        check(
-          shown(view.document.querySelector("#booking-wheelchair")),
-          false,
-          {
-            label: "group form does not ask about a wheelchair",
-            source: SOURCE.group,
-            loaded: script,
-          },
-        );
-        check(shown(view.document.querySelector("#booking-carseat")), false, {
-          label: "group form does not ask about a car seat",
+        check(view.document.querySelector("#booking-wheelchair"), null, {
+          label: "group form has no wheelchair checkbox",
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(view.document.querySelector("#booking-carseat"), null, {
+          label: "group form has no car seat checkbox",
           source: SOURCE.group,
           loaded: script,
         });
@@ -1436,9 +1432,9 @@ describe("booking", () => {
           view.document
             .querySelector("#booking-notes")
             .getAttribute("placeholder"),
-          "Examples: how many pickup and drop-off locations, any extra stops, special requests",
+          "Anything we should know? For example, a wheelchair or a car seat.",
           {
-            label: "trip description hint lists stops and requests",
+            label: "trip description hint names a wheelchair and a car seat",
             source: SOURCE.group,
             loaded: script,
           },

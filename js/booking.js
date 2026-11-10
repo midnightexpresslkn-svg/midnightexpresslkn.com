@@ -826,6 +826,8 @@
      * same name, address, phone, and email inputs, then its own fields.
      * Group rides do not show a fare.
      */
+    var NOTES_PLACEHOLDER = 'Anything we should know? For example, a wheelchair or a car seat.';
+
     function updateTripLayout() {
         var kind = tripKind();
         var $submit = $('#bookingForm button[type="submit"]');
@@ -849,9 +851,7 @@
                 $('#dest-group').removeClass('col-md-12').addClass('col-md-6').show();
                 $('#booking-destination').attr('placeholder', 'Bank of America Stadium');
                 setFieldLabel('notes-label', 'Trip Description');
-                $('#booking-notes').attr('placeholder', 'Examples: how many pickup and drop-off locations, any extra stops, special requests');
-                $('#special-requirements-section').hide();
-                $('#booking-wheelchair, #booking-carseat').prop('checked', false);
+                $('#booking-notes').attr('placeholder', NOTES_PLACEHOLDER);
                 $('#booking-quote').hide();
                 $('#quote-details').empty();
             } else {
@@ -862,8 +862,7 @@
                 $('#dest-group').hide();
                 $('#booking-destination').attr('placeholder', 'CLT Airport');
                 setFieldLabel('notes-label', 'Special Notes');
-                $('#booking-notes').attr('placeholder', '');
-                $('#special-requirements-section').show();
+                $('#booking-notes').attr('placeholder', NOTES_PLACEHOLDER);
                 $('#booking-quote').show();
             }
         } else {
@@ -962,19 +961,12 @@
      * Owner rules (Donald):
      * - Base online max 5 with carry-on only
      * - Checked bags = -1 seat (max 4 with bags)
-     * - Wheelchair and/or car seat = -1 seat total (same as live: they share one seat)
      * - Over the resulting max: do not book online; call (980) 422-9125
      */
     function calculatePassengerCapacity(requirements) {
         let maxCapacity = 5; // Carry-on online max; more than this must call
 
-        // Wheelchair and/or car seat share one seat reduction (live behavior)
-        const hasMobilityAids = requirements.wheelchair || requirements.carseat;
-        if (hasMobilityAids) {
-            maxCapacity -= 1;
-        }
-
-        // Checked bags take a full seat → max 4 with bags (before mobility)
+        // Checked bags take a full seat → max 4 with bags
         if (requirements.checkingBags) {
             maxCapacity -= 1;
         }
@@ -986,13 +978,9 @@
      * Update passenger capacity display and validation
      */
     function updatePassengerCapacity() {
-        const wheelchair = $('#booking-wheelchair').is(':checked');
-        const carseat = $('#booking-carseat').is(':checked');
         const checkingBags = checkingBagsChoice() === 'Yes';
 
         const requirements = {
-            wheelchair: wheelchair,
-            carseat: carseat,
             checkingBags: checkingBags
         };
 
@@ -1012,17 +1000,8 @@
         }
 
         // Update capacity message with detailed explanation
-        if (wheelchair || carseat || checkingBags) {
-            let reductionReasons = [];
-            if (wheelchair || carseat) {
-                reductionReasons.push('mobility aid');
-            }
-            if (checkingBags) {
-                reductionReasons.push('checked bags');
-            }
-
-            const reasonsText = reductionReasons.join(', ');
-            $capacityMsg.text('Maximum passengers: ' + maxCapacity + ' (reduced for ' + reasonsText + ')').show();
+        if (checkingBags) {
+            $capacityMsg.text('Maximum passengers: ' + maxCapacity + ' (reduced for checked bags)').show();
         } else {
             $capacityMsg.text('');
         }
@@ -1076,9 +1055,7 @@
             specialNotes: bookingData.specialNotes,
             airportTrip: bookingData.airportTrip,
             flightNumber: '', // No flight number for outbound (dropping off at airport)
-            checkingBags: bookingData.checkingBags,
-            specialRequirements: bookingData.specialRequirements,
-            otherRequirementText: bookingData.otherRequirementText
+            checkingBags: bookingData.checkingBags
         };
         submissions.push(outboundSubmission);
         console.log('Created outbound submission');
@@ -1098,9 +1075,7 @@
                 specialNotes: bookingData.specialNotes,
                 airportTrip: 'Yes', // Always "Yes" for return trips
                 flightNumber: bookingData.flightNumber, // Return flight number
-                checkingBags: bookingData.checkingBags,
-                specialRequirements: bookingData.specialRequirements,
-                otherRequirementText: bookingData.otherRequirementText
+                checkingBags: bookingData.checkingBags
             };
             submissions.push(returnSubmission);
             console.log('Created return submission');
@@ -1149,17 +1124,6 @@
      * @param {Object} submissionData - Booking data to submit
      * @returns {Promise} - Submission promise
      */
-    function specialRequirementsParagraph(submissionData) {
-        var parts = [];
-        var requirements = submissionData.specialRequirements || [];
-        for (var i = 0; i < requirements.length; i++) {
-            if (!requirements[i]) continue;
-            parts.push(requirements[i]);
-        }
-        if (submissionData.otherRequirementText) parts.push(submissionData.otherRequirementText);
-        return parts.join(', ');
-    }
-
     function buildGoogleFormData(submissionData) {
         var googleFormData = new FormData();
         var formattedPickupDate = formatDateForGoogleForms(submissionData.pickupDate);
@@ -1175,7 +1139,7 @@
         googleFormData.append(FORM_ENTRY.airportTrip, submissionData.airportTrip);
         googleFormData.append(FORM_ENTRY.flight, submissionData.flightNumber || '');
         googleFormData.append(FORM_ENTRY.checkingBags, submissionData.checkingBags || 'No');
-        googleFormData.append(FORM_ENTRY.specialRequirements, specialRequirementsParagraph(submissionData));
+        googleFormData.append(FORM_ENTRY.specialRequirements, '');
         return googleFormData;
     }
 
@@ -1543,11 +1507,9 @@
         });
 
         // Update passenger capacity when special requirements change
-        $('#booking-wheelchair, #booking-carseat, input[name="checking-bags"]').on('change', function() {
-            if (this.name === 'checking-bags') {
-                $('#checking-bags-error').text('').hide();
-                $('#checking-bags-section .form-group').first().removeClass('has-error');
-            }
+        $('input[name="checking-bags"]').on('change', function() {
+            $('#checking-bags-error').text('').hide();
+            $('#checking-bags-section .form-group').first().removeClass('has-error');
             updatePassengerCapacity();
         });
         $('#booking-bag-count').on('input', function() {
@@ -1669,20 +1631,6 @@
             $('#booking-success').html('').hide();
 
             // Collect form data
-            // Build special requirements from checked options
-            const specialRequirements = [];
-            let otherRequirementText = '';
-
-            if ($('#booking-wheelchair').is(':checked')) {
-                specialRequirements.push('Wheelchair');
-            }
-            if ($('#booking-carseat').is(':checked')) {
-                specialRequirements.push('Car Seat');
-            }
-            if ($('#booking-other-requirement').is(':checked')) {
-                otherRequirementText = $('#booking-other-text').val().trim();
-            }
-
             // Get datetime from hidden fields (populated by Flatpickr)
             const pickupDate = $('#booking-date').val();
             const pickupTime = $('#booking-time').val();
@@ -1717,8 +1665,6 @@
                 roundTrip: asksTripDetails && $('#booking-round-trip').is(':checked') ? 'Yes' : 'No',
                 returnDate: asksTripDetails ? returnDate : '',
                 returnTime: asksTripDetails ? returnTime : '',
-                specialRequirements: trip === 'airport' ? specialRequirements : [],
-                otherRequirementText: trip === 'airport' ? otherRequirementText : '',
                 groupEvent: trip === 'group' ? 'Yes' : 'No',
                 durationMinutes: RIDE_DURATION_MINUTES,
                 contactAddress: contactAddress
@@ -1840,13 +1786,9 @@
             }
 
             // Validate passenger capacity
-            const wheelchair = $('#booking-wheelchair').is(':checked');
-            const carseat = $('#booking-carseat').is(':checked');
             const checkingBags = checkingBagsChoice() === 'Yes';
 
             const requirements = {
-                wheelchair: wheelchair,
-                carseat: carseat,
                 checkingBags: checkingBags
             };
 

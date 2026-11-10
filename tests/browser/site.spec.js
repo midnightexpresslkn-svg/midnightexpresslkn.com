@@ -127,8 +127,12 @@ test.describe("booking page", () => {
     await expect(page.locator("#checking-bags-section")).toBeHidden();
     await expect(page.locator("#booking-flight")).toBeHidden();
     await expect(page.locator("#booking-round-trip")).toBeHidden();
-    await expect(page.locator("#booking-wheelchair")).toBeHidden();
-    await expect(page.locator("#booking-carseat")).toBeHidden();
+    await expect(page.locator("#booking-wheelchair")).toHaveCount(0);
+    await expect(page.locator("#booking-carseat")).toHaveCount(0);
+    await expect(page.locator("#booking-notes")).toHaveAttribute(
+      "placeholder",
+      "Anything we should know? For example, a wheelchair or a car seat.",
+    );
     await expect(page.locator("#notes-label")).toHaveText("Trip Description");
     await expect(page.locator("#booking-destination")).toHaveAttribute(
       "placeholder",

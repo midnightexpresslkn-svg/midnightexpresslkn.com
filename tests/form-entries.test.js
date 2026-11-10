@@ -1,11 +1,13 @@
 import fs from "node:fs";
 import { afterEach, describe, it } from "vitest";
 import { check } from "./helpers/failure.js";
+import { hostnameOf } from "./helpers/hostname.js";
 import {
   drainTimers,
   fillValid,
   formPosts,
   renderBooking,
+  resultText,
   sameEndpoint,
   submitForm,
 } from "./helpers/render-booking.js";
@@ -112,22 +114,8 @@ function row(values) {
   ];
 }
 
-function checkBoxes(document, { wheelchair = false, carSeat = false } = {}) {
-  document.querySelector("#booking-wheelchair").checked = wheelchair;
-  document.querySelector("#booking-carseat").checked = carSeat;
-}
-
-function latentOther(document, text) {
-  const box = document.createElement("input");
-  box.type = "checkbox";
-  box.id = "booking-other-requirement";
-  box.checked = true;
-  const field = document.createElement("input");
-  field.type = "text";
-  field.id = "booking-other-text";
-  field.value = text;
-  document.body.append(box, field);
-}
+const NOTES_HINT =
+  "Anything we should know? For example, a wheelchair or a car seat.";
 
 describe("form entries", () => {
   it("keeps the published form and calendar addresses in both scripts", () => {
@@ -162,7 +150,54 @@ describe("form entries", () => {
   });
 
   describe.each(scripts)("%s", (script) => {
-    it("sends every rebuilt field, including optional text and both requirement labels", async () => {
+    it("does not offer wheelchair or car seat fields, and the notes hint names them", async () => {
+      const view = await renderBooking(script);
+      check(view.document.querySelector("#booking-wheelchair"), null, {
+        label: "the wheelchair checkbox is gone",
+        source: "js/booking.js",
+        loaded: script,
+      });
+      check(view.document.querySelector("#booking-carseat"), null, {
+        label: "the car seat checkbox is gone",
+        source: "js/booking.js",
+        loaded: script,
+      });
+      check(
+        view.document.querySelector("#special-requirements-section"),
+        null,
+        {
+          label: "the special-requirements section is gone",
+          source: "js/booking.js",
+          loaded: script,
+        },
+      );
+      check(
+        view.document
+          .querySelector("#booking-notes")
+          .getAttribute("placeholder"),
+        NOTES_HINT,
+        {
+          label:
+            "the notes box tells riders to mention a wheelchair or car seat",
+          source: "js/booking.js",
+          loaded: script,
+        },
+      );
+      await fillValid(view, { trip: "group", notes: "" });
+      check(
+        view.document
+          .querySelector("#booking-notes")
+          .getAttribute("placeholder"),
+        NOTES_HINT,
+        {
+          label: "the group description keeps the same hint",
+          source: "js/booking.js",
+          loaded: script,
+        },
+      );
+    });
+
+    it("sends every rebuilt field, including a typed note, and leaves special requirements blank", async () => {
       const view = await renderBooking(script, { miles: 12 });
       await fillValid(view, {
         trip: "airport",
@@ -172,7 +207,6 @@ describe("form entries", () => {
         bags: true,
         bagCount: "2",
       });
-      checkBoxes(view.document, { wheelchair: true, carSeat: true });
       await submitForm(view);
       const forms = formRows(view);
       check(forms.length, 1, {
@@ -219,7 +253,7 @@ describe("form entries", () => {
           airportTrip: "Yes",
           flight: "",
           checkingBags: "Yes",
-          specialRequirements: "Wheelchair, Car Seat",
+          specialRequirements: "",
         }),
         {
           label: "exact form fields for a filled airport ride",
@@ -334,7 +368,7 @@ describe("form entries", () => {
       });
     });
 
-    it("joins one checked requirement label and keeps a typed flight off the outbound form row", async () => {
+    it("keeps a typed flight off the outbound form row", async () => {
       const view = await renderBooking(script, { miles: 12 });
       await fillValid(view, {
         trip: "airport",
@@ -342,14 +376,13 @@ describe("form entries", () => {
         bags: false,
         bagCount: "0",
       });
-      checkBoxes(view.document, { carSeat: true });
       await submitForm(view);
       const entries = formRows(view)[0].entries;
       check(
         entries.find((pair) => pair[0] === ENTRY.specialRequirements)[1],
-        "Car Seat",
+        "",
         {
-          label: "car seat label is the paragraph",
+          label: "the special-requirements sheet column stays blank",
           actual: entries,
           source: "js/booking.js",
           loaded: script,
@@ -369,11 +402,15 @@ describe("form entries", () => {
       });
     });
 
-    it("puts latent free text in the same paragraph, including commas", async () => {
+    it("sends a note that mentions a wheelchair and a car seat in the notes column", async () => {
       const view = await renderBooking(script, { miles: 12 });
-      await fillValid(view, { trip: "airport", bags: false, bagCount: "0" });
-      checkBoxes(view.document, { wheelchair: true });
-      latentOther(view.document, "rear seat, extra time");
+      const note = "rear seat, extra time, wheelchair and car seat";
+      await fillValid(view, {
+        trip: "airport",
+        notes: note,
+        bags: false,
+        bagCount: "0",
+      });
       await submitForm(view);
       const entries = formRows(view)[0].entries;
       check(
@@ -386,16 +423,29 @@ describe("form entries", () => {
           loaded: script,
         },
       );
+      check(entries.find((pair) => pair[0] === ENTRY.notes)[1], note, {
+        label:
+          "the typed note, including a wheelchair and a car seat, is the notes answer",
+        actual: entries,
+        source: "js/booking.js",
+        loaded: script,
+      });
       check(
         entries.find((pair) => pair[0] === ENTRY.specialRequirements)[1],
-        "Wheelchair, rear seat, extra time",
+        "",
         {
-          label: "free text stays in the special-requirements paragraph",
+          label: "that note does not fill the special-requirements column",
           actual: entries,
           source: "js/booking.js",
           loaded: script,
         },
       );
+      check(calendarBody(view).body.specialNotes, note, {
+        label: "the same note is the calendar description",
+        actual: calendarBody(view).body.specialNotes,
+        source: "js/booking.js",
+        loaded: script,
+      });
       check(JSON.stringify(entries).includes("other_option"), false, {
         label: "free text is not sent as a Google Forms Other answer",
         actual: entries,
@@ -415,7 +465,6 @@ describe("form entries", () => {
         returnDate: "2026-12-16",
         returnTime: "15:00:00",
       });
-      checkBoxes(view.document, { wheelchair: true });
       await submitForm(view);
       const forms = formRows(view);
       check(forms.length, 2, {
@@ -438,7 +487,7 @@ describe("form entries", () => {
           airportTrip: "Yes",
           flight: "",
           checkingBags: "Yes",
-          specialRequirements: "Wheelchair",
+          specialRequirements: "",
         }),
         {
           label: "outbound form row",
@@ -461,7 +510,7 @@ describe("form entries", () => {
           airportTrip: "Yes",
           flight: "DL99",
           checkingBags: "Yes",
-          specialRequirements: "Wheelchair",
+          specialRequirements: "",
         }),
         {
           label: "return form row swaps the ends and keeps the flight",
@@ -511,7 +560,6 @@ describe("form entries", () => {
         destination: "200 Oak St, Sherrills Ford NC",
         time: "10:00:00",
       });
-      checkBoxes(view.document, { wheelchair: true, carSeat: true });
       await submitForm(view);
       const forms = formRows(view);
       check(
@@ -531,7 +579,8 @@ describe("form entries", () => {
           specialRequirements: "",
         }),
         {
-          label: "group form row does not send wheelchair or car seat",
+          label:
+            "group notes are sent and the special-requirements column stays blank",
           actual: forms[0].entries,
           source: "js/booking.js",
           loaded: script,
@@ -567,6 +616,257 @@ describe("form entries", () => {
           loaded: script,
         },
       );
+    });
+
+    async function failFormPost(view, outcome) {
+      const win = view.window;
+      const previousFetch = win.fetch;
+      const previousSetTimeout = win.setTimeout;
+      win.setTimeout = (fn, ms, ...args) =>
+        previousSetTimeout(fn, ms === 20000 ? 0 : ms, ...args);
+      win.fetch = async (url, init = {}) => {
+        const host = hostnameOf(String(url));
+        const method = (init.method || "GET").toUpperCase();
+        if (host === "docs.google.com" && method === "POST") {
+          if (outcome === "timeout") {
+            return new Promise((resolve, reject) => {
+              const fail = () => {
+                const err = new Error("The operation was aborted");
+                err.name = "AbortError";
+                reject(err);
+              };
+              if (init.signal?.aborted) fail();
+              else init.signal?.addEventListener("abort", fail);
+            });
+          }
+          if (outcome === "http") {
+            return { ok: false, status: 500, type: "basic" };
+          }
+          if (outcome === "status") {
+            return { ok: false, status: 204, type: "basic" };
+          }
+          if (outcome === "missing") return null;
+          if (outcome === "abort") {
+            const err = new Error("The operation was aborted");
+            err.name = "AbortError";
+            throw err;
+          }
+          if (outcome === "empty") return Promise.reject();
+          throw new Error("mocked network failure");
+        }
+        return previousFetch(url, init);
+      };
+      try {
+        await fillValid(view, {
+          trip: "airport",
+          notes: "QA note",
+          bags: false,
+          bagCount: "0",
+          roundTrip: outcome === "round",
+          returnDate: "2026-12-16",
+          returnTime: "15:00:00",
+        });
+        await submitForm(view);
+      } finally {
+        win.fetch = previousFetch;
+        win.setTimeout = previousSetTimeout;
+      }
+    }
+
+    function showsSendFailure(view, detail) {
+      const text = resultText(view.document);
+      check(text.includes("We could not send your booking request"), true, {
+        label: "a failed form post tells the rider to call",
+        actual: text,
+        source: "js/booking.js",
+        loaded: view.script,
+      });
+      check(text.includes("Please call (980) 422-9125 to book."), true, {
+        label: "a failed form post gives the phone number",
+        actual: text,
+        source: "js/booking.js",
+        loaded: view.script,
+      });
+      check(text.includes(detail), true, {
+        label: "the page shows the form failure",
+        actual: text,
+        source: "js/booking.js",
+        loaded: view.script,
+      });
+      check(text.includes("Request received"), false, {
+        label: "a failed form post does not say the request was received",
+        actual: text,
+        source: "js/booking.js",
+        loaded: view.script,
+      });
+      check(calendarPosts(view).length, 0, {
+        label: "a failed form post does not mirror to the calendar",
+        actual: calendarPosts(view).map((post) => post.url),
+        source: "js/booking.js",
+        loaded: view.script,
+      });
+      check(
+        view.document.querySelector("#bookingForm").style.display === "none",
+        false,
+        {
+          label: "the form stays on the page after a failed post",
+          source: "js/booking.js",
+          loaded: view.script,
+        },
+      );
+    }
+
+    it("shows a timeout when the form post is aborted by its 20 second timer", async () => {
+      const view = await renderBooking(script, { miles: 12 });
+      await failFormPost(view, "timeout");
+      showsSendFailure(view, "Submission timed out");
+    });
+
+    it("shows the HTTP status when Google answers with a readable error", async () => {
+      const view = await renderBooking(script, { miles: 12 });
+      await failFormPost(view, "http");
+      showsSendFailure(view, "Submission failed (HTTP 500)");
+    });
+
+    it("shows a network failure from the form post itself", async () => {
+      const view = await renderBooking(script, { miles: 12 });
+      await failFormPost(view, "network");
+      showsSendFailure(view, "mocked network failure");
+    });
+
+    it("says the form post was cancelled when it is aborted before the timer", async () => {
+      const view = await renderBooking(script, { miles: 12 });
+      await failFormPost(view, "abort");
+      showsSendFailure(view, "Submission was cancelled");
+    });
+
+    it("says the form post failed when the response has no status", async () => {
+      const view = await renderBooking(script, { miles: 12 });
+      await failFormPost(view, "missing");
+      showsSendFailure(view, "Submission failed (HTTP null)");
+    });
+
+    it("names a network error when the form post rejects with nothing", async () => {
+      const view = await renderBooking(script, { miles: 12 });
+      await failFormPost(view, "empty");
+      showsSendFailure(view, "Network error submitting booking");
+    });
+
+    it("accepts a readable success status without calling it booked", async () => {
+      const view = await renderBooking(script, { miles: 12 });
+      await failFormPost(view, "status");
+      const text = resultText(view.document);
+      check(text.includes("Request received"), true, {
+        label: "a readable success status still means the request was sent",
+        actual: text,
+        source: "js/booking.js",
+        loaded: script,
+      });
+      check(text.includes("not confirmed until you receive a call"), true, {
+        label: "a readable success status is still not a confirmed booking",
+        actual: text,
+        source: "js/booking.js",
+        loaded: script,
+      });
+      check(calendarPosts(view).length, 1, {
+        label: "a readable success status still mirrors to the calendar",
+        actual: calendarPosts(view).length,
+        source: "js/booking.js",
+        loaded: script,
+      });
+    });
+
+    it("clears both pending rides when a round trip form post fails", async () => {
+      const view = await renderBooking(script, { miles: 12 });
+      await failFormPost(view, "round");
+      showsSendFailure(view, "mocked network failure");
+      view.document.querySelector("#booking-success").textContent = "";
+      await fillValid(view, {
+        trip: "airport",
+        notes: "QA note",
+        bags: false,
+        bagCount: "0",
+      });
+      await submitForm(view);
+      check(resultText(view.document).includes("Request received"), true, {
+        label: "the next ride can be sent after the failed round trip",
+        actual: resultText(view.document),
+        source: "js/booking.js",
+        loaded: script,
+      });
+    });
+
+    it("puts a typed note in the sheet notes column and the calendar description", async () => {
+      const view = await renderBooking(script, { miles: 12 });
+      await fillValid(view, {
+        trip: "airport",
+        notes: "QA note",
+        bags: true,
+        bagCount: "1",
+      });
+      await submitForm(view);
+      const form = Object.fromEntries(formRows(view)[0].entries);
+      const calendar = calendarBody(view).body;
+      check(form[ENTRY.notes], "QA note", {
+        label: "form notes stay the typed note",
+        actual: form[ENTRY.notes],
+        source: "js/booking.js",
+        loaded: script,
+      });
+      check(form[ENTRY.specialRequirements], "", {
+        label: "the special-requirements column stays blank",
+        actual: form[ENTRY.specialRequirements],
+        source: "js/booking.js",
+        loaded: script,
+      });
+      check(
+        Object.keys(calendar).sort(),
+        [
+          "airportTrip",
+          "bagCount",
+          "checkingBags",
+          "contactAddress",
+          "destinationAddress",
+          "durationMinutes",
+          "email",
+          "flightNumber",
+          "groupEvent",
+          "name",
+          "passengers",
+          "phone",
+          "pickupAddress",
+          "pickupDate",
+          "pickupTime",
+          "returnDate",
+          "returnTime",
+          "roundTrip",
+          "specialNotes",
+        ].sort(),
+        {
+          label: "calendar JSON keeps the fields the script already reads",
+          actual: Object.keys(calendar).sort(),
+          source: "js/booking.js",
+          loaded: script,
+        },
+      );
+      check(calendar.checkingBags, "Yes (1 bag)", {
+        label: "calendar bag line stays the existing bag sentence",
+        actual: calendar.checkingBags,
+        source: "js/booking.js",
+        loaded: script,
+      });
+      check(calendar.roundTrip, "No", {
+        label: "calendar round trip stays No",
+        actual: calendar.roundTrip,
+        source: "js/booking.js",
+        loaded: script,
+      });
+      check(calendar.specialNotes, "QA note", {
+        label: "calendar description is the typed note",
+        actual: calendar.specialNotes,
+        source: "js/booking.js",
+        loaded: script,
+      });
     });
   });
 });
