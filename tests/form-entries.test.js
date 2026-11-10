@@ -6,6 +6,7 @@ import {
   fillValid,
   formPosts,
   renderBooking,
+  sameEndpoint,
   submitForm,
 } from "./helpers/render-booking.js";
 
@@ -61,10 +62,21 @@ function formRows(view) {
 }
 
 function calendarPosts(view) {
+  const target = new URL(CALENDAR_URL);
   return view.state.requests.filter(
     (request) =>
-      request.method === "POST" && request.url.includes("script.google.com"),
+      request.method === "POST" &&
+      sameEndpoint(request.url, target.origin, target.pathname),
   );
+}
+
+function sourceHasEndpoint(source, expected) {
+  const target = new URL(expected);
+  for (const match of source.matchAll(/'([^'\n]+)'|"([^"\n]+)"/g)) {
+    const token = match[1] || match[2];
+    if (sameEndpoint(token, target.origin, target.pathname)) return true;
+  }
+  return false;
 }
 
 function calendarBody(view) {
@@ -121,11 +133,11 @@ describe("form entries", () => {
   it("keeps the published form and calendar addresses in both scripts", () => {
     for (const file of scripts) {
       const source = fs.readFileSync(file, "utf8");
-      check(source.includes(FORM_URL), true, {
+      check(sourceHasEndpoint(source, FORM_URL), true, {
         label: `${file} posts to the same form`,
         source: file,
       });
-      check(source.includes(CALENDAR_URL), true, {
+      check(sourceHasEndpoint(source, CALENDAR_URL), true, {
         label: `${file} posts to the same calendar`,
         source: file,
       });

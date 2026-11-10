@@ -121,9 +121,22 @@ export function bookingPosts(state) {
   });
 }
 
+export function sameEndpoint(value, origin, pathname) {
+  try {
+    const url = new URL(String(value));
+    return url.origin === origin && url.pathname === pathname;
+  } catch {
+    return false;
+  }
+}
+
+const FORM_ORIGIN = "https://docs.google.com";
+const FORM_PATH =
+  "/forms/d/e/1FAIpQLSelLJ8Yqj8jHXreIB3DW8MvsBUtHea8DB7UTjyaYkM3Q2RbTA/formResponse";
+
 export function formPosts(state) {
   return bookingPosts(state).filter((request) =>
-    request.url.includes("docs.google.com"),
+    sameEndpoint(request.url, FORM_ORIGIN, FORM_PATH),
   );
 }
 
