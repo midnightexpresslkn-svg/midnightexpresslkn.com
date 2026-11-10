@@ -173,11 +173,18 @@ describe.each(scripts)("live edges %s", (script) => {
     view.document.querySelector("#trip-type").value = "group";
     view.window.jQuery("#trip-type").trigger("change");
     await new Promise((resolve) => setTimeout(resolve, 80));
-    check(view.document.querySelector("#booking-quote").style.display, "none", {
-      label: "a group trip does not keep the airport fare",
-      source: "js/booking.js",
-      loaded: script,
-    });
+    check(
+      view.document
+        .querySelector("#quote-details")
+        .textContent.includes("Cash"),
+      false,
+      {
+        label: "a group trip does not keep the airport fare",
+        actual: view.document.querySelector("#quote-details").textContent,
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
   });
 
   it("scrolls a quote into view and skips a scroll when the page cannot move", async () => {
@@ -602,11 +609,18 @@ describe.each(scripts)("live edges %s", (script) => {
     view.window.jQuery(destination).trigger("blur");
     view.document.querySelector("#trip-type").value = "group";
     await new Promise((resolve) => setTimeout(resolve, 30));
-    check(view.document.querySelector("#booking-quote").style.display, "none", {
-      label: "a group trip does not keep a fare that was still being figured",
-      source: "js/booking.js",
-      loaded: script,
-    });
+    check(
+      view.document
+        .querySelector("#quote-details")
+        .textContent.includes("Charlotte"),
+      false,
+      {
+        label: "a group trip does not keep a fare that was still being figured",
+        actual: view.document.querySelector("#quote-details").textContent,
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
   });
 
   it("refuses a street whose map point is in Charlotte", async () => {
@@ -664,11 +678,18 @@ describe.each(scripts)("live edges %s", (script) => {
     view.window.jQuery("#booking-destination").trigger("blur");
     view.document.querySelector("#trip-type").value = "group";
     await new Promise((resolve) => setTimeout(resolve, 40));
-    check(view.document.querySelector("#booking-quote").style.display, "none", {
-      label: "a group trip does not keep a fare that failed",
-      source: "js/booking.js",
-      loaded: script,
-    });
+    check(
+      view.document
+        .querySelector("#quote-details")
+        .textContent.includes("We'll confirm"),
+      false,
+      {
+        label: "a group trip does not keep a fare that failed",
+        actual: view.document.querySelector("#quote-details").textContent,
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
   });
 
   it("checks a return date that is cleared and one chosen before the pickup", async () => {

@@ -635,8 +635,8 @@ describe("booking", () => {
           source: SOURCE.group,
           loaded: script,
         });
-        check(shown(destination), true, {
-          label: "group form keeps the typed drop-off",
+        check(shown(destination), false, {
+          label: "group form no longer asks for a typed drop-off",
           source: SOURCE.group,
           loaded: script,
         });
@@ -651,6 +651,15 @@ describe("booking", () => {
         );
         check(
           view.document.querySelector("#trip-type").options[2].textContent,
+          "Local Bars and Parties",
+          {
+            label: "local bars sit under Airport",
+            source: SOURCE.group,
+            loaded: script,
+          },
+        );
+        check(
+          view.document.querySelector("#trip-type").options[3].textContent,
           "Group",
           {
             label: "trip type still says Group",
@@ -1332,25 +1341,27 @@ describe("booking", () => {
         view.document.querySelector("#trip-type").value = "group";
         window.jQuery("#trip-type").trigger("change");
         const quote = view.document.querySelector("#booking-quote");
+        check(shown(quote), true, {
+          label: "group form shows the hourly quote",
+          actual: quote.textContent,
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(quote.textContent.includes("Cash $65"), false, {
+          label: "group form does not keep the airport fare",
+          actual: quote.textContent,
+          source: SOURCE.group,
+          loaded: script,
+        });
         check(
-          quote.hidden ||
-            quote.style.display === "none" ||
-            quote.offsetParent === null,
-          true,
+          view.document.querySelector("#group-vehicle").textContent,
+          "2026 Toyota Sienna Platinum minivan, $125 per hour.",
           {
-            label: "group event hides the quote",
-            actual: quote.style.display,
+            label: "group form names the Sienna and the hourly rate",
             source: SOURCE.group,
             loaded: script,
           },
         );
-        const formText = visibleFormText(view.document);
-        check(/\$\d|price|pricing|fare|\bcost\b/i.test(formText), false, {
-          label: "group form shows no price or cost wording",
-          actual: formText,
-          source: SOURCE.group,
-          loaded: script,
-        });
         check(view.document.querySelector("#group-pricing-note"), null, {
           label: "call for pricing line is gone",
           source: SOURCE.group,
@@ -1378,22 +1389,18 @@ describe("booking", () => {
         });
         check(
           shown(view.document.querySelector("#booking-destination")),
-          true,
+          false,
           {
-            label: "group form asks for a drop-off",
+            label: "group form does not ask for a separate drop-off",
             source: SOURCE.group,
             loaded: script,
           },
         );
-        check(
-          view.document.querySelector("#destination-label")?.textContent.trim(),
-          "Drop-off / venue *",
-          {
-            label: "drop-off is labeled as the venue",
-            source: SOURCE.group,
-            loaded: script,
-          },
-        );
+        check(shown(view.document.querySelector("#group-hours")), true, {
+          label: "group form asks for hours",
+          source: SOURCE.group,
+          loaded: script,
+        });
         check(shown(view.document.querySelector("#booking-date")), true, {
           label: "group form asks for a date",
           source: SOURCE.group,
@@ -1466,17 +1473,11 @@ describe("booking", () => {
             loaded: script,
           },
         );
-        check(
-          view.document
-            .querySelector("#booking-destination")
-            .getAttribute("placeholder"),
-          "Bank of America Stadium",
-          {
-            label: "group drop-off example is Bank of America Stadium",
-            source: SOURCE.group,
-            loaded: script,
-          },
-        );
+        check(shown(view.document.querySelector("#rule-age")), true, {
+          label: "group form asks the rider to confirm they are 21",
+          source: SOURCE.group,
+          loaded: script,
+        });
         check(shown(view.document.querySelector("#booking-notes")), true, {
           label: "group form asks for a trip description",
           source: SOURCE.group,
@@ -1511,15 +1512,11 @@ describe("booking", () => {
           source: SOURCE.group,
           loaded: script,
         });
-        check(
-          shown(view.document.querySelector("#booking-destination")),
-          true,
-          {
-            label: "preselected group form is the booking form",
-            source: SOURCE.group,
-            loaded: script,
-          },
-        );
+        check(shown(view.document.querySelector("#group-hours")), true, {
+          label: "preselected group form is the booking form",
+          source: SOURCE.group,
+          loaded: script,
+        });
       });
 
       it("opens the airport form from the home page link without asking again", async () => {
@@ -1573,17 +1570,11 @@ describe("booking", () => {
           pickup: "7740 Marlette Ln, Sherrills Ford NC",
           destination: "Bank of America stadium",
         });
-        check(
-          view.document
-            .querySelector("#booking-destination")
-            .getAttribute("placeholder"),
-          "Bank of America Stadium",
-          {
-            label: "drop-off hint stays Bank of America Stadium",
-            source: SOURCE.group,
-            loaded: script,
-          },
-        );
+        check(shown(view.document.querySelector("#group-hours")), true, {
+          label: "a group request asks for hours instead of a venue box",
+          source: SOURCE.group,
+          loaded: script,
+        });
         await submitForm(view);
         check(resultText(view.document).includes("Request received"), true, {
           label: "a venue name without a town is accepted",
@@ -1625,12 +1616,16 @@ describe("booking", () => {
           source: SOURCE.group,
           loaded: script,
         });
-        check(payload.destinationAddress, "Bank of America stadium", {
-          label: "calendar keeps the stadium drop-off",
-          actual: payload && payload.destinationAddress,
-          source: SOURCE.group,
-          loaded: script,
-        });
+        check(
+          payload.destinationAddress,
+          "Hourly charter, 2026 Toyota Sienna Platinum",
+          {
+            label: "calendar records the hourly charter",
+            actual: payload && payload.destinationAddress,
+            source: SOURCE.group,
+            loaded: script,
+          },
+        );
       });
 
       it("sends a group booking to the calendar as an unconfirmed group request", async () => {
@@ -1679,9 +1674,25 @@ describe("booking", () => {
           source: SOURCE.group,
           loaded: script,
         });
-        check(payload.destinationAddress, "200 Oak St, Sherrills Ford NC", {
-          label: "group drop-off is the venue",
-          actual: payload.destinationAddress,
+        check(
+          payload.destinationAddress,
+          "Hourly charter, 2026 Toyota Sienna Platinum",
+          {
+            label: "group calendar names the hourly charter",
+            actual: payload.destinationAddress,
+            source: SOURCE.group,
+            loaded: script,
+          },
+        );
+        check(payload.mustBe21, "Yes", {
+          label: "group calendar records the age confirmation",
+          actual: payload.mustBe21,
+          source: SOURCE.group,
+          loaded: script,
+        });
+        check(payload.hoursBilled, "3", {
+          label: "group calendar records the billed hours",
+          actual: payload.hoursBilled,
           source: SOURCE.group,
           loaded: script,
         });
@@ -1723,7 +1734,7 @@ describe("booking", () => {
         await submitForm(view);
         check(
           resultText(view.document).includes(
-            "Please call (980) 422-9125 to book a group that size.",
+            "The 2026 Toyota Sienna Platinum seats 6. For more than 6 passengers, please call (980) 422-9125.",
           ),
           true,
           {

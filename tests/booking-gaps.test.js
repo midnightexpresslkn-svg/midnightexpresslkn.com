@@ -88,7 +88,7 @@ describe.each(scripts)("booking gaps %s", (script) => {
     });
     check(
       view.document.querySelector("#trip-type-error").textContent,
-      "Please choose Airport or Group",
+      "Please choose Airport, Local Bars and Parties, or Group",
       {
         label: "the trip menu says how to choose",
         source: "js/booking.js",
@@ -120,8 +120,8 @@ describe.each(scripts)("booking gaps %s", (script) => {
 
     const group = await renderBooking(script);
     await fillValid(group, { trip: "group" });
-    group.document.querySelector("#booking-destination").value = "";
-    await expectVisible(group, "Destination address is required");
+    group.document.querySelector("#group-hours").value = "";
+    await expectVisible(group, "Enter how many hours.");
   });
 
   it("lowers the seat count when a wheelchair or car seat is requested", async () => {
