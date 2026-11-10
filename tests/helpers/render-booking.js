@@ -90,12 +90,41 @@ function jsonResponse(data) {
   };
 }
 
+function headerMap(headers) {
+  const out = {};
+  if (!headers) return out;
+  if (typeof headers.forEach === "function") {
+    headers.forEach((value, key) => {
+      out[String(key).toLowerCase()] = String(value);
+    });
+    return out;
+  }
+  for (const [key, value] of Object.entries(headers)) {
+    out[String(key).toLowerCase()] = String(value);
+  }
+  return out;
+}
+
+function formEntriesOf(body) {
+  if (typeof FormData === "undefined" || !(body instanceof FormData))
+    return null;
+  const entries = [];
+  for (const [key, value] of body.entries()) entries.push([key, String(value)]);
+  return entries;
+}
+
 export function bookingPosts(state) {
   return state.requests.filter((request) => {
     if (request.method !== "POST") return false;
     const host = hostnameOf(request.url);
     return host === "script.google.com" || host === "docs.google.com";
   });
+}
+
+export function formPosts(state) {
+  return bookingPosts(state).filter((request) =>
+    request.url.includes("docs.google.com"),
+  );
 }
 
 export async function renderBooking(script, options = {}) {
@@ -177,6 +206,10 @@ export async function renderBooking(script, options = {}) {
       method,
       url: href,
       body: typeof init.body === "string" ? init.body : "",
+      formEntries: formEntriesOf(init.body),
+      headers: headerMap(init.headers),
+      mode: init.mode || "",
+      credentials: init.credentials || "",
       mocked: true,
     });
     if (state.failPost && method === "POST") {

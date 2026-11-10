@@ -27,6 +27,25 @@
     const GOOGLE_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSelLJ8Yqj8jHXreIB3DW8MvsBUtHea8DB7UTjyaYkM3Q2RbTA/formResponse";
 
     /**
+     * Rebuilt questions on that same form. Short answer, except notes and
+     * special requirements, which are paragraphs. None are required.
+     */
+    var FORM_ENTRY = {
+        name: 'entry.38734242',
+        phone: 'entry.1464100699',
+        email: 'entry.412484716',
+        pickupDateTime: 'entry.1258152069',
+        pickup: 'entry.1915297843',
+        destination: 'entry.814545959',
+        passengers: 'entry.419038207',
+        notes: 'entry.1643147243',
+        airportTrip: 'entry.825490469',
+        flight: 'entry.149520789',
+        checkingBags: 'entry.214097981',
+        specialRequirements: 'entry.853044875'
+    };
+
+    /**
      * Calendar Apps Script web app (/exec): POST mirrors bookings onto Google Calendar.
      * Same deployment as BOOKINGS_API_URL (GET busy slots). No-op only if placeholder.
      */
@@ -1130,29 +1149,33 @@
      * @param {Object} submissionData - Booking data to submit
      * @returns {Promise} - Submission promise
      */
+    function specialRequirementsParagraph(submissionData) {
+        var parts = [];
+        var requirements = submissionData.specialRequirements || [];
+        for (var i = 0; i < requirements.length; i++) {
+            if (!requirements[i]) continue;
+            parts.push(requirements[i]);
+        }
+        if (submissionData.otherRequirementText) parts.push(submissionData.otherRequirementText);
+        return parts.join(', ');
+    }
+
     function buildGoogleFormData(submissionData) {
         var googleFormData = new FormData();
         var formattedPickupDate = formatDateForGoogleForms(submissionData.pickupDate);
         var pickupDateTime = formattedPickupDate + ' ' + submissionData.pickupTime;
-        googleFormData.append('entry.131833412', submissionData.name);
-        googleFormData.append('entry.776900145', submissionData.phone);
-        googleFormData.append('entry.121804187', submissionData.email || '');
-        googleFormData.append('entry.1592582104', pickupDateTime);
-        googleFormData.append('entry.1137073125', submissionData.pickupAddress);
-        googleFormData.append('entry.1747359283', submissionData.destinationAddress);
-        googleFormData.append('entry.240227114', submissionData.passengers);
-        googleFormData.append('entry.1761921696', submissionData.specialNotes || '');
-        googleFormData.append('entry.1268043435', submissionData.airportTrip);
-        googleFormData.append('entry.1389653467', submissionData.flightNumber || '');
-        googleFormData.append('entry.2044186606', submissionData.checkingBags || 'No');
-        if (submissionData.specialRequirements && submissionData.specialRequirements.length > 0) {
-            submissionData.specialRequirements.forEach(function(req) {
-                googleFormData.append('entry.1055055925', req);
-            });
-        }
-        if (submissionData.otherRequirementText) {
-            googleFormData.append('entry.1055055925.other_option_response', submissionData.otherRequirementText);
-        }
+        googleFormData.append(FORM_ENTRY.name, submissionData.name);
+        googleFormData.append(FORM_ENTRY.phone, submissionData.phone);
+        googleFormData.append(FORM_ENTRY.email, submissionData.email || '');
+        googleFormData.append(FORM_ENTRY.pickupDateTime, pickupDateTime);
+        googleFormData.append(FORM_ENTRY.pickup, submissionData.pickupAddress);
+        googleFormData.append(FORM_ENTRY.destination, submissionData.destinationAddress);
+        googleFormData.append(FORM_ENTRY.passengers, submissionData.passengers);
+        googleFormData.append(FORM_ENTRY.notes, submissionData.specialNotes || '');
+        googleFormData.append(FORM_ENTRY.airportTrip, submissionData.airportTrip);
+        googleFormData.append(FORM_ENTRY.flight, submissionData.flightNumber || '');
+        googleFormData.append(FORM_ENTRY.checkingBags, submissionData.checkingBags || 'No');
+        googleFormData.append(FORM_ENTRY.specialRequirements, specialRequirementsParagraph(submissionData));
         return googleFormData;
     }
 
@@ -1654,13 +1677,10 @@
                 specialRequirements.push('Wheelchair');
             }
             if ($('#booking-carseat').is(':checked')) {
-                specialRequirements.push('Carseat');
+                specialRequirements.push('Car Seat');
             }
             if ($('#booking-other-requirement').is(':checked')) {
                 otherRequirementText = $('#booking-other-text').val().trim();
-                if (otherRequirementText) {
-                    specialRequirements.push('__other_option__');
-                }
             }
 
             // Get datetime from hidden fields (populated by Flatpickr)
