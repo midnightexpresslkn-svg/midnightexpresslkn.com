@@ -1,5 +1,6 @@
 import { afterEach, describe, it } from "vitest";
 import { check } from "./helpers/failure.js";
+import { hostnameOf } from "./helpers/hostname.js";
 import {
   bookingPosts,
   chooseTrip,
@@ -12,6 +13,15 @@ import {
 } from "./helpers/render-booking.js";
 
 const scripts = ["js/booking.js", "js/booking.min.js"];
+
+function hostIs(url, host) {
+  return hostnameOf(url) === host;
+}
+
+function isGoogleApi(url) {
+  const host = hostnameOf(url);
+  return host === "googleapis.com" || host.endsWith(".googleapis.com");
+}
 const BAR_NAMES = [
   "Two Trees",
   "Bourbon & Bobbers",
@@ -576,7 +586,7 @@ describe.each(scripts)("local bars and group %s", (script) => {
       loaded: script,
     });
     const post = bookingPosts(sent.state).find((request) =>
-      request.url.includes("script.google.com"),
+      hostIs(request.url, "script.google.com"),
     );
     const payload = JSON.parse(post.body);
     check(payload.mustBe21, "Yes", {
@@ -734,7 +744,7 @@ describe.each(scripts)("local bars and group %s", (script) => {
     });
     check(
       view.state.requests.some((request) =>
-        request.url.includes("router.project-osrm.org"),
+        hostIs(request.url, "router.project-osrm.org"),
       ),
       true,
       {
@@ -744,9 +754,7 @@ describe.each(scripts)("local bars and group %s", (script) => {
       },
     );
     check(
-      view.state.requests.some((request) =>
-        request.url.includes("googleapis.com"),
-      ),
+      view.state.requests.some((request) => isGoogleApi(request.url)),
       false,
       {
         label: "no key means no Google call",
@@ -900,7 +908,7 @@ describe.each(scripts)("local bars and group %s", (script) => {
     document.head.appendChild = (node) => {
       if (
         node.tagName === "SCRIPT" &&
-        String(node.src).includes("maps.googleapis.com")
+        hostIs(node.src, "maps.googleapis.com")
       ) {
         window.google = googleSdk();
         window.midnightMapsReady();
@@ -960,7 +968,7 @@ describe.each(scripts)("local bars and group %s", (script) => {
     await new Promise((resolve) => setTimeout(resolve, 350));
     check(
       view.state.requests.some((request) =>
-        request.url.includes("places.googleapis.com"),
+        hostIs(request.url, "places.googleapis.com"),
       ),
       false,
       {
@@ -1169,7 +1177,7 @@ describe.each(scripts)("local bars and group %s", (script) => {
     await submitForm(preset);
     const payload = JSON.parse(
       bookingPosts(preset.state).find((request) =>
-        request.url.includes("script.google.com"),
+        hostIs(request.url, "script.google.com"),
       ).body,
     );
     check(payload.specialNotes.includes("gate"), true, {
@@ -1199,7 +1207,7 @@ describe.each(scripts)("local bars and group %s", (script) => {
     await submitForm(withNote);
     const partyPayload = JSON.parse(
       bookingPosts(withNote.state).find((request) =>
-        request.url.includes("script.google.com"),
+        hostIs(request.url, "script.google.com"),
       ).body,
     );
     check(partyPayload.specialNotes.includes("Party ride. gate"), true, {
@@ -1213,7 +1221,7 @@ describe.each(scripts)("local bars and group %s", (script) => {
     await submitForm(bare);
     const invicta = JSON.parse(
       bookingPosts(bare.state).find((request) =>
-        request.url.includes("script.google.com"),
+        hostIs(request.url, "script.google.com"),
       ).body,
     );
     check(invicta.destinationAddress, "Invicta", {
@@ -1472,7 +1480,7 @@ describe.each(scripts)("local bars and group %s", (script) => {
     while (Date.now() - start < 1000) {
       if (
         view.state.requests.some((request) =>
-          request.url.includes("places.googleapis.com"),
+          hostIs(request.url, "places.googleapis.com"),
         )
       )
         break;
@@ -1530,7 +1538,7 @@ describe.each(scripts)("local bars and group %s", (script) => {
     await new Promise((resolve) => setTimeout(resolve, 400));
     check(
       failed.state.requests.some((request) =>
-        request.url.includes("places.googleapis.com"),
+        hostIs(request.url, "places.googleapis.com"),
       ),
       true,
       {
@@ -1903,7 +1911,7 @@ describe.each(scripts)("private airfield %s", (script) => {
     });
     const payload = JSON.parse(
       bookingPosts(sent.state).find((request) =>
-        request.url.includes("script.google.com"),
+        hostIs(request.url, "script.google.com"),
       ).body,
     );
     check(
