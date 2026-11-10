@@ -108,7 +108,7 @@ test.describe("booking page", () => {
       .fill("123 Main Street, Denver NC 28037");
     const quote = page.locator("#quote-details");
     await expect(quote).toContainText("Cash $65.00");
-    await expect(quote).toContainText("Card $65.00");
+    await expect(quote).toContainText("Card $66.95");
     await expect(quote).not.toContainText("2.75");
     await expect(quote).not.toContainText("2.63");
     await expect(quote).not.toContainText(/per mile/i);
@@ -129,6 +129,13 @@ test.describe("booking page", () => {
     await expect(page.locator("#booking-round-trip")).toBeHidden();
     await expect(page.locator("#booking-wheelchair")).toBeHidden();
     await expect(page.locator("#booking-carseat")).toBeHidden();
+    await expect(page.locator("#booking-notes")).toHaveAttribute(
+      "placeholder",
+      "Anything we should know? For example, a wheelchair, a car seat, or extra luggage.",
+    );
+    await expect(page.locator("#notes-hint")).toHaveText(
+      "Anything we should know? For example, a wheelchair, a car seat, or extra luggage.",
+    );
     await expect(page.locator("#notes-label")).toHaveText("Trip Description");
     await expect(page.locator("#booking-destination")).toHaveAttribute(
       "placeholder",
@@ -468,6 +475,77 @@ test.describe("hero CTAs above the fold on phones", () => {
       expect(callBox.y).toBeGreaterThanOrEqual(0);
       expect(callBox.y + callBox.height).toBeLessThanOrEqual(height + 1);
       expect(callBox.y).toBeGreaterThanOrEqual(bookBox.y);
+    });
+  }
+});
+
+test.describe("call button label fits inside the phone button", () => {
+  const widths = [320, 375, 390, 430];
+
+  for (const width of widths) {
+    test(`Call (980) 422-9125 fits the existing box at ${width}px`, async ({
+      page,
+    }) => {
+      await page.route("**/*", async (route) => {
+        const host = new URL(route.request().url()).hostname;
+        if (host === "127.0.0.1" || host === "localhost") {
+          await route.continue();
+          return;
+        }
+        await route.fulfill({
+          status: 200,
+          contentType: "text/plain",
+          body: "",
+        });
+      });
+      await page.setViewportSize({ width, height: 844 });
+      await page.goto("/");
+      await page.evaluate(() => document.fonts && document.fonts.ready);
+
+      const fit = await page.evaluate(() => {
+        const call = document.querySelector('header.hero a[href^="tel:"]');
+        const book = document.querySelector('header.hero a[href="#booking"]');
+        function measure(el) {
+          const box = el.getBoundingClientRect();
+          const cs = getComputedStyle(el);
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          const rects = [...range.getClientRects()];
+          const textLeft = Math.min(...rects.map((rect) => rect.left));
+          const textRight = Math.max(...rects.map((rect) => rect.right));
+          const borderLeft = parseFloat(cs.borderLeftWidth);
+          const borderRight = parseFloat(cs.borderRightWidth);
+          const paddingLeft = parseFloat(cs.paddingLeft);
+          const paddingRight = parseFloat(cs.paddingRight);
+          return {
+            text: el.innerText.replace(/\s+/g, " ").trim(),
+            fontSize: cs.fontSize,
+            lineHeight: cs.lineHeight,
+            padding: cs.padding,
+            maxWidth: cs.maxWidth,
+            width: box.width,
+            height: box.height,
+            textLeft,
+            textRight,
+            innerLeft: box.left + borderLeft + paddingLeft,
+            innerRight: box.right - borderRight - paddingRight,
+          };
+        }
+        return { call: measure(call), book: measure(book) };
+      });
+
+      expect(fit.call.text).toBe("Call (980) 422-9125");
+      expect(fit.call.textLeft).toBeGreaterThanOrEqual(
+        fit.call.innerLeft - 0.5,
+      );
+      expect(fit.call.textRight).toBeLessThanOrEqual(fit.call.innerRight + 0.5);
+      expect(fit.call.width).toBeCloseTo(fit.book.width, 0);
+      expect(fit.call.height).toBeCloseTo(fit.book.height, 0);
+      expect(fit.call.maxWidth).toBe("220px");
+      expect(fit.book.maxWidth).toBe("220px");
+      expect(fit.book.fontSize).toBe("20px");
+      expect(parseFloat(fit.call.fontSize)).toBeLessThan(20);
+      expect(fit.call.padding).toBe(fit.book.padding);
     });
   }
 });

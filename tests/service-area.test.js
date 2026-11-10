@@ -3,10 +3,13 @@ import path from "node:path";
 import vm from "node:vm";
 import { describe, it } from "vitest";
 import { check } from "./helpers/failure.js";
+import { coveredSource } from "./helpers/runner-source.js";
 import { SOURCE } from "./helpers/source-line.js";
 
 const filename = path.resolve("js/service-area.js");
-vm.runInThisContext(fs.readFileSync(filename, "utf8"), { filename });
+vm.runInThisContext(await coveredSource(fs.readFileSync(filename, "utf8")), {
+  filename,
+});
 const area = globalThis.MidnightServiceArea;
 
 const outside = "Sorry, we don't service that area.";

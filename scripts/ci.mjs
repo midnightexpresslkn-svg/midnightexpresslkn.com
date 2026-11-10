@@ -189,7 +189,7 @@ try {
     statements: summary.statements.pct,
     functions: summary.functions.pct,
     branches: summary.branches.pct,
-    thresholds: { lines: 72, statements: 72, functions: 79, branches: 65 },
+    thresholds: { lines: 90, statements: 90, functions: 90, branches: 78 },
   };
 } catch {
   addFailure(

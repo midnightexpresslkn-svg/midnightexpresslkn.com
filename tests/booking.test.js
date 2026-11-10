@@ -30,7 +30,7 @@ function nearestFiveCents(cents) {
 function totals(miles, roundTrip = false) {
   const oneCents = Math.round(Math.max(65, miles * 2.63) * 100);
   const cashCents = nearestFiveCents(roundTrip ? oneCents * 2 : oneCents);
-  const cardCents = nearestFiveCents(Math.round(cashCents * 1.03));
+  const cardCents = Math.round(cashCents * 1.03);
   return {
     cash: (cashCents / 100).toFixed(2),
     card: (cardCents / 100).toFixed(2),
@@ -104,7 +104,7 @@ describe("booking", () => {
           pickup: "123 Main Street, Denver NC 28037",
           destination: "CLT",
         });
-        check(quoteTotal(view.document), "Cash $65.00 · Card $65.00", {
+        check(quoteTotal(view.document), "Cash $65.00 · Card $66.95", {
           label: "10-mile CLT cash and card totals",
           source: SOURCE.quote,
           loaded: script,
@@ -148,7 +148,7 @@ describe("booking", () => {
         );
         check(
           totals(40),
-          { cash: "105.00", card: "110.00" },
+          { cash: "105.00", card: "108.15" },
           {
             label: "40-mile fare rule",
             source: SOURCE.quote,
@@ -163,8 +163,8 @@ describe("booking", () => {
           pickup: "123 Main Street, Denver NC 28037",
           destination: "CLT",
         });
-        check(quoteTotal(view.document), "Cash $80.00 · Card $80.00", {
-          label: "30-mile card rounding",
+        check(quoteTotal(view.document), "Cash $80.00 · Card $82.40", {
+          label: "30-mile card is 3 percent of cash to the cent",
           source: SOURCE.quote,
           loaded: script,
         });
@@ -209,13 +209,13 @@ describe("booking", () => {
           loaded: script,
         });
         await showQuote(view, { pickup: denver, destination: "CLT" });
-        check(quoteTotal(view.document), "Cash $80.00 · Card $80.00", {
+        check(quoteTotal(view.document), "Cash $80.00 · Card $82.40", {
           label: "Denver pickup uses its own miles",
           source: SOURCE.quote,
           loaded: script,
         });
         await showQuote(view, { pickup: maiden, destination: "CLT" });
-        check(quoteTotal(view.document), "Cash $105.00 · Card $110.00", {
+        check(quoteTotal(view.document), "Cash $105.00 · Card $108.15", {
           label: "Maiden pickup gets a different fare",
           source: SOURCE.quote,
           loaded: script,
@@ -273,7 +273,7 @@ describe("booking", () => {
           pickup: "123 Main Street, Denver NC 28037",
           destination: "airport",
         });
-        check(quoteTotal(view.document), "Cash $65.00 · Card $65.00", {
+        check(quoteTotal(view.document), "Cash $65.00 · Card $66.95", {
           label: "minimum fare",
           source: SOURCE.quote,
           loaded: script,
@@ -286,7 +286,7 @@ describe("booking", () => {
           pickup: "123 Main Street, Denver NC 28037",
           destination: "CLT",
         });
-        check(quoteTotal(at50.document), "Cash $130.00 · Card $135.00", {
+        check(quoteTotal(at50.document), "Cash $130.00 · Card $133.90", {
           label: "exactly 50 miles still gets a price",
           source: SOURCE.quote,
           loaded: script,
@@ -337,7 +337,7 @@ describe("booking", () => {
           source: SOURCE.quote,
           loaded: script,
         });
-        check(quoteTotal(view.document), "Cash $70.00 · Card $70.00", {
+        check(quoteTotal(view.document), "Cash $70.00 · Card $72.10", {
           label: "27.2 miles is used instead of the 32.7-mile fastest route",
           actual: quoteTotal(view.document),
           source: SOURCE.quote,
@@ -345,13 +345,36 @@ describe("booking", () => {
         });
       });
 
-      it("rounds cash and card to the nearest $5, and an exact .50 goes down", async () => {
+      it("adds exactly 3 percent when cash is $65 and when cash is $75", async () => {
+        const minimum = await renderBooking(script, { miles: 10 });
+        await showQuote(minimum, {
+          pickup: "123 Main Street, Denver NC 28037",
+          destination: "CLT",
+        });
+        check(quoteTotal(minimum.document), "Cash $65.00 · Card $66.95", {
+          label: "a $65 cash fare is $66.95 on a card",
+          source: SOURCE.quote,
+          loaded: script,
+        });
+        const seventyFive = await renderBooking(script, { miles: 7251 / 263 });
+        await showQuote(seventyFive, {
+          pickup: "123 Main Street, Denver NC 28037",
+          destination: "CLT",
+        });
+        check(quoteTotal(seventyFive.document), "Cash $75.00 · Card $77.25", {
+          label: "a $75 cash fare is $77.25 on a card",
+          source: SOURCE.quote,
+          loaded: script,
+        });
+      });
+
+      it("rounds cash to the nearest $5 and adds 3 percent on the card", async () => {
         const cases = [
-          [7250 / 263, "Cash $70.00 · Card $70.00"],
-          [7251 / 263, "Cash $75.00 · Card $75.00"],
-          [7750 / 263, "Cash $75.00 · Card $75.00"],
-          [7751 / 263, "Cash $80.00 · Card $80.00"],
-          [8500 / 263, "Cash $85.00 · Card $90.00"],
+          [7250 / 263, "Cash $70.00 · Card $72.10"],
+          [7251 / 263, "Cash $75.00 · Card $77.25"],
+          [7750 / 263, "Cash $75.00 · Card $77.25"],
+          [7751 / 263, "Cash $80.00 · Card $82.40"],
+          [8500 / 263, "Cash $85.00 · Card $87.55"],
         ];
         for (const [miles, expected] of cases) {
           const view = await renderBooking(script, { miles });
@@ -375,7 +398,7 @@ describe("booking", () => {
           destination: "CLT",
           roundTrip: true,
         });
-        check(quoteTotal(view.document), "Cash $130.00 · Card $135.00", {
+        check(quoteTotal(view.document), "Cash $130.00 · Card $133.90", {
           label: "round trip doubles cash",
           source: SOURCE.quote,
           loaded: script,
@@ -1413,13 +1436,13 @@ describe("booking", () => {
           shown(view.document.querySelector("#booking-wheelchair")),
           false,
           {
-            label: "group form does not ask about a wheelchair",
+            label: "group form hides the wheelchair box",
             source: SOURCE.group,
             loaded: script,
           },
         );
         check(shown(view.document.querySelector("#booking-carseat")), false, {
-          label: "group form does not ask about a car seat",
+          label: "group form hides the car seat box",
           source: SOURCE.group,
           loaded: script,
         });
@@ -1436,9 +1459,9 @@ describe("booking", () => {
           view.document
             .querySelector("#booking-notes")
             .getAttribute("placeholder"),
-          "Examples: how many pickup and drop-off locations, any extra stops, special requests",
+          "Anything we should know? For example, a wheelchair, a car seat, or extra luggage.",
           {
-            label: "trip description hint lists stops and requests",
+            label: "trip description hint names a wheelchair and a car seat",
             source: SOURCE.group,
             loaded: script,
           },

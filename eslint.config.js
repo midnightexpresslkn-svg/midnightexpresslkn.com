@@ -36,10 +36,8 @@ export default [
       globals: browserGlobals,
     },
     rules: {
-      // The file already has unused flatpickr callback args and two helpers
-      // nothing calls (getRideWindow, findFirstAvailableTime). findFirstAvailableTime
-      // also calls showCallForBookingMessage, which is not defined. That path is
-      // not used by the page. Left as-is; listed in the PR instead of edited.
+      // Flatpickr passes unused callback arguments. The booking file is a
+      // browser script, so a few browser globals are not declared here.
       "no-unused-vars": "off",
       "no-undef": "off",
     },
