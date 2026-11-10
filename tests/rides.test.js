@@ -1028,8 +1028,8 @@ describe.each(scripts)("local bars and group %s", (script) => {
 
   it("maps a group pickup without using that distance for the hourly fare", async () => {
     const view = await renderBooking(script, {
-      miles: 40,
-      googleMiles: 40,
+      miles: 10,
+      googleMiles: 10,
       mapsKey: "test-browser-key",
       googleMaps: googleSdk(),
     });
@@ -1319,8 +1319,8 @@ describe.each(scripts)("local bars and group %s", (script) => {
     const pickup = outside.document.querySelector("#booking-pickup");
     pickup.value = "100 Main Street";
     outside.window.jQuery(pickup).trigger("blur");
-    check(await waitQuote(outside), "Sorry, we don't service that area.", {
-      label: "a geocoded Charlotte pickup is outside the area",
+    check(await waitQuote(outside), "out of our service area.", {
+      label: "a geocoded Charlotte pickup is outside Two Trees",
       source: "js/booking.js",
       loaded: script,
     });
@@ -1924,5 +1924,329 @@ describe.each(scripts)("private airfield %s", (script) => {
         loaded: script,
       },
     );
+  });
+});
+
+const GROUP_DETAILS =
+  "Please tell us about your group event (what it is, how many people, and anything we should know).";
+
+describe.each(scripts)("group description %s", (script) => {
+  it("blocks an empty or blank group description and keeps other rides optional", async () => {
+    const empty = await renderBooking(script, { miles: 4 });
+    await fillValid(empty, { trip: "group", notes: "" });
+    check(
+      empty.document.querySelector("#notes-label").textContent.trim(),
+      "Trip Description *",
+      {
+        label: "the group description label is required",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    check(empty.document.querySelector("#booking-notes").required, true, {
+      label: "the group description box is required",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    await submitForm(empty);
+    check(resultText(empty.document).includes(GROUP_DETAILS), true, {
+      label: "an empty group description is blocked",
+      actual: resultText(empty.document),
+      source: "js/booking.js",
+      loaded: script,
+    });
+    check(empty.document.activeElement.id, "booking-notes", {
+      label: "the empty group description gets focus",
+      actual: empty.document.activeElement.id,
+      source: "js/booking.js",
+      loaded: script,
+    });
+    check(bookingPosts(empty.state).length, 0, {
+      label: "an empty group description sends nothing",
+      source: "js/booking.js",
+      loaded: script,
+    });
+
+    const spaces = await renderBooking(script, { miles: 4 });
+    await fillValid(spaces, { trip: "group", notes: " \n\t " });
+    await submitForm(spaces);
+    check(resultText(spaces.document).includes(GROUP_DETAILS), true, {
+      label: "a whitespace-only group description is blocked",
+      actual: resultText(spaces.document),
+      source: "js/booking.js",
+      loaded: script,
+    });
+    check(bookingPosts(spaces.state).length, 0, {
+      label: "a blank group description sends nothing",
+      source: "js/booking.js",
+      loaded: script,
+    });
+
+    const told = await renderBooking(script, { miles: 4 });
+    await fillValid(told, {
+      trip: "group",
+      notes: "birthday dinner for 6",
+    });
+    await submitForm(told);
+    check(resultText(told.document).includes("Request received"), true, {
+      label: "a group description lets the request through",
+      actual: resultText(told.document),
+      source: "js/booking.js",
+      loaded: script,
+    });
+    const groupPayload = JSON.parse(
+      bookingPosts(told.state).find((request) =>
+        hostIs(request.url, "script.google.com"),
+      ).body,
+    );
+    check(groupPayload.specialNotes.includes("birthday dinner for 6"), true, {
+      label: "the group request carries the description",
+      actual: groupPayload.specialNotes,
+      source: "js/booking.js",
+      loaded: script,
+    });
+
+    const airport = await renderBooking(script, { miles: 10 });
+    await fillValid(airport, { trip: "airport", notes: "" });
+    check(airport.document.querySelector("#booking-notes").required, false, {
+      label: "an airport note stays optional",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    check(
+      airport.document.querySelector("#notes-label").textContent.trim(),
+      "Special Notes",
+      {
+        label: "an airport note is not marked required",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    await submitForm(airport);
+    check(resultText(airport.document).includes("Request received"), true, {
+      label: "an airport ride can be requested with no description",
+      actual: resultText(airport.document),
+      source: "js/booking.js",
+      loaded: script,
+    });
+
+    const bar = await renderBooking(script, { miles: 4 });
+    await fillValid(bar, { trip: "local", notes: "" });
+    check(bar.document.querySelector("#booking-notes").required, false, {
+      label: "a bar note stays optional",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    await submitForm(bar);
+    check(resultText(bar.document).includes("Request received"), true, {
+      label: "a bar ride can be requested with no description",
+      actual: resultText(bar.document),
+      source: "js/booking.js",
+      loaded: script,
+    });
+
+    const party = await renderBooking(script, { miles: 4 });
+    await fillValid(party, { trip: "local", localKind: "party", notes: "" });
+    await submitForm(party);
+    check(resultText(party.document).includes("Request received"), true, {
+      label: "a party ride can be requested with no description",
+      actual: resultText(party.document),
+      source: "js/booking.js",
+      loaded: script,
+    });
+
+    const field = await renderBooking(script, { miles: 40 });
+    await fillValid(field, { trip: "airport", notes: "" });
+    choosePrivate(field, "Smith Field", "100 Runway Rd, Charlotte NC 28202");
+    field.document.querySelector("#booking-notes").value = "";
+    await submitForm(field);
+    check(resultText(field.document).includes("Request received"), true, {
+      label: "a private airfield can be requested with no description",
+      actual: resultText(field.document),
+      source: "js/booking.js",
+      loaded: script,
+    });
+    check(field.document.querySelector("#booking-notes").required, false, {
+      label: "a private airfield note stays optional",
+      source: "js/booking.js",
+      loaded: script,
+    });
+  });
+});
+
+describe.each(scripts)("Two Trees towns and group radius %s", (script) => {
+  it("prices Two Trees inside 10 miles from a served town and blocks excluded towns", async () => {
+    const allowed = await renderBooking(script, { miles: 9 });
+    const allowedText = await priceBar(allowed, 9);
+    check(allowedText.includes("Cash $27.00 · Card $27.81"), true, {
+      label: "9 miles from Denver still quotes Two Trees",
+      actual: allowedText,
+      source: "js/booking.js",
+      loaded: script,
+    });
+    check(allowedText.includes("out of our service area."), false, {
+      label: "a served town inside 10 miles is not denied",
+      actual: allowedText,
+      source: "js/booking.js",
+      loaded: script,
+    });
+
+    const mooresville = await renderBooking(script, { miles: 8 });
+    chooseTrip(mooresville.document, "local");
+    mooresville.document.querySelector("#local-kind").value = "bar";
+    mooresville.window.jQuery("#local-kind").trigger("change");
+    mooresville.document.querySelector("#bar-choice").value = "two-trees";
+    mooresville.window.jQuery("#bar-choice").trigger("change");
+    mooresville.document.querySelector("#booking-pickup").value =
+      "123 Main St, Mooresville NC 28115";
+    mooresville.window.jQuery("#booking-pickup").trigger("blur");
+    check(await waitQuote(mooresville), "out of our service area.", {
+      label: "Mooresville is blocked for Two Trees even under 10 miles",
+      actual: quoteText(mooresville.document),
+      source: "js/booking.js",
+      loaded: script,
+    });
+    await fillValid(mooresville, {
+      trip: "local",
+      pickup: "123 Main St, Mooresville NC 28115",
+      notes: "",
+    });
+    await submitForm(mooresville);
+    check(
+      resultText(mooresville.document).includes("out of our service area."),
+      true,
+      {
+        label: "a Mooresville Two Trees request is not sent",
+        actual: resultText(mooresville.document),
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    check(bookingPosts(mooresville.state).length, 0, {
+      label: "Mooresville sends no Two Trees booking",
+      source: "js/booking.js",
+      loaded: script,
+    });
+
+    const cornelius = await renderBooking(script, { miles: 5 });
+    chooseTrip(cornelius.document, "local");
+    cornelius.document.querySelector("#local-kind").value = "bar";
+    cornelius.window.jQuery("#local-kind").trigger("change");
+    cornelius.document.querySelector("#bar-choice").value = "two-trees";
+    cornelius.window.jQuery("#bar-choice").trigger("change");
+    cornelius.document.querySelector("#booking-pickup").value =
+      "10 Main St, Cornelius NC 28031";
+    cornelius.window.jQuery("#booking-pickup").trigger("blur");
+    check(await waitQuote(cornelius), "out of our service area.", {
+      label: "an excluded airport town is blocked for Two Trees",
+      actual: quoteText(cornelius.document),
+      source: "js/booking.js",
+      loaded: script,
+    });
+
+    const other = await renderBooking(script, { miles: 8 });
+    chooseTrip(other.document, "local");
+    other.document.querySelector("#local-kind").value = "bar";
+    other.window.jQuery("#local-kind").trigger("change");
+    other.document.querySelector("#bar-choice").value = "bourbon-bobber";
+    other.window.jQuery("#bar-choice").trigger("change");
+    other.document.querySelector("#booking-pickup").value =
+      "123 Main St, Mooresville NC 28115";
+    other.window.jQuery("#booking-pickup").trigger("blur");
+    check(await waitQuote(other), "Sorry, we don't service that area.", {
+      label: "another bar still uses the airport service-area message",
+      actual: quoteText(other.document),
+      source: "js/booking.js",
+      loaded: script,
+    });
+    const mapped = await renderBooking(script, {
+      miles: 8,
+      censusCity: "Charlotte",
+      censusState: "NC",
+      censusZip: "28202",
+    });
+    chooseTrip(mapped.document, "local");
+    mapped.document.querySelector("#local-kind").value = "bar";
+    mapped.window.jQuery("#local-kind").trigger("change");
+    mapped.document.querySelector("#bar-choice").value = "bourbon-bobber";
+    mapped.window.jQuery("#bar-choice").trigger("change");
+    mapped.document.querySelector("#booking-pickup").value = "100 Main Street";
+    mapped.window.jQuery("#booking-pickup").trigger("blur");
+    check(await waitQuote(mapped), "Sorry, we don't service that area.", {
+      label:
+        "a geocoded Charlotte pickup for another bar keeps the old message",
+      actual: quoteText(mapped.document),
+      source: "js/booking.js",
+      loaded: script,
+    });
+  });
+
+  it("allows a group within 15 miles of Two Trees and blocks farther pickups", async () => {
+    const near = await renderBooking(script, { miles: 14.9 });
+    chooseTrip(near.document, "group");
+    near.document.querySelector("#group-hours").value = "2";
+    near.window.jQuery("#group-hours").trigger("change");
+    near.document.querySelector("#booking-pickup").value =
+      "100 N Main St, Mooresville NC 28115";
+    near.window.jQuery("#booking-pickup").trigger("blur");
+    const nearText = await waitQuote(near);
+    check(nearText.includes("Cash $250.00"), true, {
+      label: "14.9 miles across the lake still quotes the group",
+      actual: nearText,
+      source: "js/booking.js",
+      loaded: script,
+    });
+    check(nearText.includes("out of our service area."), false, {
+      label: "a group inside 15 miles is not denied",
+      actual: nearText,
+      source: "js/booking.js",
+      loaded: script,
+    });
+    await fillValid(near, {
+      trip: "group",
+      miles: 14.9,
+      pickup: "100 N Main St, Mooresville NC 28115",
+      notes: "lake rehearsal",
+    });
+    near.state.miles = 14.9;
+    await submitForm(near);
+    check(resultText(near.document).includes("Request received"), true, {
+      label: "a group across the lake within 15 miles is accepted",
+      actual: resultText(near.document),
+      source: "js/booking.js",
+      loaded: script,
+    });
+
+    const far = await renderBooking(script, { miles: 15.1 });
+    chooseTrip(far.document, "group");
+    far.document.querySelector("#group-hours").value = "2";
+    far.window.jQuery("#group-hours").trigger("change");
+    far.document.querySelector("#booking-pickup").value =
+      "100 N Main St, Mooresville NC 28115";
+    far.window.jQuery("#booking-pickup").trigger("blur");
+    check(await waitQuote(far), "out of our service area.", {
+      label: "15.1 miles is outside the group radius",
+      actual: quoteText(far.document),
+      source: "js/booking.js",
+      loaded: script,
+    });
+    await fillValid(far, {
+      trip: "group",
+      pickup: "100 N Main St, Mooresville NC 28115",
+      notes: "lake rehearsal",
+    });
+    far.state.miles = 15.1;
+    await submitForm(far);
+    check(resultText(far.document).includes("out of our service area."), true, {
+      label: "a group past 15 miles is not booked",
+      actual: resultText(far.document),
+      source: "js/booking.js",
+      loaded: script,
+    });
+    check(bookingPosts(far.state).length, 0, {
+      label: "a group past 15 miles sends nothing",
+      source: "js/booking.js",
+      loaded: script,
+    });
   });
 });

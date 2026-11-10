@@ -1990,7 +1990,7 @@ describe("booking", () => {
         });
         check(
           view.document.querySelector("#notes-label")?.textContent.trim(),
-          "Trip Description",
+          "Trip Description *",
           {
             label: "group notes ask for a trip description",
             source: SOURCE.group,

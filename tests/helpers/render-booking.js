@@ -524,8 +524,10 @@ export async function fillValid(view, overrides = {}) {
   if (overrides.flight) {
     setControl(doc.querySelector("#booking-flight"), overrides.flight);
   }
-  if (overrides.notes) {
+  if (overrides.notes != null) {
     setControl(doc.querySelector("#booking-notes"), overrides.notes);
+  } else if (trip === "group") {
+    setControl(doc.querySelector("#booking-notes"), "Family reunion");
   }
   if (trip === "airport") {
     const choice = doc.querySelector(
