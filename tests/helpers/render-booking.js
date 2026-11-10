@@ -3,6 +3,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { JSDOM } from "jsdom";
 import { waitFor } from "@testing-library/dom";
+import { coveredSource } from "./runner-source.js";
 import { placeholder, role, roles } from "./failure.js";
 import { hostnameOf } from "./hostname.js";
 
@@ -53,8 +54,30 @@ export function drainTimers() {
   pendingTimers.clear();
 }
 
+const compiledScripts = new Map();
+const executableSource = new Map();
+
+async function executable(filename, code) {
+  if (filename !== "js/booking.js" && filename !== "js/service-area.js")
+    return code;
+  if (!executableSource.has(filename)) {
+    executableSource.set(filename, await coveredSource(code));
+  }
+  return executableSource.get(filename);
+}
+
 function run(code, filename) {
-  vm.runInThisContext(code, { filename: path.resolve(root, filename) });
+  const resolved = path.resolve(root, filename);
+  let compiled = compiledScripts.get(resolved);
+  if (!compiled) {
+    compiled = new vm.Script(code, { filename: resolved });
+    compiledScripts.set(resolved, compiled);
+  }
+  compiled.runInThisContext();
+}
+
+async function runCovered(code, filename) {
+  run(await executable(filename, code), filename);
 }
 
 let libsReady = false;
@@ -154,6 +177,7 @@ export async function renderBooking(script, options = {}) {
     lon: options.lon ?? -81.03,
     places: options.places ?? null,
     censusMode: options.censusMode ?? "ok",
+    osmMode: options.osmMode ?? "ok",
     routeMode: options.routeMode ?? "ok",
     routesMiles: options.routesMiles ?? null,
     failPost: options.failPost ?? false,
@@ -183,6 +207,17 @@ export async function renderBooking(script, options = {}) {
       } else if (state.censusMode === "miss") {
         settings.success &&
           settings.success({ result: { addressMatches: [] } });
+      } else if (state.censusMode === "bare") {
+        settings.success &&
+          settings.success({
+            result: {
+              addressMatches: [
+                {
+                  coordinates: { x: state.lon, y: state.lat },
+                },
+              ],
+            },
+          });
       } else {
         settings.success &&
           settings.success({
@@ -260,6 +295,7 @@ export async function renderBooking(script, options = {}) {
       });
     }
     if (host === "nominatim.openstreetmap.org") {
+      if (state.osmMode === "miss") return jsonResponse([]);
       return jsonResponse([{ lat: String(state.lat), lon: String(state.lon) }]);
     }
     if (host === "script.google.com" || host === "docs.google.com") {
@@ -292,8 +328,8 @@ export async function renderBooking(script, options = {}) {
 
   window.history.replaceState(null, "", options.url || "/");
   if (options.withoutForm) document.querySelector("#bookingForm")?.remove();
-  run(serviceAreaSource, "js/service-area.js");
-  run(scriptSource[script], script);
+  await runCovered(serviceAreaSource, "js/service-area.js");
+  await runCovered(scriptSource[script], script);
   await new Promise((resolve) => nativeSetTimeout(resolve, 0));
   return { script, document, window, state, $: window.jQuery };
 }

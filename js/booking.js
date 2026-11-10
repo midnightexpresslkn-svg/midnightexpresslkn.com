@@ -55,7 +55,7 @@
     var UNCLEAR_AREA_MESSAGE = "Please include the town and state, for example Denver, NC.";
 
     function escapeHtml(value) {
-        return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
+        return String(value).replace(/[&<>"']/g, function (ch) {
             return {
                 '&': '&amp;',
                 '<': '&lt;',
@@ -94,7 +94,6 @@
      */
     function endIsAirfield(text) {
         var api = globalThis.MidnightServiceArea;
-        if (!api) return false;
         if (api.lookupAirport && api.lookupAirport(text)) return true;
         if (api.isPrivateAirfield && api.isPrivateAirfield(text)) return true;
         return false;
@@ -694,15 +693,15 @@
             airportTrip: formData.airportTrip,
             flightNumber: formData.flightNumber || '',
             checkingBags: formData.airportTrip === 'Yes'
-                ? bagsForCalendar(formData.checkingBags || 'No', formData.bagCount || 0)
-                : (formData.checkingBags || 'No'),
-            bagCount: formData.bagCount || 0,
-            roundTrip: formData.roundTrip || 'No',
+                ? bagsForCalendar(formData.checkingBags, formData.bagCount)
+                : formData.checkingBags,
+            bagCount: formData.bagCount,
+            roundTrip: formData.roundTrip,
             returnDate: formData.returnDate || '',
             returnTime: formData.returnTime || '',
-            groupEvent: formData.groupEvent || 'No',
-            durationMinutes: formData.durationMinutes || RIDE_DURATION_MINUTES,
-            contactAddress: formData.contactAddress || ''
+            groupEvent: formData.groupEvent,
+            durationMinutes: formData.durationMinutes,
+            contactAddress: formData.contactAddress
         };
         return fetch(NEW_SCRIPT_URL, {
             method: 'POST',
@@ -1093,9 +1092,7 @@
      * Convert date from YYYY-MM-DD to MM/DD/YYYY format
      */
     function formatDateForGoogleForms(dateStr) {
-        if (!dateStr) return '';
         var parts = dateStr.split('-');
-        if (parts.length !== 3) return dateStr;
         return parts[1] + '/' + parts[2] + '/' + parts[0]; // MM/DD/YYYY
     }
 
@@ -1106,9 +1103,8 @@
      */
     function specialRequirementsParagraph(submissionData) {
         var parts = [];
-        var requirements = submissionData.specialRequirements || [];
+        var requirements = submissionData.specialRequirements;
         for (var i = 0; i < requirements.length; i++) {
-            if (!requirements[i]) continue;
             parts.push(requirements[i]);
         }
         return parts.join(', ');
@@ -1138,7 +1134,7 @@
         googleFormData.append(FORM_ENTRY.notes, submissionData.specialNotes || '');
         googleFormData.append(FORM_ENTRY.airportTrip, submissionData.airportTrip);
         googleFormData.append(FORM_ENTRY.flight, submissionData.flightNumber || '');
-        googleFormData.append(FORM_ENTRY.checkingBags, submissionData.checkingBags || 'No');
+        googleFormData.append(FORM_ENTRY.checkingBags, submissionData.checkingBags);
         googleFormData.append(FORM_ENTRY.specialRequirements, specialRequirementsParagraph(submissionData));
         return googleFormData;
     }
@@ -1771,7 +1767,7 @@
                 date: formData.pickupDate,
                 hours: outboundHours,
                 minutes: outboundMinutes,
-                durationMinutes: formData.durationMinutes || RIDE_DURATION_MINUTES
+                durationMinutes: formData.durationMinutes
             });
 
             // If round trip, also add return booking to pending
@@ -1960,7 +1956,6 @@
     })(jQuery);
 
 !function($){
-    if(!$)return;
     var fb='We\'ll confirm your price when we call.';
     var far='For trips over 50 miles, please call <a href="tel:+19804229125">(980) 422-9125</a> for your price.';
     var ask='Enter your home address and airport to see your price.';
@@ -2001,7 +1996,9 @@
                         };
                         res(point);
                     }else rej('nomatch');},
-                error:function(){rej('census');}});
+                error:function(){
+                    rej('census');
+                }});
         });
     }
     function osmGeo(a){
@@ -2013,7 +2010,9 @@
     function geocode(a){
         var k=a.toLowerCase();
         if(geoCache[k])return geoCache[k];
-        var p=censusGeo(a).catch(function(){return osmGeo(a);});
+        var p=censusGeo(a).catch(function(){
+            return osmGeo(a);
+        });
         geoCache[k]=p; p.catch(function(){delete geoCache[k];});
         return p;
     }
@@ -2088,7 +2087,7 @@
             }
             if(!inArea(g))throw 'area';
             return driveMiles(g,airport);
-        }).then(function(mi){
+        }).then(function(mi) {
             if(my!==seq||groupEventYes()){if(groupEventYes())hideGroupQuote();return;}
             // Donald (Nov 9, 2026): no online price over 50 driving miles; same limit as Ara.
             if(!(typeof mi==='number'&&isFinite(mi)&&mi>0&&mi<=50))throw (typeof mi==='number'&&mi>50)?'far':'nomiles';
@@ -2098,7 +2097,7 @@
             var cash=cashCents/100, card=cardCents/100;
             var label=rt?'Round trip, '+esc(airport.name)+' and back':'One way to '+esc(airport.name);
             show('<span class="quote-label">'+label+'</span><br><strong class="quote-total">Cash '+money(cash)+' &middot; Card '+money(card)+'</strong>');
-        }).catch(function(err){
+        }).catch(function(err) {
             if(my!==seq)return;
             if(groupEventYes()){hideGroupQuote();return;}
             if(err==='out'&&api){show(esc(api.OUT_OF_AREA_MESSAGE));return;}
@@ -2116,7 +2115,7 @@
             var item=api.AIRPORTS[i];
             var opt=document.createElement('option');
             opt.value=item.id;
-            opt.textContent=item.menu||item.name;
+            opt.textContent=item.menu;
             airline.appendChild(opt);
         }
         airline.setAttribute('data-ready','yes');
@@ -2143,6 +2142,8 @@
             $('#booking-destination').val(found.typed).trigger('input');
         });
         $('#booking-pickup, #booking-destination').on('input', later).on('change blur', function(){clearTimeout(timer);refresh();});
-        $('#booking-round-trip, #trip-type').on('change', function(){setTimeout(refresh,50);});
+        $('#booking-round-trip, #trip-type').on('change', function() {
+            setTimeout(refresh, 50);
+        });
     });
 }(window.jQuery);
