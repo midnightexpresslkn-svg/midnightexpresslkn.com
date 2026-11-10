@@ -1106,6 +1106,14 @@ section button.btn {
 }
 
 @media (max-width: 767px) {
+  /* Hero buttons stay 22rem wide. The Call label is longer than
+     Book Your Ride, so 20px spills past that box. Shrink only this
+     label. The line box stays 26.6px so the button keeps its height. */
+  header.hero .hero-actions a.btn[href^="tel:"] {
+    font-size: 15px !important;
+    line-height: 26.6px;
+  }
+
   header .intro-text .skills,
   #services .service-description,
   #why-choose-us .feature-list,
