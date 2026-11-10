@@ -83,6 +83,12 @@ test.describe("mobile page fits the screen", () => {
       const form = await offenders(page);
       expect(form.scrollWidth).toBeLessThanOrEqual(form.clientWidth + 1);
       expect(form.found).toEqual([]);
+      await page.locator("#airport-choice").selectOption("PRIVATE");
+      const airfield = await offenders(page);
+      expect(airfield.scrollWidth).toBeLessThanOrEqual(
+        airfield.clientWidth + 1,
+      );
+      expect(airfield.found).toEqual([]);
 
       await page.locator("#trip-type").selectOption("local");
       await page.locator("#local-kind").selectOption("bar");

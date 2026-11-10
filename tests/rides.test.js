@@ -1592,3 +1592,207 @@ describe.each(scripts)("local bars and group %s", (script) => {
     });
   });
 });
+
+function choosePrivate(view, name, address) {
+  chooseTrip(view.document, "airport");
+  const airline = view.document.querySelector("#airport-choice");
+  airline.value = "PRIVATE";
+  view.window.jQuery(airline).trigger("change");
+  view.document.querySelector("#airfield-name").value = name;
+  view.document.querySelector("#airfield-address").value = address;
+}
+
+describe.each(scripts)("private airfield %s", (script) => {
+  it("prices a named airfield with the airport fare and the 50-mile cap", async () => {
+    const view = await renderBooking(script, { miles: 40 });
+    choosePrivate(view, "", "");
+    view.document.querySelector("#booking-pickup").value = "12";
+    view.window.jQuery("#booking-pickup").trigger("blur");
+    check(
+      quoteText(view.document),
+      "Enter your home address and the airfield address to see your price.",
+      {
+        label: "a private airfield asks for both addresses",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    view.document.querySelector("#booking-pickup").value =
+      "123 Main Street, Denver NC 28037";
+    view.document.querySelector("#airfield-name").value = "A";
+    view.window.jQuery("#airfield-name").trigger("blur");
+    check(quoteText(view.document).includes("airfield address"), true, {
+      label: "a one-letter airfield name is not enough",
+      actual: quoteText(view.document),
+      source: "js/booking.js",
+      loaded: script,
+    });
+    view.document.querySelector("#airfield-name").value = "Smith Field";
+    view.document.querySelector("#airfield-address").value = "12";
+    view.window.jQuery("#airfield-address").trigger("blur");
+    check(quoteText(view.document).includes("airfield address"), true, {
+      label: "a short airfield address is not enough",
+      actual: quoteText(view.document),
+      source: "js/booking.js",
+      loaded: script,
+    });
+    view.document.querySelector("#airfield-address").value =
+      "Mooresville field road";
+    view.window.jQuery("#airfield-address").trigger("blur");
+    check(quoteText(view.document).includes("airfield address"), true, {
+      label: "an airfield address needs a street number",
+      actual: quoteText(view.document),
+      source: "js/booking.js",
+      loaded: script,
+    });
+    view.document.querySelector("#airfield-address").value =
+      "100 Runway Rd, Charlotte NC 28202";
+    view.window.jQuery("#airfield-address").trigger("blur");
+    const priced = await waitQuote(view);
+    check(priced.includes("One way to Smith Field"), true, {
+      label: "the quote names the airfield",
+      actual: priced,
+      source: "js/booking.js",
+      loaded: script,
+    });
+    check(priced.includes("Cash $105.00"), true, {
+      label: "40 miles is the airport cash fare",
+      actual: priced,
+      source: "js/booking.js",
+      loaded: script,
+    });
+    check(priced.includes("Card $108.15"), true, {
+      label: "40 miles is the airport card fare",
+      actual: priced,
+      source: "js/booking.js",
+      loaded: script,
+    });
+    const round = view.document.querySelector("#booking-round-trip");
+    round.checked = true;
+    view.document.querySelector("#quote-details").textContent = "Figuring";
+    view.window.jQuery(round).trigger("change");
+    const doubled = await waitQuote(view);
+    check(doubled.includes("Round trip, Smith Field and back"), true, {
+      label: "a private airfield round trip uses the airport label",
+      actual: doubled,
+      source: "js/booking.js",
+      loaded: script,
+    });
+    check(doubled.includes("Cash $210.00"), true, {
+      label: "a private airfield round trip doubles the cash fare",
+      actual: doubled,
+      source: "js/booking.js",
+      loaded: script,
+    });
+    const farView = await renderBooking(script, { miles: 55 });
+    choosePrivate(farView, "Smith Field", "100 Runway Rd, Charlotte NC 28202");
+    farView.document.querySelector("#booking-pickup").value =
+      "123 Main Street, Denver NC 28037";
+    farView.window.jQuery("#booking-pickup").trigger("blur");
+    const far = await waitQuote(farView);
+    check(far.includes("For trips over 50 miles"), true, {
+      label: "a private airfield over 50 miles uses the call message",
+      actual: far,
+      source: "js/booking.js",
+      loaded: script,
+    });
+    check(shown(view.document.querySelector("#airfield-name")), true, {
+      label: "the airfield name stays on the airport form",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    chooseTrip(view.document, "group");
+    check(shown(view.document.querySelector("#airfield-name")), false, {
+      label: "group hides the airfield fields",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    chooseTrip(view.document, "airport");
+    check(shown(view.document.querySelector("#airfield-name")), true, {
+      label: "coming back to airport shows the airfield fields again",
+      source: "js/booking.js",
+      loaded: script,
+    });
+  });
+
+  it("requires the airfield name and address before it sends the request", async () => {
+    const missing = await renderBooking(script, { miles: 40 });
+    await fillValid(missing);
+    choosePrivate(missing, "", "");
+    await submitForm(missing);
+    check(
+      resultText(missing.document).includes("Airfield name is required"),
+      true,
+      {
+        label: "a blank airfield name blocks the request",
+        actual: resultText(missing.document),
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    check(
+      resultText(missing.document).includes("Airfield address is required"),
+      true,
+      {
+        label: "a blank airfield address blocks the request",
+        actual: resultText(missing.document),
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    check(bookingPosts(missing.state).length, 0, {
+      label: "a blank airfield does not send a booking",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    const named = await renderBooking(script, { miles: 40 });
+    await fillValid(named);
+    choosePrivate(named, "Smith Field", "");
+    await submitForm(named);
+    check(
+      resultText(named.document).includes("Airfield address is required"),
+      true,
+      {
+        label: "a name without an address still blocks the request",
+        actual: resultText(named.document),
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    check(
+      resultText(named.document).includes("Airfield name is required"),
+      false,
+      {
+        label: "the name error clears once the name is filled",
+        actual: resultText(named.document),
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    const sent = await renderBooking(script, { miles: 40 });
+    await fillValid(sent);
+    choosePrivate(sent, "Smith Field", "100 Runway Rd, Charlotte NC 28202");
+    await submitForm(sent);
+    check(resultText(sent.document).includes("Request received"), true, {
+      label: "a named airfield in Charlotte can still be requested",
+      actual: resultText(sent.document),
+      source: "js/booking.js",
+      loaded: script,
+    });
+    const payload = JSON.parse(
+      bookingPosts(sent.state).find((request) =>
+        request.url.includes("script.google.com"),
+      ).body,
+    );
+    check(
+      payload.destinationAddress,
+      "Smith Field, 100 Runway Rd, Charlotte NC 28202",
+      {
+        label: "the request names the airfield and its address",
+        actual: payload.destinationAddress,
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+  });
+});

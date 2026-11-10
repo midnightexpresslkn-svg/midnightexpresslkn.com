@@ -373,6 +373,7 @@ test.describe("booking page", () => {
       "Charlotte-Monroe Executive (EQY)",
       "Wilgrove Air Park (8A6)",
       "Little Mountain (Airport Rd, Maiden)",
+      "Private airfield",
     ]);
     await page.locator("#airport-choice").selectOption("KIPJ");
     await expect(page.locator("#booking-destination")).toHaveValue("KIPJ");
@@ -417,6 +418,62 @@ test.describe("booking page", () => {
     await expect(page.locator("#quote-details")).not.toContainText("Cash $");
   });
 
+  test("a private airfield is priced like an airport from its address", async ({
+    page,
+  }) => {
+    const posts = await installMocks(page, { miles: 40 });
+    await page.goto("/");
+    await page.locator("#trip-type").selectOption("airport");
+    await page.locator("#airport-choice").selectOption("PRIVATE");
+    await page.locator("#airfield-name").fill("Smith Field");
+    await page
+      .locator("#airfield-address")
+      .fill("100 Runway Rd, Charlotte NC 28202");
+    await page
+      .getByPlaceholder("123 Main Street, Denver NC 28037")
+      .fill("123 Main Street, Denver NC 28037");
+    const quote = page.locator("#quote-details");
+    await expect(quote).toContainText("One way to Smith Field");
+    await expect(quote).toContainText("Cash $105.00");
+    await expect(quote).toContainText("Card $108.15");
+    await expect(quote).not.toContainText("2.63");
+    await expect(quote).not.toContainText(/per mile/i);
+    await page.locator("#trip-type").selectOption("group");
+    await expect(page.locator("#airfield-name")).toBeHidden();
+    await expect(page.locator("#airfield-address")).toBeHidden();
+    await expect(page.locator("#quote-details")).not.toContainText(
+      "Smith Field",
+    );
+    await expect(page.locator("#quote-details")).not.toContainText("$105.00");
+    await expect(page.locator("#group-vehicle")).toContainText(
+      "2026 Toyota Sienna Platinum",
+    );
+    expect(posts).toEqual([]);
+  });
+
+  test("a private airfield over 50 miles uses the same call message", async ({
+    page,
+  }) => {
+    const posts = await installMocks(page, { miles: 55 });
+    await page.goto("/");
+    await page.locator("#trip-type").selectOption("airport");
+    await page.locator("#airport-choice").selectOption("PRIVATE");
+    await page.locator("#airfield-name").fill("Smith Field");
+    await page
+      .locator("#airfield-address")
+      .fill("100 Runway Rd, Charlotte NC 28202");
+    await page
+      .getByPlaceholder("123 Main Street, Denver NC 28037")
+      .fill("123 Main Street, Denver NC 28037");
+    const quote = page.locator("#quote-details");
+    await expect(quote).toContainText(
+      "For trips over 50 miles, please call (980) 422-9125 for your price.",
+    );
+    await expect(quote).not.toContainText("Cash");
+    await expect(quote.locator('a[href="tel:+19804229125"]')).toBeVisible();
+    expect(posts).toEqual([]);
+  });
+
   test("manifest start url opens the booking section", async ({ page }) => {
     await installMocks(page);
     const response = await page.goto("/manifest.webmanifest");
@@ -426,6 +483,140 @@ test.describe("booking page", () => {
     await page.goto(manifest.start_url);
     await expect(page.locator("#booking")).toBeVisible();
     await expect(page).toHaveURL(/#booking/);
+  });
+});
+
+async function fillIdentity(page) {
+  await page.locator("#booking-name").fill("TEST, DO NOT BOOK");
+  await page.locator("#booking-phone").fill("9804229125");
+  await page.locator("#booking-email").fill("jane@example.com");
+  await page.locator("#booking-passengers").fill("2");
+  await page.locator("#booking-date").evaluate((el) => {
+    el._flatpickr.setDate("2026-12-15", true);
+    el.value = "2026-12-15";
+  });
+  await page.locator("#booking-time").evaluate((el) => {
+    el._flatpickr.setDate("10:00:00", true);
+    el.value = "10:00:00";
+  });
+}
+
+test.describe("new rides on a 375px phone", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+  });
+
+  test("a listed bar quotes and the three boxes block submit", async ({
+    page,
+  }) => {
+    const posts = await installMocks(page, { miles: 4 });
+    await page.goto("/");
+    await page.locator("#trip-type").selectOption("local");
+    await page.locator("#local-kind").selectOption("bar");
+    const kindBox = await page.locator("#local-kind").boundingBox();
+    const barBox = await page.locator("#bar-choice").boundingBox();
+    expect(barBox.y).toBeGreaterThan(kindBox.y);
+    await page.locator("#bar-choice").selectOption("two-trees");
+    await page
+      .locator("#booking-pickup")
+      .fill("123 Main Street, Denver NC 28037");
+    await expect(page.locator("#quote-details")).toContainText("Cash $15.00");
+    await expect(page.locator("#quote-details")).toContainText("Card $15.45");
+    await fillIdentity(page);
+    await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
+    await expect(page.locator("#booking-success")).toContainText(
+      "Please check all three boxes: Must be 21 or older, No smoking, and If you damage anything, you are responsible.",
+    );
+    await page.locator("#rule-age").check();
+    await page.locator("#rule-smoke").check();
+    await page.locator("#rule-damage").check();
+    await expect(page.locator("#rule-age")).toBeChecked();
+    await expect(page.locator("#rule-smoke")).toBeChecked();
+    await expect(page.locator("#rule-damage")).toBeChecked();
+    expect(posts).toEqual([]);
+  });
+
+  test("a party address uses the same quote and the same boxes", async ({
+    page,
+  }) => {
+    const posts = await installMocks(page, { miles: 4 });
+    await page.goto("/");
+    await page.locator("#trip-type").selectOption("local");
+    await page.locator("#local-kind").selectOption("party");
+    await expect(page.locator("#party-address")).toBeVisible();
+    await page.locator("#party-address").fill("200 Oak St, Sherrills Ford NC");
+    await page
+      .locator("#booking-pickup")
+      .fill("123 Main Street, Denver NC 28037");
+    await expect(page.locator("#quote-details")).toContainText(
+      "One way to the party",
+    );
+    await expect(page.locator("#quote-details")).toContainText("Cash $15.00");
+    await fillIdentity(page);
+    await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
+    await expect(page.locator("#booking-success")).toContainText(
+      "Please check all three boxes",
+    );
+    expect(posts).toEqual([]);
+  });
+
+  test("a bar that is not on the list is out of our service area", async ({
+    page,
+  }) => {
+    const posts = await installMocks(page, { miles: 4 });
+    await page.goto("/");
+    await page.locator("#trip-type").selectOption("local");
+    await page.locator("#local-kind").selectOption("bar");
+    await page.locator("#bar-choice").evaluate((select) => {
+      const option = document.createElement("option");
+      option.value = "not-on-the-list";
+      option.textContent = "Some Other Bar";
+      select.appendChild(option);
+      select.value = "not-on-the-list";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await page
+      .locator("#booking-pickup")
+      .fill("123 Main Street, Denver NC 28037");
+    await expect(page.locator("#quote-details")).toHaveText(
+      "out of our service area.",
+    );
+    await expect(page.locator("#quote-details")).not.toContainText("Cash");
+    expect(posts).toEqual([]);
+  });
+
+  test("group shows the 2-hour minimum, 25% deposit, 6-passenger cap, and boxes", async ({
+    page,
+  }) => {
+    const posts = await installMocks(page);
+    await page.goto("/");
+    await page.locator("#trip-type").selectOption("group");
+    await page.locator("#group-hours").fill("1");
+    await page.locator("#group-hours").blur();
+    const quote = page.locator("#quote-details");
+    await expect(quote).toContainText("2-hour minimum");
+    await expect(quote).toContainText("Cash $250.00");
+    await expect(quote).toContainText("Card $257.50");
+    await expect(quote).toContainText("Deposit $62.50 cash");
+    await expect(quote).toContainText("$64.38 card");
+    await page.locator("#booking-passengers").fill("6");
+    await expect(page.locator("#passenger-capacity-message")).not.toContainText(
+      "seats 6",
+    );
+    await page.locator("#booking-passengers").fill("7");
+    await expect(page.locator("#passenger-capacity-message")).toContainText(
+      "The 2026 Toyota Sienna Platinum seats 6. For more than 6 passengers, please call (980) 422-9125.",
+    );
+    await page.locator("#booking-passengers").fill("2");
+    await fillIdentity(page);
+    await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
+    await expect(page.locator("#booking-success")).toContainText(
+      "Please check all three boxes: Must be 21 or older, No smoking, and If you damage anything, you are responsible.",
+    );
+    await page.locator("#rule-age").check();
+    await page.locator("#rule-smoke").check();
+    await page.locator("#rule-damage").check();
+    expect(posts).toEqual([]);
   });
 });
 

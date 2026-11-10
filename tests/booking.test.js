@@ -575,6 +575,7 @@ describe("booking", () => {
             "Charlotte-Monroe Executive (EQY)",
             "Wilgrove Air Park (8A6)",
             "Little Mountain (Airport Rd, Maiden)",
+            "Private airfield",
           ],
           {
             label: "airport menu lists every field in order",
@@ -594,6 +595,7 @@ describe("booking", () => {
             "EQY",
             "8A6",
             "LITTLE-MOUNTAIN",
+            "PRIVATE",
           ],
           {
             label: "airport menu keeps the existing option values",
