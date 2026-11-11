@@ -1123,9 +1123,19 @@ section button.btn {
     box-sizing: border-box;
   }
 
+  /* Same space on both sides, so the intro line sits in the middle. */
   header.hero .intro-text .skills {
-    padding-right: 64px;
+    padding-left: 0;
+    padding-right: 0;
     box-sizing: border-box;
+  }
+
+  /* The hero column is a flex column on a phone, which shrank this
+     line to the width of its star. Match the 250px section lines. */
+  header.hero hr.star-light {
+    width: 100%;
+    max-width: 250px;
+    align-self: center;
   }
 
   header.hero .hero-content {
