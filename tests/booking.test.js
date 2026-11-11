@@ -2089,6 +2089,47 @@ describe("booking", () => {
         });
       });
 
+      it("puts four matching booking boxes on the front page", async () => {
+        const view = await renderBooking(script);
+        const boxes = [
+          {
+            id: "hero-book-airport",
+            text: "Book an Airport Ride",
+            href: "/?type=airport#booking",
+          },
+          {
+            id: "hero-call",
+            text: "Call (980) 422-9125",
+            href: "tel:+19804229125",
+          },
+          {
+            id: "hero-book-group",
+            text: "Book a Group Ride",
+            href: "/?type=group#booking",
+          },
+          {
+            id: "hero-book-bar",
+            text: "Book a Bar Ride",
+            href: "/?type=local&kind=bar#booking",
+          },
+        ];
+        for (const box of boxes) {
+          const link = view.document.querySelector(`#${box.id}`);
+          check(link?.textContent.replace(/\s+/g, " ").trim(), box.text, {
+            label: `front page has ${box.text}`,
+            actual: link?.textContent,
+            source: SOURCE.group,
+            loaded: script,
+          });
+          check(link?.getAttribute("href"), box.href, {
+            label: `${box.text} opens the right place`,
+            actual: link?.getAttribute("href"),
+            source: SOURCE.group,
+            loaded: script,
+          });
+        }
+      });
+
       it("keeps one trip type chooser when the page did not choose", async () => {
         const view = await renderBooking(script, { url: "/#booking" });
         check(shown(view.document.querySelector("#trip-type-group")), true, {
@@ -2244,8 +2285,8 @@ describe("booking", () => {
           source: SOURCE.group,
           loaded: script,
         });
-        check(payload.roundTrip, "No", {
-          label: "group booking does not send a return trip",
+        check(payload.roundTrip, "Yes", {
+          label: "group events are always a round trip",
           actual: payload.roundTrip,
           source: SOURCE.group,
           loaded: script,

@@ -619,7 +619,7 @@ describe("form entries", () => {
           flightNumber: "",
           checkingBags: "No",
           bagCount: 0,
-          roundTrip: "No",
+          roundTrip: "Yes",
           returnDate: "",
           returnTime: "",
           groupEvent: "Yes",

@@ -557,16 +557,22 @@ export async function fillValid(view, overrides = {}) {
       window.jQuery(box).trigger("change");
     }
   }
-  if (overrides.roundTrip) {
-    const roundTrip = role(doc, "checkbox", { name: /round trip/i });
-    roundTrip.checked = true;
-    window.jQuery(roundTrip).trigger("change");
-    setWhen(
-      doc,
-      overrides.returnDate ?? "2026-12-16",
-      overrides.returnTime ?? "15:00:00",
-      "return-",
-    );
+  if (trip === "airport" || trip === "local") {
+    if (overrides.roundTrip === true) {
+      const yes = doc.querySelector("#booking-round-trip");
+      yes.checked = true;
+      window.jQuery(yes).trigger("change");
+      setWhen(
+        doc,
+        overrides.returnDate ?? "2026-12-16",
+        overrides.returnTime ?? "15:00:00",
+        "return-",
+      );
+    } else if (overrides.roundTrip !== null) {
+      const no = doc.querySelector("#booking-round-trip-no");
+      no.checked = true;
+      window.jQuery(no).trigger("change");
+    }
   }
   setWhen(doc, overrides.date ?? "2026-12-15", overrides.time ?? "10:00:00");
 }
@@ -590,7 +596,7 @@ export async function showQuote(
 ) {
   chooseTrip(view.document, airport === "No" ? "group" : "airport");
   if (roundTrip) {
-    const box = role(view.document, "checkbox", { name: /round trip/i });
+    const box = view.document.querySelector("#booking-round-trip");
     box.checked = true;
     window.jQuery(box).trigger("change");
   }
@@ -622,7 +628,7 @@ export async function showAirfieldQuote(
 ) {
   chooseTrip(view.document, "airport");
   if (roundTrip) {
-    const box = role(view.document, "checkbox", { name: /round trip/i });
+    const box = view.document.querySelector("#booking-round-trip");
     box.checked = true;
     view.window.jQuery(box).trigger("change");
   }
