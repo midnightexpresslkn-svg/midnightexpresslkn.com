@@ -1,0 +1,14 @@
+# gitleaks config for npm run verify (scripts/ci.mjs) and CI. All default rules stay on.
+# One narrow exception, approved by Donald (Nov 10, 2026): the Google Maps BROWSER key in js/maps-config.js.
+# That key is public by design (every visitor's browser receives it) and is locked in Google Cloud to the
+# referrers https://midnightexpresslkn.com/* and https://www.midnightexpresslkn.com/* and to the Maps
+# JavaScript, Places and Routes APIs. Only the gcp-api-key and generic-api-key rules, only that file, only a key with that prefix.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Donald's referrer-restricted Google Maps browser key in js/maps-config.js"
+targetRules = ["gcp-api-key", "generic-api-key"]
+condition = "AND"
+paths = ['''^js/maps-config\.js$''']
+regexes = ['''^AIzaSyDM21OH[\w-]{27}$''']
