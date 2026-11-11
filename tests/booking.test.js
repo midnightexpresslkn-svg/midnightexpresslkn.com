@@ -24,8 +24,9 @@ afterEach(() => {
 
 function nearestFiveCents(cents) {
   const step = 500;
-  let units = Math.floor(cents / step);
-  if (cents % step > 250) units += 1;
+  const whole = Math.round(cents);
+  let units = Math.floor(whole / step);
+  if (whole % step >= 250) units += 1;
   return units * step;
 }
 
@@ -370,12 +371,12 @@ describe("booking", () => {
         });
       });
 
-      it("rounds cash to the nearest $5 and adds 3 percent on the card", async () => {
+      it("rounds cash to the nearest $5 (an exact $2.50 up) and adds exactly 3 percent on the card", async () => {
         const cases = [
-          [7250 / 263, "Cash $70.00 · Card $72.10"],
-          [7251 / 263, "Cash $75.00 · Card $77.25"],
-          [7750 / 263, "Cash $75.00 · Card $77.25"],
-          [7751 / 263, "Cash $80.00 · Card $82.40"],
+          [7249 / 263, "Cash $70.00 · Card $72.10"],
+          [7250 / 263, "Cash $75.00 · Card $77.25"],
+          [7749 / 263, "Cash $75.00 · Card $77.25"],
+          [7750 / 263, "Cash $80.00 · Card $82.40"],
           [8500 / 263, "Cash $85.00 · Card $87.55"],
         ];
         for (const [miles, expected] of cases) {
