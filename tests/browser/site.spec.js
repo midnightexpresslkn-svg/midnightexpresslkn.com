@@ -108,17 +108,17 @@ test.describe("booking page", () => {
       .fill("123 Main Street, Denver NC 28037");
     const quote = page.locator("#quote-details");
     await expect(quote).toContainText("Cash $65.00");
-    await expect(quote).toContainText("Card $65.00");
+    await expect(quote).toContainText("Card $66.95");
     await expect(quote).not.toContainText("2.75");
     await expect(quote).not.toContainText("2.63");
     await expect(quote).not.toContainText(/per mile/i);
     expect(posts).toEqual([]);
   });
 
-  test("airport prices round to the nearest $5 on cash and card", async ({
+  test("airport cash rounds to the nearest $5 and card is exactly 3 percent more", async ({
     page,
   }) => {
-    // 30 miles * $2.63 = $78.90 -> $80 cash; card $82.40 -> $80. Nothing is submitted.
+    // 30 miles * $2.63 = $78.90 -> $80 cash; card $82.40. Nothing is submitted.
     const posts = await installMocks(page, { miles: 30 });
     await page.goto("/");
     await page.locator("#trip-type").selectOption("airport");
@@ -128,8 +128,8 @@ test.describe("booking page", () => {
       .fill("123 Main Street, Denver NC 28037");
     const quote = page.locator("#quote-details");
     await expect(quote).toContainText("Cash $80.00");
-    await expect(quote).toContainText("Card $80.00");
-    await expect(quote).not.toContainText("82.40");
+    await expect(quote).toContainText("Card $82.40");
+    await expect(quote).not.toContainText("78.90");
     expect(posts).toEqual([]);
   });
 
@@ -454,7 +454,7 @@ test.describe("booking page", () => {
     const quote = page.locator("#quote-details");
     await expect(quote).toContainText("One way to Smith Field");
     await expect(quote).toContainText("Cash $105.00");
-    await expect(quote).toContainText("Card $110.00");
+    await expect(quote).toContainText("Card $108.15");
     await expect(quote).not.toContainText("2.63");
     await expect(quote).not.toContainText(/per mile/i);
     await page.locator("#trip-type").selectOption("group");
@@ -543,7 +543,7 @@ test.describe("new rides on a 375px phone", () => {
       "One way to Two Trees",
     );
     await expect(page.locator("#quote-details")).toContainText("Cash $15.00");
-    await expect(page.locator("#quote-details")).toContainText("Card $15.00");
+    await expect(page.locator("#quote-details")).toContainText("Card $15.45");
     await fillIdentity(page);
     await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
     await expect(page.locator("#booking-success")).toContainText(
@@ -704,9 +704,9 @@ test.describe("new rides on a 375px phone", () => {
     const quote = page.locator("#quote-details");
     await expect(quote).toContainText("2-hour minimum");
     await expect(quote).toContainText("Cash $250.00");
-    await expect(quote).toContainText("Card $260.00");
+    await expect(quote).toContainText("Card $257.50");
     await expect(quote).toContainText("Deposit $62.50 cash");
-    await expect(quote).toContainText("$65.00 card");
+    await expect(quote).toContainText("$64.38 card");
     await page.locator("#booking-passengers").fill("6");
     await expect(page.locator("#passenger-capacity-message")).not.toContainText(
       "seats 6",
@@ -904,7 +904,7 @@ test.describe("Two Trees towns and group radius at 375px", () => {
       .locator("#booking-pickup")
       .fill("123 Main Street, Denver NC 28037");
     await expect(page.locator("#quote-details")).toContainText("Cash $25.00");
-    await expect(page.locator("#quote-details")).toContainText("Card $25.00");
+    await expect(page.locator("#quote-details")).toContainText("Card $25.75");
     expect(posts).toEqual([]);
   });
 

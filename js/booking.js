@@ -92,8 +92,8 @@
         return typeof bar.maxMiles === 'number' && miles > bar.maxMiles;
     }
 
-    // Every quoted price (cash and card) is rounded to the nearest $5; an exact $2.50 rounds up.
-    // Card = the rounded cash * 1.03, then rounded the same way. April (Ara v4.7) uses the same rule.
+    // Every quoted cash price is rounded to the nearest $5; an exact $2.50 rounds up.
+    // Card = the rounded cash * 1.03 to the cent (exactly 3% over cash). April (Ara v4.7) uses the same rule.
     function nearestFiveCents(cents) {
         var whole = Math.round(cents);
         var units = Math.floor(whole / 500);
@@ -101,14 +101,14 @@
         return units * 500;
     }
 
-    function cardFiveCents(cashCents) {
-        return nearestFiveCents(cashCents * 1.03);
+    function cardCentsFor(cashCents) {
+        return Math.round(cashCents * 1.03);
     }
 
     function localFare(miles, roundTrip) {
         var one = miles <= 2 ? 1000 : Math.max(1500, Math.round(miles * 300));
         var cash = nearestFiveCents(roundTrip ? one * 2 : one);
-        return { cashCents: cash, cardCents: cardFiveCents(cash) };
+        return { cashCents: cash, cardCents: cardCentsFor(cash) };
     }
 
     function groupFare(hours) {
@@ -116,7 +116,7 @@
         var minimum = entered < GROUP_MIN_HOURS;
         var billed = minimum ? GROUP_MIN_HOURS : entered;
         var cash = nearestFiveCents(billed * GROUP_HOURLY_CENTS);
-        var card = cardFiveCents(cash);
+        var card = cardCentsFor(cash);
         return {
             entered: entered,
             billed: billed,
@@ -170,7 +170,7 @@
         listedBar: listedBar,
         overVenueMiles: overVenueMiles,
         nearestFiveCents: nearestFiveCents,
-        cardFiveCents: cardFiveCents,
+        cardCentsFor: cardCentsFor,
         localFare: localFare,
         groupFare: groupFare,
         mapKey: mapKey,
@@ -2326,7 +2326,7 @@
         var oneCents=Math.round(Math.max(q([59,56]),mi*q([63,35,59,62]))*100);
         var rides=globalThis.MidnightRides;
         var cashCents=rides.nearestFiveCents(rt?oneCents*2:oneCents);
-        var cardCents=rides.cardFiveCents(cashCents);
+        var cardCents=rides.cardCentsFor(cashCents);
         return {cash:cashCents/100,card:cardCents/100};
     }
     function lookupAirport(raw){

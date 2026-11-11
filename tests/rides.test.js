@@ -135,7 +135,7 @@ function shown(element) {
 }
 
 describe.each(scripts)("local bars and group %s", (script) => {
-  it("rounds every price to the nearest $5, an exact $2.50 up, cash and card (Donald, Nov 10 2026)", async () => {
+  it("rounds cash to the nearest $5 (an exact $2.50 up) and keeps the card exactly 3 percent over cash (Donald, Nov 10 2026)", async () => {
     const view = await renderBooking(script);
     const rides = view.window.MidnightRides;
     const five = [
@@ -153,13 +153,13 @@ describe.each(scripts)("local bars and group %s", (script) => {
     });
     check(
       [
-        rides.cardFiveCents(7500),
-        rides.cardFiveCents(8500),
-        rides.cardFiveCents(25000),
+        rides.cardCentsFor(7500),
+        rides.cardCentsFor(8500),
+        rides.cardCentsFor(25000),
       ],
-      [7500, 9000, 26000],
+      [7725, 8755, 25750],
       {
-        label: "card is cash plus 3 percent, then the nearest $5",
+        label: "card is the rounded cash plus exactly 3 percent, to the cent",
         source: "js/booking.js",
         loaded: script,
       },
@@ -168,9 +168,10 @@ describe.each(scripts)("local bars and group %s", (script) => {
     const barRound = rides.localFare(5.5, true);
     check(
       [bar.cashCents, bar.cardCents, barRound.cashCents, barRound.cardCents],
-      [1500, 1500, 3500, 3500],
+      [1500, 1545, 3500, 3605],
       {
-        label: "a $16.50 bar fare is $15; its $33 round trip is $35",
+        label:
+          "a $16.50 bar fare is $15 ($15.45 card); its $33 round trip is $35 ($36.05 card)",
         source: "js/booking.js",
         loaded: script,
       },
@@ -183,10 +184,10 @@ describe.each(scripts)("local bars and group %s", (script) => {
         group.depositCashCents,
         group.depositCardCents,
       ],
-      [37500, 38500, 9375, 9625],
+      [37500, 38625, 9375, 9656],
       {
         label:
-          "group card $386.25 -> $385; deposit is 25% of the rounded total",
+          "group card is $386.25; deposits are 25% of the cash and card totals",
         source: "js/booking.js",
         loaded: script,
       },
@@ -358,13 +359,13 @@ describe.each(scripts)("local bars and group %s", (script) => {
   });
 
   it.each([
-    [1.5, false, "Cash $10.00 · Card $10.00"],
-    [2, false, "Cash $10.00 · Card $10.00"],
-    [2.01, false, "Cash $15.00 · Card $15.00"],
-    [4, false, "Cash $15.00 · Card $15.00"],
-    [10, false, "Cash $30.00 · Card $30.00"],
-    [10, true, "Cash $60.00 · Card $60.00"],
-    [1.5, true, "Cash $20.00 · Card $20.00"],
+    [1.5, false, "Cash $10.00 · Card $10.30"],
+    [2, false, "Cash $10.00 · Card $10.30"],
+    [2.01, false, "Cash $15.00 · Card $15.45"],
+    [4, false, "Cash $15.00 · Card $15.45"],
+    [10, false, "Cash $30.00 · Card $30.90"],
+    [10, true, "Cash $60.00 · Card $61.80"],
+    [1.5, true, "Cash $20.00 · Card $20.60"],
   ])(
     "prices %s miles roundTrip=%s as %s",
     async (miles, roundTrip, expected) => {
@@ -400,7 +401,7 @@ describe.each(scripts)("local bars and group %s", (script) => {
   it("limits Two Trees to 10 road miles and leaves other venues open", async () => {
     const inside = await renderBooking(script, { miles: 9.99 });
     const insideText = await priceBar(inside, 9.99);
-    check(insideText.includes("Cash $30.00 · Card $30.00"), true, {
+    check(insideText.includes("Cash $30.00 · Card $30.90"), true, {
       label: "9.99 miles from Two Trees is still quoted",
       actual: insideText,
       source: "js/booking.js",
@@ -414,7 +415,7 @@ describe.each(scripts)("local bars and group %s", (script) => {
     });
     const edge = await renderBooking(script, { miles: 10 });
     const edgeText = await priceBar(edge, 10);
-    check(edgeText.includes("Cash $30.00 · Card $30.00"), true, {
+    check(edgeText.includes("Cash $30.00 · Card $30.90"), true, {
       label: "exactly 10.00 miles from Two Trees is quoted",
       actual: edgeText,
       source: "js/booking.js",
@@ -447,7 +448,7 @@ describe.each(scripts)("local bars and group %s", (script) => {
     });
     const open = await renderBooking(script, { miles: 12 });
     const openText = await priceBar(open, 12, { bar: "bourbon-bobber" });
-    check(openText.includes("Cash $35.00 · Card $35.00"), true, {
+    check(openText.includes("Cash $35.00 · Card $36.05"), true, {
       label: "a venue without maxMiles is quoted past 10 miles",
       actual: openText,
       source: "js/booking.js",
@@ -477,7 +478,7 @@ describe.each(scripts)("local bars and group %s", (script) => {
     party.value = "200 Oak St, Sherrills Ford NC";
     view.window.jQuery(party).trigger("blur");
     const text = await waitQuote(view);
-    check(text.includes("Cash $30.00 · Card $30.00"), true, {
+    check(text.includes("Cash $30.00 · Card $30.90"), true, {
       label: "10 mile party fare",
       actual: text,
       source: "js/booking.js",
@@ -577,7 +578,7 @@ describe.each(scripts)("local bars and group %s", (script) => {
   it("prices a listed Mooresville bar and a geocoded Royal Bliss address", async () => {
     const parrot = await renderBooking(script, { miles: 6 });
     const parrotText = await priceBar(parrot, 6, { bar: "blue-parrot" });
-    check(parrotText.includes("Cash $20.00 · Card $20.00"), true, {
+    check(parrotText.includes("Cash $20.00 · Card $20.60"), true, {
       label:
         "Blue Parrot is priced even though Mooresville is outside the town list",
       actual: parrotText,
@@ -586,7 +587,7 @@ describe.each(scripts)("local bars and group %s", (script) => {
     });
     const bliss = await renderBooking(script, { miles: 4 });
     const blissText = await priceBar(bliss, 4, { bar: "royal-bliss" });
-    check(blissText.includes("Cash $15.00 · Card $15.00"), true, {
+    check(blissText.includes("Cash $15.00 · Card $15.45"), true, {
       label: "Royal Bliss is priced from its street address",
       actual: blissText,
       source: "js/booking.js",
@@ -695,13 +696,13 @@ describe.each(scripts)("local bars and group %s", (script) => {
       source: "js/booking.js",
       loaded: script,
     });
-    check(text.includes("Cash $250.00 · Card $260.00"), true, {
+    check(text.includes("Cash $250.00 · Card $257.50"), true, {
       label: "minimum cash and card",
       actual: text,
       source: "js/booking.js",
       loaded: script,
     });
-    check(text.includes("Deposit $62.50 cash · $65.00 card"), true, {
+    check(text.includes("Deposit $62.50 cash · $64.38 card"), true, {
       label: "25 percent deposit on the 2 hour minimum",
       actual: text,
       source: "js/booking.js",
@@ -725,13 +726,13 @@ describe.each(scripts)("local bars and group %s", (script) => {
       source: "js/booking.js",
       loaded: script,
     });
-    check(text.includes("Cash $375.00 · Card $385.00"), true, {
+    check(text.includes("Cash $375.00 · Card $386.25"), true, {
       label: "three hours at $125",
       actual: text,
       source: "js/booking.js",
       loaded: script,
     });
-    check(text.includes("Deposit $93.75 cash · $96.25 card"), true, {
+    check(text.includes("Deposit $93.75 cash · $96.56 card"), true, {
       label: "25 percent of the three hour total",
       actual: text,
       source: "js/booking.js",
@@ -836,7 +837,7 @@ describe.each(scripts)("local bars and group %s", (script) => {
       destination: "CLT",
     });
     const airportText = quoteText(airport.document);
-    check(airportText.includes("Cash $80.00 · Card $80.00"), true, {
+    check(airportText.includes("Cash $80.00 · Card $82.40"), true, {
       label: "airport fare uses the Google road miles",
       actual: airportText,
       source: "js/booking.js",
@@ -882,7 +883,7 @@ describe.each(scripts)("local bars and group %s", (script) => {
       googleMaps: googleSdk(),
     });
     const barText = await priceBar(bar, 4);
-    check(barText.includes("Cash $30.00 · Card $30.00"), true, {
+    check(barText.includes("Cash $30.00 · Card $30.90"), true, {
       label: "a bar fare uses the Google miles instead of the fallback",
       actual: barText,
       source: "js/booking.js",
@@ -984,7 +985,7 @@ describe.each(scripts)("local bars and group %s", (script) => {
       polyline: "_",
     });
     const text = await priceBar(view, 8);
-    check(text.includes("Cash $25.00 · Card $25.00"), true, {
+    check(text.includes("Cash $25.00 · Card $25.75"), true, {
       label: "eight Google miles still use the bar formula",
       actual: text,
       source: "js/booking.js",
@@ -1100,7 +1101,7 @@ describe.each(scripts)("local bars and group %s", (script) => {
     view.window.jQuery(hours).trigger("change");
     view.window.jQuery("#booking-pickup").trigger("blur");
     const text = await waitQuote(view);
-    check(text.includes("Cash $250.00 · Card $260.00"), true, {
+    check(text.includes("Cash $250.00 · Card $257.50"), true, {
       label: "the group fare stays hourly",
       actual: text,
       source: "js/booking.js",
@@ -1850,7 +1851,7 @@ describe.each(scripts)("private airfield %s", (script) => {
       source: "js/booking.js",
       loaded: script,
     });
-    check(priced.includes("Card $110.00"), true, {
+    check(priced.includes("Card $108.15"), true, {
       label: "40 miles is the airport card fare",
       actual: priced,
       source: "js/booking.js",
@@ -2137,7 +2138,7 @@ describe.each(scripts)("Two Trees towns and group radius %s", (script) => {
   it("prices Two Trees inside 10 miles from a served town and blocks excluded towns", async () => {
     const allowed = await renderBooking(script, { miles: 9 });
     const allowedText = await priceBar(allowed, 9);
-    check(allowedText.includes("Cash $25.00 · Card $25.00"), true, {
+    check(allowedText.includes("Cash $25.00 · Card $25.75"), true, {
       label: "9 miles from Denver still quotes Two Trees",
       actual: allowedText,
       source: "js/booking.js",
