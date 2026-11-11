@@ -129,15 +129,24 @@ header.hero hr.star-light {
 }
 
 header.hero .hero-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
-  margin-top: 8px;
+  width: 100%;
+  max-width: 1080px;
+  margin: 8px auto 0;
 }
 
 header.hero .hero-actions .btn {
   margin: 0;
+  width: 100%;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  white-space: normal;
+  line-height: 1.2;
 }
 
 header.hero .btn-outline:hover,
@@ -367,7 +376,7 @@ header.hero .btn-outline:active {
     line-height: 1.27;
   }
 
-  /* Keep Book Your Ride and Call on the first phone screen.
+  /* Keep the four booking boxes on the first phone screen.
      Pull the action buttons up under the van photo; leave the
      logo, heading, and about line for scrolling below. */
   header.hero .hero-content > .row > [class*="col-"] {
@@ -383,11 +392,16 @@ header.hero .btn-outline:active {
     order: -1;
     margin: 16px 0 12px;
     gap: 10px;
+    grid-template-columns: 1fr 1fr;
   }
 
   header.hero .hero-actions .btn {
     width: 100%;
-    max-width: 22rem;
+    max-width: none;
+    min-height: 48px;
+    padding: 8px 6px;
+    font-size: 14px;
+    box-sizing: border-box;
   }
 
   .hero-control {

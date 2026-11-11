@@ -790,6 +790,126 @@ describe.each(scripts)("local bars and group %s", (script) => {
     );
   });
 
+  it("lets a bar ride book six passengers and asks seven to call", async () => {
+    const six = await renderBooking(script);
+    await fillValid(six, { trip: "local", passengers: "6" });
+    await submitForm(six);
+    check(resultText(six.document).includes("Request received"), true, {
+      label: "six bar passengers can request a ride",
+      actual: resultText(six.document),
+      source: "js/booking.js",
+      loaded: script,
+    });
+    const seven = await renderBooking(script);
+    await fillValid(seven, { trip: "local", passengers: "7" });
+    await submitForm(seven);
+    check(
+      resultText(seven.document).includes(
+        "The 2026 Toyota Sienna Platinum seats 6. For more than 6 passengers, please call (980) 422-9125.",
+      ),
+      true,
+      {
+        label: "seven bar passengers sees the Sienna seat message",
+        actual: resultText(seven.document),
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+  });
+
+  it("requires a Yes or No round trip on airport and bar rides", async () => {
+    const airport = await renderBooking(script);
+    await fillValid(airport, { trip: "airport", roundTrip: null });
+    await submitForm(airport);
+    check(
+      resultText(airport.document).includes(
+        "Please choose Yes or No for round trip.",
+      ),
+      true,
+      {
+        label: "an airport booking needs a round trip choice",
+        actual: resultText(airport.document),
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    check(bookingPosts(airport.state).length, 0, {
+      label: "an airport booking without Yes or No is not sent",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    const bar = await renderBooking(script);
+    await fillValid(bar, { trip: "local", roundTrip: null });
+    await submitForm(bar);
+    check(
+      resultText(bar.document).includes(
+        "Please choose Yes or No for round trip.",
+      ),
+      true,
+      {
+        label: "a bar booking needs a round trip choice",
+        actual: resultText(bar.document),
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+  });
+
+  it("opens the bar form from type=bar or kind=bar", async () => {
+    const typed = await renderBooking(script, { url: "/?type=bar#booking" });
+    check(typed.document.querySelector("#trip-type").value, "local", {
+      label: "type=bar opens Local Bars and Parties",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    check(typed.document.querySelector("#local-kind").value, "bar", {
+      label: "type=bar preselects bar or restaurant",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    check(shown(typed.document.querySelector("#bar-choice")), true, {
+      label: "type=bar shows the bar list",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    const kinded = await renderBooking(script, {
+      url: "/?type=local&kind=bar#booking",
+    });
+    check(kinded.document.querySelector("#local-kind").value, "bar", {
+      label: "kind=bar preselects bar or restaurant",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    const party = await renderBooking(script, {
+      url: "/?type=local&kind=party#booking",
+    });
+    check(party.document.querySelector("#local-kind").value, "party", {
+      label: "kind=party preselects a party",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    check(shown(party.document.querySelector("#party-address")), true, {
+      label: "kind=party shows the party address",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    check(
+      shown(kinded.document.querySelector("#booking-round-trip-no")),
+      true,
+      {
+        label: "a bar booking asks Yes or No for round trip",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    const group = await renderBooking(script, { url: "/?type=group#booking" });
+    check(shown(group.document.querySelector("#round-trip-section")), false, {
+      label: "a group event has no round trip option",
+      source: "js/booking.js",
+      loaded: script,
+    });
+  });
+
   it("hides the map and keeps OSRM pricing when no Google key is set", async () => {
     const view = await renderBooking(script, { miles: 10 });
     const text = await priceBar(view, 10);

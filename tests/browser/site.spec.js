@@ -6,6 +6,13 @@ async function answerBags(page) {
   await page.locator("#booking-bag-count").fill("0");
 }
 
+async function answerRoundTrip(page, value = "No") {
+  const section = page.locator("#round-trip-section");
+  if (!(await section.isVisible())) return;
+  const id = value === "Yes" ? "#booking-round-trip" : "#booking-round-trip-no";
+  await page.locator(id).check();
+}
+
 async function installMocks(page, { miles = 10, bookings = [] } = {}) {
   const posts = [];
   await page.route("**/*", async (route) => {
@@ -216,6 +223,7 @@ test.describe("booking page", () => {
       el.value = "10:00:00";
     });
     await page.locator("#airport-choice").selectOption("");
+    await answerRoundTrip(page);
     await page.locator("#bookingForm button[type=submit]").click();
     const line = page
       .locator("#booking-success .alert li")
@@ -251,6 +259,7 @@ test.describe("booking page", () => {
       el.value = "10:00:00";
     });
     await answerBags(page);
+    await answerRoundTrip(page);
     await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
     await expect(page.locator("#booking-success")).toContainText(
       "Request received",
@@ -283,6 +292,7 @@ test.describe("booking page", () => {
       el.value = "10:00:00";
     });
     await answerBags(page);
+    await answerRoundTrip(page);
     await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
     await expect(page.locator("#booking-success")).toContainText(
       "That time is booked",
@@ -304,6 +314,63 @@ test.describe("booking page", () => {
     await expect(page.locator("#booking")).toBeVisible();
     await expect(page.locator("#group-hours")).toBeVisible();
     await expect(page.locator("#booking-quote")).toBeVisible();
+  });
+
+  test("round trip Yes or No matches the other booking labels", async ({
+    page,
+  }) => {
+    await installMocks(page);
+    const views = [
+      { width: 390, height: 844, fontSize: "21px" },
+      { width: 1280, height: 800, fontSize: "24px" },
+    ];
+    for (const { width, height, fontSize } of views) {
+      await page.setViewportSize({ width, height });
+      await page.goto("/?type=airport#booking");
+      const bags = page.locator("#checking-bags-label");
+      const bagsYes = page.locator("#checking-bags-section label").first();
+      const legend = page.locator(".round-trip-choice legend");
+      const options = page.locator("label.round-trip-option");
+      await expect(bags).toBeVisible();
+      await expect(legend).toHaveText("Round trip *");
+      const bagsStyle = await bags.evaluate((el) => {
+        const s = getComputedStyle(el);
+        return {
+          color: s.color,
+          fontSize: s.fontSize,
+          fontWeight: s.fontWeight,
+        };
+      });
+      expect(bagsStyle.color).toBe("rgb(255, 255, 255)");
+      expect(bagsStyle.fontSize).toBe(fontSize);
+      for (const loc of [legend, options.nth(0), options.nth(1), bagsYes]) {
+        await expect(loc).toHaveCSS("color", bagsStyle.color);
+        await expect(loc).toHaveCSS("font-size", bagsStyle.fontSize);
+        await expect(loc).toHaveCSS("font-weight", bagsStyle.fontWeight);
+      }
+      await page.goto("/?type=local&kind=bar#booking");
+      const passengers = page
+        .locator("#passengers-label, #passengers-group label")
+        .first();
+      const barLegend = page.locator(".round-trip-choice legend");
+      const barOptions = page.locator("label.round-trip-option");
+      await expect(barLegend).toBeVisible();
+      const paxStyle = await passengers.evaluate((el) => {
+        const s = getComputedStyle(el);
+        return {
+          color: s.color,
+          fontSize: s.fontSize,
+          fontWeight: s.fontWeight,
+        };
+      });
+      expect(paxStyle.color).toBe("rgb(255, 255, 255)");
+      expect(paxStyle.fontSize).toBe(fontSize);
+      for (const loc of [barLegend, barOptions.nth(0), barOptions.nth(1)]) {
+        await expect(loc).toHaveCSS("color", paxStyle.color);
+        await expect(loc).toHaveCSS("font-size", paxStyle.fontSize);
+        await expect(loc).toHaveCSS("font-weight", paxStyle.fontWeight);
+      }
+    }
   });
 
   test("about section is one short paragraph", async ({ page }) => {
@@ -413,6 +480,7 @@ test.describe("booking page", () => {
       el.value = "10:00:00";
     });
     await answerBags(page);
+    await answerRoundTrip(page);
     await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
     await expect(page.locator("#booking-success")).toContainText(
       "Request received",
@@ -506,6 +574,7 @@ test.describe("booking page", () => {
 });
 
 async function fillIdentity(page) {
+  await answerRoundTrip(page);
   await page.locator("#booking-name").fill("TEST, DO NOT BOOK");
   await page.locator("#booking-phone").fill("9804229125");
   await page.locator("#booking-email").fill("jane@example.com");
@@ -815,6 +884,7 @@ test.describe("group description on a 375px phone", () => {
       .locator("#booking-pickup")
       .fill("123 Main Street, Denver NC 28037");
     await answerBags(page);
+    await answerRoundTrip(page);
     await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
     await expect(page.locator("#booking-success")).toContainText(
       "Request received",
@@ -881,6 +951,7 @@ test.describe("group description on a 375px phone", () => {
       .locator("#booking-pickup")
       .fill("123 Main Street, Denver NC 28037");
     await answerBags(page);
+    await answerRoundTrip(page);
     await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
     await expect(page.locator("#booking-success")).toContainText(
       "Request received",
@@ -979,11 +1050,15 @@ test.describe("hero CTAs above the fold on phones", () => {
     { width: 393, height: 852 },
     { width: 430, height: 932 },
   ];
+  const ids = [
+    "hero-book-airport",
+    "hero-call",
+    "hero-book-group",
+    "hero-book-bar",
+  ];
 
   for (const { width, height } of viewports) {
-    test(`Book Your Ride and Call fit in ${width}x${height}`, async ({
-      page,
-    }) => {
+    test(`four booking boxes fit in ${width}x${height}`, async ({ page }) => {
       await page.route("**/*", async (route) => {
         const host = new URL(route.request().url()).hostname;
         if (host === "127.0.0.1" || host === "localhost") {
@@ -1000,32 +1075,33 @@ test.describe("hero CTAs above the fold on phones", () => {
       await page.goto("/");
       await page.evaluate(() => document.fonts && document.fonts.ready);
 
-      const book = page.locator('header.hero a[href="#booking"]');
-      const call = page.locator('header.hero a[href^="tel:"]');
-      await expect(book).toBeVisible();
-      await expect(call).toBeVisible();
-
-      const bookBox = await book.boundingBox();
-      const callBox = await call.boundingBox();
-      expect(bookBox, "Book Your Ride missing box").toBeTruthy();
-      expect(callBox, "Call missing box").toBeTruthy();
-
-      expect(bookBox.y).toBeGreaterThanOrEqual(0);
-      expect(bookBox.y + bookBox.height).toBeLessThanOrEqual(height + 1);
-      expect(callBox.y).toBeGreaterThanOrEqual(0);
-      expect(callBox.y + callBox.height).toBeLessThanOrEqual(height + 1);
-      expect(callBox.y).toBeGreaterThanOrEqual(bookBox.y);
+      const boxes = [];
+      for (const id of ids) {
+        const link = page.locator(`header.hero #${id}`);
+        await expect(link).toBeVisible();
+        const box = await link.boundingBox();
+        expect(box, `${id} missing box`).toBeTruthy();
+        expect(box.y).toBeGreaterThanOrEqual(0);
+        expect(box.y + box.height).toBeLessThanOrEqual(height + 1);
+        boxes.push(box);
+      }
+      expect(boxes[1].y).toBeGreaterThanOrEqual(boxes[0].y - 1);
+      expect(boxes[3].y).toBeGreaterThanOrEqual(boxes[2].y - 1);
     });
   }
 });
 
-test.describe("call button label fits inside the phone button", () => {
+test.describe("hero button labels fit inside their boxes", () => {
   const widths = [320, 375, 390, 430];
+  const labels = {
+    "hero-book-airport": "Book an Airport Ride",
+    "hero-call": "Call (980) 422-9125",
+    "hero-book-group": "Book a Group Ride",
+    "hero-book-bar": "Book a Bar Ride",
+  };
 
   for (const width of widths) {
-    test(`Call (980) 422-9125 fits the existing box at ${width}px`, async ({
-      page,
-    }) => {
+    test(`front page box labels fit at ${width}px`, async ({ page }) => {
       await page.route("**/*", async (route) => {
         const host = new URL(route.request().url()).hostname;
         if (host === "127.0.0.1" || host === "localhost") {
@@ -1042,9 +1118,7 @@ test.describe("call button label fits inside the phone button", () => {
       await page.goto("/");
       await page.evaluate(() => document.fonts && document.fonts.ready);
 
-      const fit = await page.evaluate(() => {
-        const call = document.querySelector('header.hero a[href^="tel:"]');
-        const book = document.querySelector('header.hero a[href="#booking"]');
+      const fit = await page.evaluate((ids) => {
         function measure(el) {
           const box = el.getBoundingClientRect();
           const cs = getComputedStyle(el);
@@ -1059,10 +1133,6 @@ test.describe("call button label fits inside the phone button", () => {
           const paddingRight = parseFloat(cs.paddingRight);
           return {
             text: el.innerText.replace(/\s+/g, " ").trim(),
-            fontSize: cs.fontSize,
-            lineHeight: cs.lineHeight,
-            padding: cs.padding,
-            maxWidth: cs.maxWidth,
             width: box.width,
             height: box.height,
             textLeft,
@@ -1071,21 +1141,24 @@ test.describe("call button label fits inside the phone button", () => {
             innerRight: box.right - borderRight - paddingRight,
           };
         }
-        return { call: measure(call), book: measure(book) };
-      });
+        const out = {};
+        for (const id of ids) {
+          out[id] = measure(document.querySelector(`header.hero #${id}`));
+        }
+        return out;
+      }, Object.keys(labels));
 
-      expect(fit.call.text).toBe("Call (980) 422-9125");
-      expect(fit.call.textLeft).toBeGreaterThanOrEqual(
-        fit.call.innerLeft - 0.5,
+      const widthsFound = Object.values(fit).map((box) => box.width);
+      for (const [id, text] of Object.entries(labels)) {
+        expect(fit[id].text).toBe(text);
+        expect(fit[id].textLeft).toBeGreaterThanOrEqual(
+          fit[id].innerLeft - 0.5,
+        );
+        expect(fit[id].textRight).toBeLessThanOrEqual(fit[id].innerRight + 0.5);
+      }
+      expect(Math.max(...widthsFound) - Math.min(...widthsFound)).toBeLessThan(
+        2,
       );
-      expect(fit.call.textRight).toBeLessThanOrEqual(fit.call.innerRight + 0.5);
-      expect(fit.call.width).toBeCloseTo(fit.book.width, 0);
-      expect(fit.call.height).toBeCloseTo(fit.book.height, 0);
-      expect(fit.call.maxWidth).toBe("220px");
-      expect(fit.book.maxWidth).toBe("220px");
-      expect(fit.book.fontSize).toBe("20px");
-      expect(parseFloat(fit.call.fontSize)).toBeLessThan(20);
-      expect(fit.call.padding).toBe(fit.book.padding);
     });
   }
 });

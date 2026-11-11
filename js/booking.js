@@ -884,6 +884,29 @@
         return tripKind() === 'airport';
     }
 
+    function roundTripChoice() {
+        return $('input[name="round-trip"]:checked').val() || '';
+    }
+
+    function isRoundTrip() {
+        return roundTripChoice() === 'Yes';
+    }
+
+    function seatsSix() {
+        return isGroupEvent() || isLocalTrip();
+    }
+
+    function passengerLimit(requirements) {
+        return seatsSix() ? GROUP_MAX_PASSENGERS : calculatePassengerCapacity(requirements);
+    }
+
+    function overCapacityMessage(limit) {
+        if (seatsSix()) {
+            return 'The ' + GROUP_VEHICLE + ' seats ' + GROUP_MAX_PASSENGERS + '. For more than ' + GROUP_MAX_PASSENGERS + ' passengers, please call (980) 422-9125.';
+        }
+        return 'For more than ' + limit + ' passengers, please call (980) 422-9125.';
+    }
+
     function privateAirfieldChosen() {
         return tripKind() === 'airport' && $('#airport-choice').val() === 'PRIVATE';
     }
@@ -908,13 +931,17 @@
     }
 
     function readPresetTrip() {
-        var presetTrip = '';
-        try {
-            presetTrip = new URLSearchParams(window.location.search).get('type') || '';
-        } catch (err) {
-            void err;
-        }
+        var presetTrip = urlParam('type');
+        if (presetTrip === 'bar') return 'local';
         if (presetTrip === 'airport' || presetTrip === 'local' || presetTrip === 'group') return presetTrip;
+        return '';
+    }
+
+    function readPresetLocalKind() {
+        var type = urlParam('type');
+        var kind = urlParam('kind');
+        if (type === 'bar' || kind === 'bar') return 'bar';
+        if (kind === 'party') return 'party';
         return '';
     }
 
@@ -1066,7 +1093,7 @@
     }
 
     function updateConditionalFields() {
-        const roundTrip = $('#booking-round-trip').is(':checked');
+        const roundTrip = isRoundTrip();
 
         // Bags and a return flight are airport fields. Local keeps round trip for the fare only.
         if (isAirportTrip()) {
@@ -1084,7 +1111,7 @@
             $('input[name="checking-bags"]').prop('checked', false);
             $('#booking-bag-count').val('');
             $('#checking-bags-error, #bag-count-error').text('').hide();
-            $('#booking-round-trip').prop('checked', false);
+            $('#booking-round-trip, #booking-round-trip-no').prop('checked', false);
         }
 
         // Return date and time only for an airport round trip.
@@ -1096,9 +1123,6 @@
             $('#return-timeline-container').slideUp();
             $('#booking-return-date').val('');
             $('#booking-return-time').val('');
-            if (!isGroupEvent()) {
-                $('#booking-flight').val('');
-            }
             $('#return-date-error').text('').hide();
             $('#return-time-error').text('').hide();
         }
@@ -1168,10 +1192,8 @@
         };
 
         const maxCapacity = calculatePassengerCapacity(requirements);
-        const callMsg = isGroupEvent()
-            ? 'The ' + GROUP_VEHICLE + ' seats ' + GROUP_MAX_PASSENGERS + '. For more than ' + GROUP_MAX_PASSENGERS + ' passengers, please call (980) 422-9125.'
-            : 'For more than ' + maxCapacity + ' passengers, please call (980) 422-9125.';
-        const limit = isGroupEvent() ? GROUP_MAX_PASSENGERS : maxCapacity;
+        const limit = passengerLimit(requirements);
+        const callMsg = overCapacityMessage(limit);
 
         // Update or create capacity message
         let $capacityMsg = $('#passenger-capacity-message');
@@ -1183,7 +1205,7 @@
         }
 
         // Update capacity message with detailed explanation
-        if (wheelchair || carseat || checkingBags) {
+        if (!seatsSix() && (wheelchair || carseat || checkingBags)) {
             let reductionReasons = [];
             if (wheelchair || carseat) {
                 reductionReasons.push('mobility aid');
@@ -1566,16 +1588,14 @@
         }
 
         // Initialize return Flatpickr when round trip is checked
-        $('#booking-round-trip').on('change', function() {
-            if ($(this).is(':checked')) {
+        $('input[name="round-trip"]').on('change', function() {
+            $('#round-trip-error').text('').hide();
+            $('#round-trip-section .form-group').removeClass('has-error');
+            if (isRoundTrip()) {
                 setTimeout(function() {
                     initializeReturnFlatpickr();
                 }, 100); // Small delay to ensure the field is visible
             }
-        });
-
-        // Show/hide conditional fields based on round trip selection
-        $('#booking-round-trip').on('change', function() {
             updateConditionalFields();
         });
 
@@ -1763,7 +1783,7 @@
                 destinationAddress = partyAddress;
                 notes = notes ? 'Party ride. ' + notes : 'Party ride.';
             }
-            if (trip === 'local' && $('#booking-round-trip').is(':checked')) {
+            if (trip === 'local' && isRoundTrip()) {
                 notes = notes ? notes + ' Round trip.' : 'Round trip.';
             }
             const ack = (trip === 'group' || trip === 'local') ? rulesState() : null;
@@ -1785,7 +1805,7 @@
                 pickupTime: pickupTime,
                 checkingBags: asksTripDetails ? bagsChoice : 'No',
                 bagCount: asksTripDetails && bagCount.filled ? bagCount.value : 0,
-                roundTrip: (trip === 'airport' || trip === 'local') && $('#booking-round-trip').is(':checked') ? 'Yes' : 'No',
+                roundTrip: trip === 'group' || ((trip === 'airport' || trip === 'local') && isRoundTrip()) ? 'Yes' : 'No',
                 returnDate: asksTripDetails ? returnDate : '',
                 returnTime: asksTripDetails ? returnTime : '',
                 specialRequirements: trip === 'airport' ? specialRequirements : [],
@@ -2014,16 +2034,26 @@
                 errors.push(needMsg);
                 $('#booking-passengers').closest('.form-group').addClass('has-error').find('.help-block').text(needMsg).show();
                 isValid = false;
-            } else if (trip === 'group' && passengerCount > GROUP_MAX_PASSENGERS) {
-                const callMsg = 'The ' + GROUP_VEHICLE + ' seats ' + GROUP_MAX_PASSENGERS + '. For more than ' + GROUP_MAX_PASSENGERS + ' passengers, please call (980) 422-9125.';
+            } else if ((trip === 'group' || trip === 'local') && passengerCount > GROUP_MAX_PASSENGERS) {
+                const callMsg = overCapacityMessage(GROUP_MAX_PASSENGERS);
                 errors.push(callMsg);
                 $('#booking-passengers').closest('.form-group').addClass('has-error').find('.help-block').text(callMsg).show();
                 isValid = false;
-            } else if (trip !== 'group' && passengerCount > maxCapacity) {
-                const callMsg = 'For more than ' + maxCapacity + ' passengers, please call (980) 422-9125.';
+            } else if (trip === 'airport' && passengerCount > maxCapacity) {
+                const callMsg = overCapacityMessage(maxCapacity);
                 errors.push(callMsg);
                 $('#booking-passengers').closest('.form-group').addClass('has-error').find('.help-block').text(callMsg).show();
                 isValid = false;
+            }
+
+            if (trip === 'airport' || trip === 'local') {
+                if (roundTripChoice() !== 'Yes' && roundTripChoice() !== 'No') {
+                    const needTrip = 'Please choose Yes or No for round trip.';
+                    errors.push(needTrip);
+                    $('#round-trip-section .form-group').addClass('has-error');
+                    $('#round-trip-error').text(needTrip).show();
+                    isValid = false;
+                }
             }
 
             // Validate return flight fields if an airport round trip is yes
@@ -2303,6 +2333,10 @@
         if (presetTrip) {
             $('#trip-type').val(presetTrip);
             $('#trip-type-group').hide();
+            var presetKind = readPresetLocalKind();
+            if (presetTrip === 'local' && presetKind) {
+                $('#local-kind').val(presetKind);
+            }
             updateTripLayout();
         }
         globalThis.MidnightBooking = {
@@ -2613,7 +2647,7 @@
         var rides=globalThis.MidnightRides;
         var mode=$('#local-kind').val()||'';
         var pick=$.trim($('#booking-pickup').val()||'');
-        var rt=$('#booking-round-trip').is(':checked');
+        var rt=$('input[name="round-trip"]:checked').val()==='Yes';
         if(mode==='bar'&&barDenied()){hideMap();show(esc(rides.LOCAL_DENIAL));return;}
         if(mode!=='bar'&&mode!=='party'){hideMap();show('Choose a bar, restaurant, or party to see your price.');return;}
         var stop=null;
@@ -2671,7 +2705,7 @@
         var dest=$.trim((privateRide?$('#airfield-address'):$('#booking-destination')).val()||'');
         var airfieldName=$.trim($('#airfield-name').val()||'');
         var airport=privateRide?null:(airportFromChoice(choice)||lookupAirport(dest));
-        var rt=$('#booking-round-trip').is(':checked');
+        var rt=$('input[name="round-trip"]:checked').val()==='Yes';
         var privateAsk='Enter your home address and the airfield address to see your price.';
         if(pick.length<6||!/\d/.test(pick)){show(privateRide?privateAsk:ask);return;}
         if(privateRide){
@@ -2843,7 +2877,7 @@
             $('#booking-destination').val(found.typed).trigger('input');
         });
         $('#booking-pickup, #booking-destination, #party-address, #group-hours, #airfield-name, #airfield-address').on('input', later).on('change blur', function(){clearTimeout(timer);refresh();});
-        $('#booking-round-trip, #trip-type, #local-kind, #bar-choice').on('change', function() {
+        $('input[name="round-trip"], #trip-type, #local-kind, #bar-choice').on('change', function() {
             setTimeout(refresh, 50);
         });
         bindSuggest();
