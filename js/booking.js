@@ -2396,9 +2396,19 @@
         routeCache[k]=p; p.catch(function(){delete routeCache[k];});
         return p;
     }
+    var lastRoad=null;
     function hideMap(){
+        lastRoad=null;
         var slot=document.getElementById('ride-map-slot');
         if(slot) slot.hidden=true;
+    }
+    function routeText(road){
+        return (Math.round(road.miles*10)/10).toFixed(1)+' miles · '+road.minutes+' min';
+    }
+    // Donald (Nov 10, 2026): the Google road miles and minutes sit next to the price in the quote box.
+    function routeLine(rt){
+        if(!lastRoad) return '';
+        return '<br><span class="quote-route">'+routeText(lastRoad)+(rt?' each way':'')+'</span>';
     }
     function routeEnd(value){
         var text=String(value).trim();
@@ -2460,6 +2470,7 @@
         return points;
     }
     var mapsReady=null;
+    var ROUTE_PADDING=12;
     function ensureMaps(){
         if(globalThis.google&&globalThis.google.maps&&globalThis.google.maps.Map) return Promise.resolve(true);
         if(mapsReady){return mapsReady;}
@@ -2470,7 +2481,7 @@
             };
             var script=document.createElement('script');
             script.async=true;
-            script.src='https://maps.googleapis.com/maps/api/js?key='+encodeURIComponent(key)+'&v=weekly&callback=midnightMapsReady';
+            script.src='https://maps.googleapis.com/maps/api/js?key='+encodeURIComponent(key)+'&v=weekly&loading=async&callback=midnightMapsReady';
             script.onerror=function(){resolve(false);};
             document.head.appendChild(script);
         });
@@ -2481,19 +2492,21 @@
         var canvas=document.getElementById('ride-map');
         var summary=document.getElementById('ride-map-summary');
         if(!slot||!summary) return;
+        lastRoad=road;
         slot.hidden=false;
-        summary.textContent=(Math.round(road.miles*10)/10).toFixed(1)+' miles · '+road.minutes+' min';
+        summary.textContent=routeText(road);
         ensureMaps().then(function(ok){
             if(!ok||!canvas||!globalThis.google||!globalThis.google.maps){if(canvas) canvas.hidden=true;return;}
             canvas.hidden=false;
             var maps=globalThis.google.maps;
             var path=decodePath(road.polyline).map(function(point){return new maps.LatLng(point.lat, point.lng);});
-            var map=new maps.Map(canvas,{disableDefaultUI:true,clickableIcons:false,gestureHandling:'cooperative'});
+            var map=new maps.Map(canvas,{disableDefaultUI:true,clickableIcons:false,gestureHandling:'cooperative',isFractionalZoomEnabled:true});
             if(!path.length) return;
             new maps.Polyline({path:path,map:map,strokeColor:'#db3040',strokeWeight:4});
             var bounds=new maps.LatLngBounds();
             for(var i=0;i<path.length;i++) bounds.extend(path[i]);
-            map.fitBounds(bounds);
+            // Fit tightly: fractional zoom plus a small edge so the line fills the map.
+            map.fitBounds(bounds, ROUTE_PADDING);
         });
     }
     function paintPoint(g){
@@ -2636,7 +2649,7 @@
             var fare=rides.localFare(mi, rt);
             var name=mode==='party'?'the party':stop.name;
             var label=rt?'Round trip, '+esc(name)+' and back':'One way to '+esc(name);
-            show('<span class="quote-label">'+label+'</span><br><strong class="quote-total">Cash '+money(fare.cashCents/100)+' · Card '+money(fare.cardCents/100)+'</strong>');
+            show('<span class="quote-label">'+label+'</span><br><strong class="quote-total">Cash '+money(fare.cashCents/100)+' · Card '+money(fare.cardCents/100)+'</strong>'+routeLine(rt));
         }).catch(function(err){
             if(my!==seq||tripNow()!=='local')return;
             if(err==='out'&&api){hideMap();show(esc(mode==='bar'&&stop&&stop.blockUnservedTowns?rides.LOCAL_DENIAL:api.OUT_OF_AREA_MESSAGE));return;}
@@ -2709,7 +2722,7 @@
             if(mi>50)throw 'far';
             var fare=airportFare(mi,rt);
             var label=rt?'Round trip, '+esc(labelName)+' and back':'One way to '+esc(labelName);
-            show('<span class="quote-label">'+label+'</span><br><strong class="quote-total">Cash '+money(fare.cash)+' &middot; Card '+money(fare.card)+'</strong>');
+            show('<span class="quote-label">'+label+'</span><br><strong class="quote-total">Cash '+money(fare.cash)+' &middot; Card '+money(fare.card)+'</strong>'+routeLine(rt));
         }).catch(function(err) {
             if(my!==seq)return;
             var kindNow=tripNow();

@@ -67,9 +67,11 @@ function googleSdk() {
   function Map(el, opts) {
     this.el = el;
     this.opts = opts;
+    globalThis.__rideMap = this;
   }
-  Map.prototype.fitBounds = function fitBounds(bounds) {
+  Map.prototype.fitBounds = function fitBounds(bounds, padding) {
     this.bounds = bounds;
+    this.padding = padding;
   };
   function Polyline(opts) {
     globalThis.__rideLine = opts;
@@ -822,6 +824,11 @@ describe.each(scripts)("local bars and group %s", (script) => {
         loaded: script,
       },
     );
+    check(view.document.querySelector("#quote-details .quote-route"), null, {
+      label: "no key means no miles and minutes line in the quote box",
+      source: "js/booking.js",
+      loaded: script,
+    });
   });
 
   it("prices airport and bar rides from the Google road distance and shows the map", async () => {
@@ -875,6 +882,45 @@ describe.each(scripts)("local bars and group %s", (script) => {
       source: "js/booking.js",
       loaded: script,
     });
+    check(
+      airport.document.querySelector("#quote-details .quote-route")
+        ?.textContent,
+      "30.0 miles · 40 min",
+      {
+        label: "the miles and minutes sit next to the price in the quote box",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    check(
+      [
+        globalThis.__rideMap.opts.isFractionalZoomEnabled,
+        globalThis.__rideMap.padding,
+        globalThis.__rideMap.bounds.points.length,
+      ],
+      [true, 12, globalThis.__rideLine.path.length],
+      {
+        label: "the map fits tightly to every point of the route",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    airport.document.querySelector("#booking-round-trip").checked = true;
+    airport.window.jQuery("#booking-round-trip").trigger("change");
+    const routeStart = Date.now();
+    let routeNow = "";
+    while (Date.now() - routeStart < 2000) {
+      routeNow =
+        airport.document.querySelector("#quote-details .quote-route")
+          ?.textContent || "";
+      if (/each way/.test(routeNow)) break;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    check(routeNow, "30.0 miles · 40 min each way", {
+      label: "a round trip says the miles and minutes are each way",
+      source: "js/booking.js",
+      loaded: script,
+    });
 
     const bar = await renderBooking(script, {
       miles: 4,
@@ -889,6 +935,17 @@ describe.each(scripts)("local bars and group %s", (script) => {
       source: "js/booking.js",
       loaded: script,
     });
+    check(
+      bar.document
+        .querySelector("#quote-details .quote-route")
+        ?.textContent.startsWith("10.0 miles · "),
+      true,
+      {
+        label: "a bar quote shows the Google miles next to the price",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
   });
 
   it("falls back to OSRM when Google routes fail or the map script errors", async () => {
@@ -970,6 +1027,7 @@ describe.each(scripts)("local bars and group %s", (script) => {
         node.tagName === "SCRIPT" &&
         hostIs(node.src, "maps.googleapis.com")
       ) {
+        globalThis.__mapsSrc = node.src;
         window.google = googleSdk();
         window.midnightMapsReady();
         return node;
@@ -1003,6 +1061,12 @@ describe.each(scripts)("local bars and group %s", (script) => {
         loaded: script,
       },
     );
+    check(new URL(globalThis.__mapsSrc).searchParams.get("loading"), "async", {
+      label: "the Maps script loads with loading=async",
+      actual: globalThis.__mapsSrc.replace(/key=[^&]*/, "key=<test>"),
+      source: "js/booking.js",
+      loaded: script,
+    });
     view.state.googleMode = "no-line";
     await priceBar(view, 8);
     document.head.appendChild = original;
