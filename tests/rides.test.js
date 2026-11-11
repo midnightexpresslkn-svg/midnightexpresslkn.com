@@ -281,12 +281,13 @@ describe.each(scripts)("local bars and group %s", (script) => {
         (label) => label.textContent.replace(/\s+/g, " ").trim(),
       ),
       [
-        "Must be 21 or older",
-        "No smoking",
-        "If you damage anything, you are responsible.",
+        "Must be 21 or older *",
+        "No smoking *",
+        "If you damage anything, you are responsible. *",
       ],
       {
-        label: "local notices are the three required boxes in order",
+        label:
+          "local notices are the three required boxes in order, each with the required star",
         source: "js/booking.js",
         loaded: script,
       },

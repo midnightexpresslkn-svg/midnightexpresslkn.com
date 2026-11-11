@@ -1640,7 +1640,7 @@
             }
         });
 
-        // Group events cannot be booked online and do not get a price quote
+        // Trip type switches the form layout; group events are requested online and priced by the hour (refreshGroup)
         $('#trip-type').on('change', function() {
             $('#trip-type-error').text('').hide();
             $(this).closest('.form-group').removeClass('has-error');
