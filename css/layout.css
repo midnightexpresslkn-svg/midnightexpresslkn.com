@@ -38,8 +38,7 @@ header.hero img.header-logo,
   display: block;
   width: 100%;
   font-weight: bold;
-  font-size: 16px;
-  margin-bottom: 8px;
+  margin-bottom: 5px;
   padding: 0;
   border: 0;
   float: none;
@@ -768,6 +767,8 @@ a.booking-alternate,
 #booking p,
 #booking label,
 #booking #checking-bags-label,
+#booking .round-trip-choice legend,
+#booking .round-trip-option,
 #booking a,
 #booking .add-home-tip,
 #booking .booking-legal,
@@ -1202,6 +1203,8 @@ section button.btn {
 /* Booking form labels match the page words. */
 #booking label,
 #booking #checking-bags-label,
+#booking .round-trip-choice legend,
+#booking .round-trip-option,
 #booking #quote-details {
   font-size: 24px !important;
 }
@@ -1209,6 +1212,8 @@ section button.btn {
 @media (max-width: 767px) {
   #booking label,
   #booking #checking-bags-label,
+  #booking .round-trip-choice legend,
+  #booking .round-trip-option,
   #booking #quote-details {
     font-size: 21px !important;
   }

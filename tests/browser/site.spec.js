@@ -316,6 +316,63 @@ test.describe("booking page", () => {
     await expect(page.locator("#booking-quote")).toBeVisible();
   });
 
+  test("round trip Yes or No matches the other booking labels", async ({
+    page,
+  }) => {
+    await installMocks(page);
+    const views = [
+      { width: 390, height: 844, fontSize: "21px" },
+      { width: 1280, height: 800, fontSize: "24px" },
+    ];
+    for (const { width, height, fontSize } of views) {
+      await page.setViewportSize({ width, height });
+      await page.goto("/?type=airport#booking");
+      const bags = page.locator("#checking-bags-label");
+      const bagsYes = page.locator("#checking-bags-section label").first();
+      const legend = page.locator(".round-trip-choice legend");
+      const options = page.locator("label.round-trip-option");
+      await expect(bags).toBeVisible();
+      await expect(legend).toHaveText("Round trip *");
+      const bagsStyle = await bags.evaluate((el) => {
+        const s = getComputedStyle(el);
+        return {
+          color: s.color,
+          fontSize: s.fontSize,
+          fontWeight: s.fontWeight,
+        };
+      });
+      expect(bagsStyle.color).toBe("rgb(255, 255, 255)");
+      expect(bagsStyle.fontSize).toBe(fontSize);
+      for (const loc of [legend, options.nth(0), options.nth(1), bagsYes]) {
+        await expect(loc).toHaveCSS("color", bagsStyle.color);
+        await expect(loc).toHaveCSS("font-size", bagsStyle.fontSize);
+        await expect(loc).toHaveCSS("font-weight", bagsStyle.fontWeight);
+      }
+      await page.goto("/?type=local&kind=bar#booking");
+      const passengers = page
+        .locator("#passengers-label, #passengers-group label")
+        .first();
+      const barLegend = page.locator(".round-trip-choice legend");
+      const barOptions = page.locator("label.round-trip-option");
+      await expect(barLegend).toBeVisible();
+      const paxStyle = await passengers.evaluate((el) => {
+        const s = getComputedStyle(el);
+        return {
+          color: s.color,
+          fontSize: s.fontSize,
+          fontWeight: s.fontWeight,
+        };
+      });
+      expect(paxStyle.color).toBe("rgb(255, 255, 255)");
+      expect(paxStyle.fontSize).toBe(fontSize);
+      for (const loc of [barLegend, barOptions.nth(0), barOptions.nth(1)]) {
+        await expect(loc).toHaveCSS("color", paxStyle.color);
+        await expect(loc).toHaveCSS("font-size", paxStyle.fontSize);
+        await expect(loc).toHaveCSS("font-weight", paxStyle.fontWeight);
+      }
+    }
+  });
+
   test("about section is one short paragraph", async ({ page }) => {
     await installMocks(page);
     await page.setViewportSize({ width: 390, height: 844 });
