@@ -61,7 +61,7 @@
     var GROUP_MAX_PASSENGERS = 6;
     var GROUP_VEHICLE = "2026 Toyota Sienna Platinum";
     var BARS = [
-        { id: "two-trees", name: "Two Trees", address: "5242 Slanting Bridge Rd, Denver, NC 28037", lat: 35.552237, lon: -80.994465, maxMiles: 10, groupMaxMiles: 15, blockUnservedTowns: true },
+        { id: "two-trees", name: "Two Trees Bar and Grill", address: "5242 Slanting Bridge Rd, Denver, NC 28037", lat: 35.552237, lon: -80.994465, maxMiles: 10, groupMaxMiles: 15, blockUnservedTowns: true },
         { id: "bourbon-bobber", name: "Bourbon & Bobbers", address: "3746 Mount Pleasant Road, Sherrills Ford, NC 28673", lat: 35.589826, lon: -81.019457 },
         { id: "joeys-sherrills-ford", name: "Joey's (Hwy 150)", address: "7600 East NC Hwy 150, Sherrills Ford, NC 28673", lat: 35.578943, lon: -80.998957 },
         { id: "joeys-denver", name: "Joey's (Natalie Commons)", address: "7913 Natalie Commons Dr, Denver, NC 28037", lat: 35.482131, lon: -80.996916 },
@@ -71,15 +71,21 @@
         { id: "lobster-dog", name: "Lobster Dogs", address: "1219 NC-16 Business, Denver, NC 28037", lat: 35.476092, lon: -80.99367 },
         { id: "safari-miles", name: "Safari Miles", address: "390 NC-16 Business, Denver, NC 28037", lat: 35.45131, lon: -80.993633 },
         { id: "royal-bliss", name: "Royal Bliss", address: "7532 Royal Bliss Court, Denver, NC 28037", lat: null, lon: null },
-        { id: "sports-bar-grill", name: "Sports Bar and Grill", address: "", lat: null, lon: null },
+        { id: "sports-page", name: "Sports Page Food and Spirits", address: "7490 Waterside Crossing Blvd, Denver, NC 28037", lat: 35.442658, lon: -80.996558 },
         { id: "blue-parrot", name: "Blue Parrot", address: "169 Pinnacle Lane, Mooresville, NC 28117", lat: 35.608132, lon: -80.936035 },
         { id: "toucans", name: "Toucan's", address: "167 Pinnacle Lane, Mooresville, NC 28117", lat: 35.608097, lon: -80.935983 },
-        { id: "invicta", name: "Invicta", address: "", lat: null, lon: null }
+        { id: "vitale-lakeside", name: "Vitale Lakeside", address: "1459 River Highway, Mooresville, NC 28117", lat: 35.604983, lon: -80.930081 }
     ];
 
+    // Stale "Sports Bar and Grill" links and ids still resolve to Two Trees Bar and Grill.
+    var BAR_ALIASES = {
+        "sports-bar-grill": "two-trees",
+        "sports bar and grill": "two-trees"
+    };
     function listedBar(raw) {
         var text = String(raw || "").trim().toLowerCase();
         if (!text) return null;
+        if (BAR_ALIASES[text]) text = BAR_ALIASES[text];
         for (var i = 0; i < BARS.length; i++) {
             var bar = BARS[i];
             if (text === bar.id || text === bar.name.toLowerCase()) return bar;
@@ -992,7 +998,7 @@
             var select = document.getElementById('bar-choice');
             if (found && select && !select.value) {
                 select.value = found.id;
-                $('#booking-destination').val(found.address || found.name);
+                $('#booking-destination').val(found.address);
             }
         } else if (mode === 'party') {
             $('#bar-choice-row').attr('hidden', 'hidden').hide();
@@ -1693,7 +1699,7 @@
             $(this).closest('.form-group').removeClass('has-error');
             var bar = listedBar($(this).val());
             if (bar) {
-                $('#booking-destination').val(bar.address || bar.name).trigger('input');
+                $('#booking-destination').val(bar.address).trigger('input');
             } else if ($(this).val()) {
                 $('#booking-destination').val($(this).val()).trigger('input');
             }
@@ -1777,7 +1783,7 @@
                     durationMinutes = Math.round(fare.billed * 60);
                 }
             } else if (trip === 'local' && mode === 'bar' && chosenBar) {
-                destinationAddress = chosenBar.address || chosenBar.name;
+                destinationAddress = chosenBar.address;
                 notes = (notes ? 'Bar or restaurant ride to ' + chosenBar.name + '. ' + notes : 'Bar or restaurant ride to ' + chosenBar.name + '.');
             } else if (trip === 'local' && mode === 'party') {
                 destinationAddress = partyAddress;
@@ -2654,7 +2660,6 @@
         if(mode==='bar'){
             stop=rides.listedBar($('#bar-choice').val());
             if(!stop){hideMap();show('Choose a bar or restaurant to see your price.');return;}
-            if(!stop.address&&stop.lat==null){hideMap();show(fb);return;}
         }
         var party=$.trim($('#party-address').val()||'');
         if(mode==='party'&&party.length<6){hideMap();show('Enter your address and the party address to see your price.');return;}

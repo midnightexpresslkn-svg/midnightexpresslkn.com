@@ -609,7 +609,7 @@ test.describe("new rides on a 375px phone", () => {
       .locator("#booking-pickup")
       .fill("123 Main Street, Denver NC 28037");
     await expect(page.locator("#quote-details")).toContainText(
-      "One way to Two Trees",
+      "One way to Two Trees Bar and Grill",
     );
     await expect(page.locator("#quote-details")).toContainText("Cash $15.00");
     await expect(page.locator("#quote-details")).toContainText("Card $15.45");
@@ -632,7 +632,7 @@ test.describe("new rides on a 375px phone", () => {
   }) => {
     const posts = await installMocks(page);
     const names = [
-      "Two Trees",
+      "Two Trees Bar and Grill",
       "Bourbon & Bobbers",
       "Joey's (Hwy 150)",
       "Joey's (Natalie Commons)",
@@ -642,10 +642,10 @@ test.describe("new rides on a 375px phone", () => {
       "Lobster Dogs",
       "Safari Miles",
       "Royal Bliss",
-      "Sports Bar and Grill",
+      "Sports Page Food and Spirits",
       "Blue Parrot",
       "Toucan's",
-      "Invicta",
+      "Vitale Lakeside",
     ];
     const towns = [
       "Denver",

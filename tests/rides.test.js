@@ -23,7 +23,7 @@ function isGoogleApi(url) {
   return host === "googleapis.com" || host.endsWith(".googleapis.com");
 }
 const BAR_NAMES = [
-  "Two Trees",
+  "Two Trees Bar and Grill",
   "Bourbon & Bobbers",
   "Joey's (Hwy 150)",
   "Joey's (Natalie Commons)",
@@ -33,10 +33,10 @@ const BAR_NAMES = [
   "Lobster Dogs",
   "Safari Miles",
   "Royal Bliss",
-  "Sports Bar and Grill",
+  "Sports Page Food and Spirits",
   "Blue Parrot",
   "Toucan's",
-  "Invicta",
+  "Vitale Lakeside",
 ];
 const BAR_TOWNS = [
   "Denver",
@@ -381,12 +381,16 @@ describe.each(scripts)("local bars and group %s", (script) => {
         loaded: script,
       });
       if (roundTrip) {
-        check(text.includes("Round trip, Two Trees and back"), true, {
-          label: "round trip names the bar",
-          actual: text,
-          source: "js/booking.js",
-          loaded: script,
-        });
+        check(
+          text.includes("Round trip, Two Trees Bar and Grill and back"),
+          true,
+          {
+            label: "round trip names the bar",
+            actual: text,
+            source: "js/booking.js",
+            loaded: script,
+          },
+        );
         check(
           shown(view.document.querySelector("#booking-return-date")),
           false,
@@ -553,25 +557,44 @@ describe.each(scripts)("local bars and group %s", (script) => {
     });
   });
 
-  it("does not invent a price for a listed bar with no verified address", async () => {
+  it("prices Vitale Lakeside and Sports Page, and maps the stale Sports Bar and Grill id to Two Trees", async () => {
     const view = await renderBooking(script, { miles: 8 });
-    const text = await priceBar(view, 8, { bar: "invicta" });
-    check(text, "We'll confirm your price when we call.", {
-      label: "Invicta stays on the list without a guessed fare",
+    const text = await priceBar(view, 8, { bar: "vitale-lakeside" });
+    check(text.includes("Cash $25.00 · Card $25.75"), true, {
+      label: "Vitale Lakeside is priced from its stored address",
       actual: text,
       source: "js/booking.js",
       loaded: script,
     });
-    check(text.includes("out of our service area."), false, {
-      label: "an unverified listed bar is not treated as outside the list",
-      actual: text,
+    const page = await priceBar(view, 8, { bar: "sports-page" });
+    check(page.includes("One way to Sports Page Food and Spirits"), true, {
+      label: "Sports Page Food and Spirits is priced from its stored address",
+      actual: page,
       source: "js/booking.js",
       loaded: script,
     });
-    const sports = await priceBar(view, 8, { bar: "sports-bar-grill" });
-    check(sports.includes("Cash"), false, {
-      label: "Sports Bar and Grill is not given a guessed fare",
-      actual: sports,
+    check(
+      view.window.MidnightRides.listedBar("sports-bar-grill").id,
+      "two-trees",
+      {
+        label: "the stale Sports Bar and Grill id still maps to Two Trees",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    check(
+      view.window.MidnightRides.listedBar("Sports Bar and Grill").id,
+      "two-trees",
+      {
+        label: "the stale Sports Bar and Grill name still maps to Two Trees",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    const alias = await priceBar(view, 8, { bar: "two-trees" });
+    check(alias.includes("One way to Two Trees Bar and Grill"), true, {
+      label: "Two Trees uses its full name in the quote",
+      actual: alias,
       source: "js/booking.js",
       loaded: script,
     });
@@ -1385,22 +1408,26 @@ describe.each(scripts)("local bars and group %s", (script) => {
   it("preselects a listed bar from the address and still accepts a ride with no notes", async () => {
     const named = await renderBooking(script, {
       miles: 4,
-      url: "/?venue=Invicta",
+      url: "/?venue=Vitale%20Lakeside",
     });
     chooseTrip(named.document, "local");
     const kind = named.document.querySelector("#local-kind");
     kind.value = "bar";
     named.window.jQuery(kind).trigger("change");
-    check(named.document.querySelector("#bar-choice").value, "invicta", {
-      label: "a venue name in the URL selects that bar",
-      source: "js/booking.js",
-      loaded: script,
-    });
+    check(
+      named.document.querySelector("#bar-choice").value,
+      "vitale-lakeside",
+      {
+        label: "a venue name in the URL selects that bar",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
     check(
       named.document.querySelector("#booking-destination").value,
-      "Invicta",
+      "1459 River Highway, Mooresville, NC 28117",
       {
-        label: "a bar without a street uses its name",
+        label: "a listed bar fills its stored street address",
         source: "js/booking.js",
         loaded: script,
       },
@@ -1461,16 +1488,33 @@ describe.each(scripts)("local bars and group %s", (script) => {
       loaded: script,
     });
     const bare = await renderBooking(script, { miles: 4 });
-    await fillValid(bare, { trip: "local", bar: "invicta" });
+    await fillValid(bare, { trip: "local", bar: "vitale-lakeside" });
     await submitForm(bare);
-    const invicta = JSON.parse(
+    const vitale = JSON.parse(
       bookingPosts(bare.state).find((request) =>
         hostIs(request.url, "script.google.com"),
       ).body,
     );
-    check(invicta.destinationAddress, "Invicta", {
-      label: "the request names Invicta without a guessed street",
-      actual: invicta.destinationAddress,
+    check(
+      vitale.destinationAddress,
+      "1459 River Highway, Mooresville, NC 28117",
+      {
+        label: "the request uses Vitale Lakeside's stored street address",
+        actual: vitale.destinationAddress,
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    const stale = await renderBooking(script, {
+      miles: 4,
+      url: "/?type=local&bar=sports-bar-grill",
+    });
+    chooseTrip(stale.document, "local");
+    const staleKind = stale.document.querySelector("#local-kind");
+    staleKind.value = "bar";
+    stale.window.jQuery(staleKind).trigger("change");
+    check(stale.document.querySelector("#bar-choice").value, "two-trees", {
+      label: "a stale Sports Bar and Grill URL selects Two Trees",
       source: "js/booking.js",
       loaded: script,
     });
