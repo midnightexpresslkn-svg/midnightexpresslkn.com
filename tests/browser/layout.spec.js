@@ -118,7 +118,7 @@ test.describe("mobile page fits the screen", () => {
         "2-hour minimum",
       );
       await expect(page.locator("#quote-details")).toContainText("$250.00");
-      await expect(page.locator("#quote-details")).toContainText("$64.38");
+      await expect(page.locator("#quote-details")).toContainText("$65.00");
       const group = await offenders(page);
       expect(group.scrollWidth).toBeLessThanOrEqual(group.clientWidth + 1);
       expect(group.found).toEqual([]);

@@ -92,18 +92,31 @@
         return typeof bar.maxMiles === 'number' && miles > bar.maxMiles;
     }
 
+    // Every quoted price (cash and card) is rounded to the nearest $5; an exact $2.50 rounds up.
+    // Card = the rounded cash * 1.03, then rounded the same way. April (Ara v4.7) uses the same rule.
+    function nearestFiveCents(cents) {
+        var whole = Math.round(cents);
+        var units = Math.floor(whole / 500);
+        if (whole % 500 >= 250) units += 1;
+        return units * 500;
+    }
+
+    function cardFiveCents(cashCents) {
+        return nearestFiveCents(cashCents * 1.03);
+    }
+
     function localFare(miles, roundTrip) {
         var one = miles <= 2 ? 1000 : Math.max(1500, Math.round(miles * 300));
-        var cash = roundTrip ? one * 2 : one;
-        return { cashCents: cash, cardCents: Math.round(cash * 1.03) };
+        var cash = nearestFiveCents(roundTrip ? one * 2 : one);
+        return { cashCents: cash, cardCents: cardFiveCents(cash) };
     }
 
     function groupFare(hours) {
         var entered = Number(hours);
         var minimum = entered < GROUP_MIN_HOURS;
         var billed = minimum ? GROUP_MIN_HOURS : entered;
-        var cash = Math.round(billed * GROUP_HOURLY_CENTS);
-        var card = Math.round(cash * 1.03);
+        var cash = nearestFiveCents(billed * GROUP_HOURLY_CENTS);
+        var card = cardFiveCents(cash);
         return {
             entered: entered,
             billed: billed,
@@ -156,6 +169,8 @@
         GROUP_HOURLY_CENTS: GROUP_HOURLY_CENTS,
         listedBar: listedBar,
         overVenueMiles: overVenueMiles,
+        nearestFiveCents: nearestFiveCents,
+        cardFiveCents: cardFiveCents,
         localFare: localFare,
         groupFare: groupFare,
         mapKey: mapKey,
@@ -2306,16 +2321,12 @@
     function q(a){var s='',i=0;while(i<a.length){s+=String.fromCharCode(a[i]^13);i++;}return +s;}
     function esc(s){return String(s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
     function money(n){return '$'+n.toFixed(2);}
-    function nearestFive(cents){
-        var step=500, units=Math.floor(cents/step), rem=cents%step;
-        if(rem>250) units+=1;
-        return units*step;
-    }
     // Listed airports and a private airfield the customer names share this fare.
     function airportFare(mi, rt){
         var oneCents=Math.round(Math.max(q([59,56]),mi*q([63,35,59,62]))*100);
-        var cashCents=nearestFive(rt?oneCents*2:oneCents);
-        var cardCents=Math.round(cashCents*(1+q([61,35,61,62])));
+        var rides=globalThis.MidnightRides;
+        var cashCents=rides.nearestFiveCents(rt?oneCents*2:oneCents);
+        var cardCents=rides.cardFiveCents(cashCents);
         return {cash:cashCents/100,card:cardCents/100};
     }
     function lookupAirport(raw){
