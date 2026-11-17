@@ -4,6 +4,7 @@ import {
   bookingMocks,
   fillAirport,
 } from "./helpers/booking-mocks.js";
+import { ui } from "./helpers/ui.js";
 
 const shots = process.env.MELKN_SHOTS_DIR;
 const request = (page) =>
@@ -123,9 +124,8 @@ test.describe("price on the confirmation at phone width", () => {
     await request(page).click();
     await expect(confirmation(page)).toBeVisible();
     await expect(page.getByText(/Estimated price:/)).toHaveCount(0);
-    await expect(
-      page.getByRole("heading", { name: /Request received/ }).locator(".."),
-    ).not.toContainText("$");
+    await expect(ui.result(page)).toContainText("Request received");
+    await expect(ui.result(page)).not.toContainText("$");
   });
 
   test("Make Another Booking removes the old price", async ({ page }) => {

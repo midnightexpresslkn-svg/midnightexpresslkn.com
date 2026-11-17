@@ -134,8 +134,12 @@ export async function fillAirport(
 /** A one-way-or-round bar ride to Two Trees with every bar answer filled in. */
 export async function fillBar(page, { round = false, agree = true } = {}) {
   await page.getByRole("combobox", { name: "Trip type" }).selectOption("local");
-  await page.locator("#local-kind").selectOption("bar");
-  await page.locator("#bar-choice").selectOption("two-trees");
+  await page
+    .getByRole("combobox", { name: "Bar, restaurant, or party" })
+    .selectOption("bar");
+  await page
+    .getByRole("combobox", { name: "Bar or restaurant", exact: true })
+    .selectOption("two-trees");
   await page.getByPlaceholder("Jane Smith").fill("Isolated QA Rider");
   await page.getByPlaceholder("5555551234").fill("5555550199");
   await page.getByPlaceholder("email@example.com").fill("qa@example.invalid");
@@ -202,11 +206,27 @@ export async function typeTimeAt(page, name, text, period) {
 }
 
 export async function pick(box, value) {
+  // Picks the day the way a rider does: open the calendar, choose the month, tap the day.
+  const page = box.page();
+  const [year, month, day] = value.split("-").map(Number);
+  const monthName = new Date(year, month - 1, day).toLocaleString("en-US", {
+    month: "long",
+  });
   await expect(box).toBeVisible();
-  await box.evaluate(
-    (el, v) => el.previousElementSibling._flatpickr.setDate(v, true),
-    value,
-  );
+  await box.click();
+  const calendarMonth = page
+    .getByRole("combobox", { name: "Month" })
+    .filter({ visible: true });
+  await expect(calendarMonth).toBeVisible();
+  await expect(
+    page.getByRole("spinbutton", { name: "Year" }).filter({ visible: true }),
+  ).toHaveValue(String(year));
+  await calendarMonth.selectOption({ label: monthName });
+  await page
+    .getByLabel(`${monthName} ${day}, ${year}`, { exact: true })
+    .filter({ visible: true })
+    .click();
+  await expect(calendarMonth).toBeHidden();
 }
 
 /** Hold every census lookup (the service-area check run on submit) until release(). */
@@ -234,6 +254,16 @@ export function holdChecks(state) {
 export const test = base.extend({
   page: async ({ page }, use, testInfo) => {
     const problems = [];
+    // Safety net under each spec's own page.route mocks (page routes win over context routes):
+    // anything external a spec forgot to mock is answered locally and fails the test below.
+    const unmocked = [];
+    await page.context().route(
+      (url) => url.hostname !== "127.0.0.1" && url.hostname !== "localhost",
+      (route) => {
+        unmocked.push(route.request().method() + " " + route.request().url());
+        return route.fulfill({ status: 204, body: "" });
+      },
+    );
     page.on("console", (msg) => {
       if (msg.type() === "error") problems.push("console: " + msg.text());
     });
@@ -256,7 +286,8 @@ export const test = base.extend({
       ),
     );
     await use(page);
-    if (testInfo.status !== testInfo.expectedStatus) {
+    problems.push(...unmocked.map((call) => "unmocked: " + call));
+    if (testInfo.status !== testInfo.expectedStatus || unmocked.length) {
       await testInfo.attach("console-and-network-errors", {
         body: problems.join("\n") || "(none)",
         contentType: "text/plain",
@@ -266,6 +297,7 @@ export const test = base.extend({
         contentType: "text/html",
       });
     }
+    expect(unmocked, "external calls with no page.route mock").toEqual([]);
   },
 });
 export { expect };

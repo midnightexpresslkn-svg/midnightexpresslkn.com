@@ -1,4 +1,5 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./helpers/booking-mocks.js";
+import { ui } from "./helpers/ui.js";
 
 // Donald, Nov 10, 2026 6:57 PM: the required agreement shows the same required star as the other required fields.
 // Donald, Nov 16, 2026: bar, party, and group all use one combined required box instead of three.
@@ -17,11 +18,18 @@ async function expectOneStarredBox(page) {
   const box = page.getByRole("checkbox", { name: AGREEMENT });
   await expect(box).toBeVisible();
   await expect(box).toHaveAttribute("required", "");
-  await expect(page.locator("#ride-rules").getByRole("checkbox")).toHaveCount(
-    1,
-  );
+  await expect(
+    page
+      .getByRole("group", { name: "Before you request this ride" })
+      .getByRole("checkbox"),
+  ).toHaveCount(1);
   // same marker as the other required labels, e.g. "Trip type *"
-  await expect(page.locator('label[for="trip-type"]')).toHaveText(/ \*$/);
+  await expect(
+    page.getByRole("combobox", { name: /^Trip type \*$/ }),
+  ).toBeVisible();
+  await expect(page.getByText("Trip type *", { exact: true })).toHaveText(
+    / \*$/,
+  );
 }
 
 for (const [name, trip, kind] of [
@@ -34,8 +42,8 @@ for (const [name, trip, kind] of [
   }) => {
     await blockNetwork(page);
     await page.goto("/");
-    await page.locator("#trip-type").selectOption(trip);
-    if (kind) await page.locator("#local-kind").selectOption(kind);
+    await ui.tripType(page).selectOption(trip);
+    if (kind) await ui.localKind(page).selectOption(kind);
     await expectOneStarredBox(page);
   });
 }

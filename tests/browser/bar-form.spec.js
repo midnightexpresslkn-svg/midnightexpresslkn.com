@@ -6,6 +6,7 @@ import {
   fillBar,
   settled,
 } from "./helpers/booking-mocks.js";
+import { ui } from "./helpers/ui.js";
 
 const shots = process.env.MELKN_SHOTS_DIR;
 const request = (page) =>
@@ -26,7 +27,7 @@ test.describe("bar form at phone width", () => {
     await page
       .getByRole("combobox", { name: "Trip type" })
       .selectOption("local");
-    await page.locator("#local-kind").selectOption("bar");
+    await ui.localKind(page).selectOption("bar");
     const round = page.getByRole("group", { name: /Round trip/ });
     await expect(
       round.getByRole("radio", { name: "Yes", exact: true }),

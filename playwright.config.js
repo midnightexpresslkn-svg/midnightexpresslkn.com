@@ -15,6 +15,9 @@ export default defineConfig({
   use: {
     baseURL: "http://127.0.0.1:4173",
     trace: "retain-on-failure",
+    // The site's service worker would fetch the Apps Script itself, around page.route mocks.
+    // Blocking it keeps every external call inside the specs' mocks (robust-e2e-testing, Nov 16 2026).
+    serviceWorkers: "block",
     screenshot: "only-on-failure",
   },
   webServer: {

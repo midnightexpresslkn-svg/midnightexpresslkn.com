@@ -78,7 +78,8 @@ test.describe("airport form at phone width", () => {
     ).toHaveAttribute("placeholder", /extra stops.*arrival or departure curb/);
 
     // How many? is only required after Yes.
-    const carryCount = page.locator("#booking-carryon-count");
+    // Both bag questions say "How many?"; the carry-on one is the box hinted "Example: 1".
+    const carryCount = page.getByPlaceholder("Example: 1", { exact: true });
     await carryOn.getByRole("radio", { name: "No", exact: true }).check();
     await expect(carryCount).not.toHaveAttribute("required", "");
     await carryOn.getByRole("radio", { name: "Yes", exact: true }).check();

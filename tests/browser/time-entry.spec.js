@@ -15,7 +15,7 @@ const ampm = (page) =>
   page.getByRole("group", { name: "Pickup Time AM or PM *", exact: true });
 
 async function showTime(page) {
-  await page.locator("#time-group").evaluate((el) => {
+  await page.getByText("Pickup Time *", { exact: true }).evaluate((el) => {
     const top = el.getBoundingClientRect().top + window.scrollY;
     window.scrollTo({ top: top - 150, behavior: "instant" });
   });

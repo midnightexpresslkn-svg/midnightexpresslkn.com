@@ -6,6 +6,7 @@ import {
   fillGroup,
   settled,
 } from "./helpers/booking-mocks.js";
+import { ui } from "./helpers/ui.js";
 
 const shots = process.env.MELKN_SHOTS_DIR;
 const request = (page) =>
@@ -31,7 +32,7 @@ test.describe("group form at phone width", () => {
     await page
       .getByRole("combobox", { name: "Trip type" })
       .selectOption("group");
-    const form = page.locator("#bookingForm");
+    const form = ui.form(page);
     for (const word of [
       /airport/i,
       /luggage/i,
@@ -62,7 +63,7 @@ test.describe("group form at phone width", () => {
     }
 
     await fillGroup(page);
-    const quote = page.locator("#quote-details");
+    const quote = ui.quote(page);
     await expect(quote).toContainText(
       "Trip charge: Cash $375.00 · Card $386.25",
     );
@@ -72,18 +73,19 @@ test.describe("group form at phone width", () => {
       await scrollTo(page.getByRole("combobox", { name: "Trip type" }));
       await settled(page);
       await page.screenshot({ path: shots + "/melkn-group-form-top.png" });
-      await page
-        .getByRole("heading", { name: "Estimated Quote" })
-        .evaluate((el) => el.parentElement.scrollIntoView({ block: "center" }));
+      await quote.evaluate((el) => el.scrollIntoView({ block: "center" }));
       await settled(page);
-      await expect(page.locator(".quote-deposit")).toBeInViewport();
+      await expect(quote.getByText(/^25% deposit:/)).toBeInViewport();
       await page.screenshot({ path: shots + "/melkn-group-form-lower.png" });
     }
     await request(page).click();
     await expect(
       page.getByRole("heading", { name: /Request received/ }),
     ).toBeVisible();
-    const confirm = page.locator(".confirm-price");
+    const confirm = ui
+      .result(page)
+      .getByRole("paragraph")
+      .filter({ hasText: "Estimated price:" });
     await expect(confirm).toContainText(
       "Trip charge: Cash $375.00 · Card $386.25",
     );
@@ -132,7 +134,7 @@ test.describe("group form at phone width", () => {
     await page.getByLabel("How many hours *").fill("");
     await page.getByLabel("How many hours *").blur();
     // Clearing hours shrinks the quote, so wait for it before pressing the button.
-    await expect(page.locator("#quote-details")).toContainText(
+    await expect(ui.quote(page)).toContainText(
       "Enter how many hours to see your price.",
     );
     await request(page).click();

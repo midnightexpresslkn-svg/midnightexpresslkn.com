@@ -1,4 +1,5 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./helpers/booking-mocks.js";
+import { ui } from "./helpers/ui.js";
 import { hostnameOf } from "../helpers/hostname.js";
 
 // Route preview (Donald, Nov 10, 2026): with a Maps key the booking form draws the route, fits the map
@@ -16,6 +17,8 @@ const FAKE_SDK = `
   function Marker() {}
   window.google = { maps: { LatLng: LatLng, LatLngBounds: LatLngBounds, Map: Map, Polyline: Polyline, Marker: Marker } };
   var cb = new URL(document.currentScript.src).searchParams.get("callback");
+  // Mock SDK code running in the page: Google calls the callback asynchronously, so the fake does too.
+  // This is not a test wait; the test itself only uses web-first expects.
   setTimeout(function () { window[cb](); }, 0);
 })();`;
 
@@ -124,22 +127,20 @@ for (const [name, viewport] of [
     await page.setViewportSize(viewport);
     const seen = await mockGoogle(page);
     await page.goto("/");
-    await page.locator("#trip-type").selectOption("airport");
-    await page.locator("#airport-choice").selectOption("CLT");
-    await page
-      .locator("#booking-pickup")
-      .fill("7740 Marlette Ln, Sherrills Ford, NC 28673");
-    const quote = page.locator("#quote-details");
+    await ui.tripType(page).selectOption("airport");
+    await ui.airport(page).selectOption("CLT");
+    await ui.pickup(page).fill("7740 Marlette Ln, Sherrills Ford, NC 28673");
+    const quote = ui.quote(page);
     await expect(quote).toContainText("Cash $75.00");
     await expect(quote).toContainText("Card $77.25");
-    await expect(quote.locator(".quote-route")).toHaveText(
-      "28.8 miles · 38 min",
-    );
-    await expect(quote.locator(".quote-route")).toBeVisible();
-    await expect(page.locator("#ride-map-summary")).toHaveText(
-      "28.8 miles · 38 min",
-    );
-    await expect(page.locator("#ride-map")).toBeVisible();
+    const route = quote.getByText("28.8 miles · 38 min", { exact: true });
+    await expect(route).toHaveText("28.8 miles · 38 min");
+    await expect(route).toBeVisible();
+    // The line under the map says the same miles and minutes.
+    await expect(
+      page.getByRole("paragraph").filter({ hasText: /^28\.8 miles · 38 min$/ }),
+    ).toHaveText("28.8 miles · 38 min");
+    await expect(ui.routeMap(page)).toBeVisible();
     await expect
       .poll(() => page.evaluate(() => window.__mapCalls?.fits.length || 0))
       .toBeGreaterThan(0);
