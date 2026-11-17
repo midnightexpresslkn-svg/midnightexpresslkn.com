@@ -1755,14 +1755,16 @@
             submitInFlight = true;
             e.preventDefault();
             const bookingId = currentBookingId;
+            // The exact price on screen when Request Booking was pressed (null when none is shown)
+            const quoteAtSubmit = globalThis.MidnightQuote.current();
             const $lockedBtn = $form.find('button[type="submit"]').prop('disabled', true);
-            return sendBooking(bookingId).finally(function() {
+            return sendBooking(bookingId, quoteAtSubmit).finally(function() {
                 submitInFlight = false;
                 if (!sentBookingIds.has(bookingId)) $lockedBtn.prop('disabled', false);
             });
         });
 
-        async function sendBooking(bookingId) {
+        async function sendBooking(bookingId, quoteAtSubmit) {
 
             // Clear previous errors
             $('.help-block.text-danger').text('').hide();
@@ -2263,6 +2265,8 @@
                         '<p>We will call you at <strong>' + escapeHtml(formData.phone) + '</strong> to confirm your booking.</p>';
                 }
 
+                successHtml += quotePriceHtml(quoteAtSubmit);
+
                 successHtml +=
                     '<hr>' +
                     '<p><strong>Important:</strong> Your booking' + (formData.roundTrip === 'Yes' && formData.airportTrip === 'Yes' ? 's are' : ' is') + ' not confirmed until you receive a call from us. If you don\'t hear from us within 2 hours, please call (980) 422-9125.</p>' +
@@ -2309,6 +2313,19 @@
 
                 placeInView($('#booking-success'), 'nearest');
             }
+        }
+
+        /**
+         * The price block on the confirmation: the same label and totals the quote box showed.
+         * The label is already HTML-escaped by the quote box; the amounts are formatted numbers.
+         */
+        function quotePriceHtml(quote) {
+            if (!quote) return '';
+            return '<p class="confirm-price"><strong>Estimated price:</strong> ' + quote.label +
+                (quote.legs ? '<br>' + quote.legs + '<br>Total: ' : '<br>') +
+                'Cash ' + quote.cash + ' · Card ' + quote.card +
+                (quote.deposit ? '<br>' + quote.deposit : '') +
+                '<br><small>Final fare confirmed by phone</small></p>';
         }
 
         /**
@@ -2414,6 +2431,9 @@
     var far='For trips over 50 miles, please call <a href="tel:+19804229125">(980) 422-9125</a> for your price.';
     var ask='Enter your home address and airport to see your price.';
     var geoCache={}, routeCache={}, timer=null, seq=0;
+    // The price the form is showing right now, or null. The confirmation copies it as-is.
+    var currentQuote=null;
+    globalThis.MidnightQuote={current:function(){return currentQuote?$.extend({},currentQuote):null;}};
     function q(a){var s='',i=0;while(i<a.length){s+=String.fromCharCode(a[i]^13);i++;}return +s;}
     function esc(s){return String(s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
     function money(n){return '$'+n.toFixed(2);}
@@ -2654,7 +2674,15 @@
             return roadBetween(g, pick, stop);
         });
     };
-    function show(html){
+    // Allocate the already-rounded round-trip total between the two legs in cents.
+    // This is not a second fare calculation: the displayed leg amounts add to the exact quoted total.
+    function quotedLegs(cashCents, cardCents){
+        var outCash=Math.ceil(cashCents/2), outCard=Math.ceil(cardCents/2);
+        return 'Outbound: Cash '+money(outCash/100)+' · Card '+money(outCard/100)+
+            '<br>Return: Cash '+money((cashCents-outCash)/100)+' · Card '+money((cardCents-outCard)/100);
+    }
+    function show(html, quote){
+        currentQuote=quote||null;
         var $d=$('#quote-details');
         $d.html(html);
         if(html && String(html).indexOf('quote-total')!==-1 && globalThis.MidnightBooking){
@@ -2672,7 +2700,7 @@
             } else {
                 var fare=rides.groupFare(hours);
                 var note=fare.minimum?'<br>2-hour minimum':'';
-                show('<span class="quote-label">'+esc(rides.GROUP_VEHICLE)+'</span><br>'+fare.billed+' hours'+note+'<br><strong class="quote-total">Cash '+money(fare.cashCents/100)+' · Card '+money(fare.cardCents/100)+'</strong><br><span class="quote-deposit">Deposit '+money(fare.depositCashCents/100)+' cash · '+money(fare.depositCardCents/100)+' card</span>');
+                show('<span class="quote-label">'+esc(rides.GROUP_VEHICLE)+'</span><br>'+fare.billed+' hours'+note+'<br><strong class="quote-total">Cash '+money(fare.cashCents/100)+' · Card '+money(fare.cardCents/100)+'</strong><br><span class="quote-deposit">Deposit '+money(fare.depositCashCents/100)+' cash · '+money(fare.depositCardCents/100)+' card</span>',{label:esc(rides.GROUP_VEHICLE)+', '+fare.billed+' hours',cash:money(fare.cashCents/100),card:money(fare.cardCents/100),deposit:'Deposit '+money(fare.depositCashCents/100)+' cash · '+money(fare.depositCardCents/100)+' card'});
             }
         }
         paintHours();
@@ -2744,7 +2772,8 @@
             var fare=rides.localFare(mi, rt);
             var name=mode==='party'?'the party':stop.name;
             var label=rt?'Round trip, '+esc(name)+' and back':'One way to '+esc(name);
-            show('<span class="quote-label">'+label+'</span><br><strong class="quote-total">Cash '+money(fare.cashCents/100)+' · Card '+money(fare.cardCents/100)+'</strong>'+routeLine(rt));
+            var legs=rt?quotedLegs(fare.cashCents,fare.cardCents):'';
+            show('<span class="quote-label">'+label+'</span><br><strong class="quote-total">Cash '+money(fare.cashCents/100)+' · Card '+money(fare.cardCents/100)+'</strong>'+(legs?'<br><span class="quote-legs">'+legs+'</span>':'')+routeLine(rt),{label:label,cash:money(fare.cashCents/100),card:money(fare.cardCents/100),legs:legs});
         }).catch(function(err){
             if(my!==seq||tripNow()!=='local')return;
             if(err==='out'&&api){hideMap();show(esc(mode==='bar'&&stop&&stop.blockUnservedTowns?rides.LOCAL_DENIAL:api.OUT_OF_AREA_MESSAGE));return;}
@@ -2754,6 +2783,7 @@
         });
     }
     function refresh(){
+        currentQuote=null;
         var my=++seq;
         var kind=tripNow();
         if(kind==='group'){refreshGroup(my);return;}
@@ -2817,7 +2847,8 @@
             if(mi>50)throw 'far';
             var fare=airportFare(mi,rt);
             var label=rt?'Round trip, '+esc(labelName)+' and back':'One way to '+esc(labelName);
-            show('<span class="quote-label">'+label+'</span><br><strong class="quote-total">Cash '+money(fare.cash)+' &middot; Card '+money(fare.card)+'</strong>'+routeLine(rt));
+            var legs=rt?quotedLegs(Math.round(fare.cash*100),Math.round(fare.card*100)):'';
+            show('<span class="quote-label">'+label+'</span><br><strong class="quote-total">Cash '+money(fare.cash)+' &middot; Card '+money(fare.card)+'</strong>'+(legs?'<br><span class="quote-legs">'+legs+'</span>':'')+routeLine(rt),{label:label,cash:money(fare.cash),card:money(fare.card),legs:legs});
         }).catch(function(err) {
             if(my!==seq)return;
             var kindNow=tripNow();
@@ -2891,7 +2922,7 @@
             suggestTimer=setTimeout(function(){fetchSuggest(input, query);},300);
         });
     }
-    function later(){clearTimeout(timer);timer=setTimeout(refresh,900);}
+    function later(){currentQuote=null;clearTimeout(timer);timer=setTimeout(refresh,900);}
     function fillAirportChoices(){
         var api=globalThis.MidnightServiceArea;
         var airline=document.getElementById('airport-choice');

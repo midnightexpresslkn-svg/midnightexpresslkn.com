@@ -1,6 +1,6 @@
 import { test as base, expect } from "@playwright/test";
 // Every external request is fulfilled locally; tests can never create a real ride.
-export async function bookingMocks(page) {
+export async function bookingMocks(page, { miles = 10 } = {}) {
   const state = { forms: [], calendars: [], gate: null };
   await page.route("**/*", async (route) => {
     const req = route.request();
@@ -45,7 +45,10 @@ export async function bookingMocks(page) {
     if (u.hostname === "router.project-osrm.org")
       return route.fulfill({
         contentType: "application/json",
-        body: JSON.stringify({ code: "Ok", routes: [{ distance: 16093.44 }] }),
+        body: JSON.stringify({
+          code: "Ok",
+          routes: [{ distance: miles * 1609.344 }],
+        }),
       });
     if (u.hostname === "nominatim.openstreetmap.org")
       return route.fulfill({ contentType: "application/json", body: "[]" });
