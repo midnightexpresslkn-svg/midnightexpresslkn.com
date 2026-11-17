@@ -67,7 +67,7 @@ test.describe("one send per booking", () => {
     await fillAirport(page, { round: true });
     await request(page).dblclick();
     await expect(
-      page.getByText("Your round-trip requests were sent:"),
+      page.getByText("Your round-trip requests were sent."),
     ).toBeVisible();
     await expect(another(page)).toBeVisible();
     await page

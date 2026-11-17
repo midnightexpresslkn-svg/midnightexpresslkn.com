@@ -1278,15 +1278,15 @@ describe("booking", () => {
           loaded: script,
         });
         const alert = resultText(view.document);
-        check(alert.includes("Outbound"), true, {
-          label: "confirmation names the outbound leg",
+        check(alert.includes("Your round-trip requests were sent."), true, {
+          label: "confirmation says both legs were sent",
           actual: alert,
           source: SOURCE.airport,
           loaded: script,
         });
-        check(alert.includes("Return"), true, {
-          label: "confirmation names the return leg",
-          actual: alert,
+        // Donald (Nov 16, 2026): no Outbound/Return date bullets, so the box fits a phone screen.
+        check(view.document.querySelectorAll("#booking-success li").length, 0, {
+          label: "no date/time bullet lines on the confirmation",
           source: SOURCE.airport,
           loaded: script,
         });

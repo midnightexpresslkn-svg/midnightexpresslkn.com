@@ -77,6 +77,15 @@ describe.each(scripts)("confirmation price %s", (script) => {
       ),
     ];
     const total = /Total: Cash (\$[\d.]+) · Card (\$[\d.]+)/.exec(price);
+    check(view.document.querySelectorAll("#booking-success li").length, 0, {
+      label: "no date/time bullet lines",
+      ...opts,
+    });
+    check(
+      resultText(view.document).includes("Your round-trip requests were sent."),
+      true,
+      { label: "natural lead-in", ...opts },
+    );
     check(legs.length, 2, { label: "two legs", actual: price, ...opts });
     check(quote.includes("Cash " + total[1] + " · Card " + total[2]), true, {
       label: "total is the quote",

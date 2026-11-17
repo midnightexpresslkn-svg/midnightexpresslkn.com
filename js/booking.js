@@ -481,8 +481,9 @@
         return formatTimeFromMinutes(hours * 60 + minutes);
     }
 
-    function placeInView(el, align) {
+    function placeInView(el, align, endEl) {
         var node = el && el.jquery ? el[0] : el;
+        var endNode = endEl && endEl.jquery ? endEl[0] : endEl;
         if (!node || !node.getBoundingClientRect || !window.scrollTo) return;
         var nav = document.querySelector('.navbar-fixed-top');
         var navHeight = 0;
@@ -491,6 +492,11 @@
         }
         var topBar = navHeight + 12;
         var rect = node.getBoundingClientRect();
+        // With endEl, place the span from the top of el to the bottom of endEl
+        if (endNode) {
+            var endRect = endNode.getBoundingClientRect();
+            rect = { top: rect.top, bottom: endRect.bottom, height: endRect.bottom - rect.top };
+        }
         var viewH = window.innerHeight || document.documentElement.clientHeight;
         var top = window.pageYOffset + rect.top - topBar;
         if (align === 'center' && rect.height + topBar < viewH) {
@@ -2253,11 +2259,7 @@
 
                 if (formData.roundTrip === 'Yes' && formData.airportTrip === 'Yes') {
                     successHtml +=
-                        '<p>Your round-trip requests were sent:</p>' +
-                        '<ul class="confirm-legs">' +
-                        '<li><strong>Outbound:</strong> ' + escapeHtml(formatDisplayDate(formData.pickupDate)) + ' at ' + escapeHtml(formatDisplayTime(formData.pickupTime)) + '</li>' +
-                        '<li><strong>Return:</strong> ' + escapeHtml(formatDisplayDate(formData.returnDate)) + ' at ' + escapeHtml(formatDisplayTime(formData.returnTime)) + '</li>' +
-                        '</ul>' +
+                        '<p>Your round-trip requests were sent.</p>' +
                         '<p>We will call you at <strong>' + escapeHtml(formData.phone) + '</strong> to confirm both bookings.</p>';
                 } else {
                     successHtml +=
@@ -2283,9 +2285,10 @@
                 // The sent booking stays locked; only Make Another Booking unlocks the form.
                 $submitBtn.html(originalBtnText);
 
-                placeInView($('#booking-success'), 'center');
-
                 showAnotherBookingButton();
+
+                // Center the confirmation and its Make Another Booking button together on the screen
+                placeInView($('#booking-success'), 'center', $('#new-booking-wrap'));
 
             } catch (error) {
                 console.error('=== SUBMISSION ERROR CAUGHT ===');

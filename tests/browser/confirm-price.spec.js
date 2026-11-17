@@ -35,10 +35,27 @@ test.describe("price on the confirmation at phone width", () => {
       page.getByText(/not confirmed until you receive a call from us/),
     ).toBeVisible();
     await page.mouse.move(0, 0); // no hover styling in the screenshot
+    await expect(confirmation(page)).toBeInViewport({ ratio: 1 });
+    // The page scrolls smoothly; wait until two animation frames show the same scroll position.
+    await page.waitForFunction(
+      () =>
+        new Promise((done) => {
+          const y = window.scrollY;
+          requestAnimationFrame(() =>
+            requestAnimationFrame(() => done(window.scrollY === y)),
+          );
+        }),
+    );
+    await expect(
+      page.getByRole("listitem").filter({ hasText: /^(Outbound|Return):/ }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Make Another Booking", exact: true }),
+    ).toBeInViewport({ ratio: 1 });
     if (shots)
-      await page
-        .locator("#booking")
-        .screenshot({ path: shots + "/melkn-confirm-price-oneway.png" });
+      await page.screenshot({
+        path: shots + "/melkn-confirm-price-oneway.png",
+      });
   });
 
   test("round trip shows the same round-trip total the form showed", async ({
@@ -59,7 +76,7 @@ test.describe("price on the confirmation at phone width", () => {
     ).toBeVisible();
     await request(page).click();
     await expect(
-      page.getByText("Your round-trip requests were sent:"),
+      page.getByText("Your round-trip requests were sent."),
     ).toBeVisible();
     const price = page
       .getByRole("paragraph")
@@ -71,10 +88,27 @@ test.describe("price on the confirmation at phone width", () => {
     await expect(price).toContainText("Return: Cash $65.00 · Card $66.95");
     await expect(price).toContainText("Total: Cash $130.00 · Card $133.90");
     await page.mouse.move(0, 0); // no hover styling in the screenshot
+    await expect(confirmation(page)).toBeInViewport({ ratio: 1 });
+    // The page scrolls smoothly; wait until two animation frames show the same scroll position.
+    await page.waitForFunction(
+      () =>
+        new Promise((done) => {
+          const y = window.scrollY;
+          requestAnimationFrame(() =>
+            requestAnimationFrame(() => done(window.scrollY === y)),
+          );
+        }),
+    );
+    await expect(
+      page.getByRole("listitem").filter({ hasText: /^(Outbound|Return):/ }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Make Another Booking", exact: true }),
+    ).toBeInViewport({ ratio: 1 });
     if (shots)
-      await page
-        .locator("#booking")
-        .screenshot({ path: shots + "/melkn-confirm-price-roundtrip.png" });
+      await page.screenshot({
+        path: shots + "/melkn-confirm-price-roundtrip.png",
+      });
   });
 
   test("no price on the confirmation when the form had none", async ({
