@@ -2780,7 +2780,7 @@ describe("booking", () => {
         await submitForm(view);
         check(
           resultText(view.document).includes(
-            "Return flight time conflicts with outbound flight",
+            "Return pickup time conflicts with the first ride",
           ),
           true,
           {

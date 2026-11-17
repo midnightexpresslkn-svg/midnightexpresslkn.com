@@ -184,10 +184,10 @@ describe.each(scripts)("booking gaps %s", (script) => {
     returnTime.value = "";
     await expectVisible(
       missing,
-      "Return flight date is required for round trips",
+      "Return pickup date is required for round trips",
     );
     check(
-      text(missing).includes("Return flight time is required for round trips"),
+      text(missing).includes("Return pickup time is required for round trips"),
       true,
       {
         label: "blank return time",
@@ -643,7 +643,7 @@ describe.each(scripts)("booking gaps %s", (script) => {
     view.document.querySelector("#booking-return-time").value = "12:00:00";
     await expectVisible(
       view,
-      "Return flight: Pickup time cannot be in the past",
+      "Return pickup: Pickup time cannot be in the past",
     );
     check(formPosts(view.state).length, 0, {
       label: "a past return is not sent",
@@ -940,7 +940,7 @@ describe.each(scripts)("booking gaps %s", (script) => {
       source: "js/booking.js",
       loaded: script,
     });
-    check(text(view).includes("Conflicts with outbound flight"), false, {
+    check(text(view).includes("Conflicts with the first ride"), false, {
       label: "Tuesday's hold is not reported as a same-day return conflict",
       actual: text(view),
       source: "js/booking.js",

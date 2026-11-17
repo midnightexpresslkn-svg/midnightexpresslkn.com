@@ -1193,8 +1193,13 @@
         var airport = isAirportTrip();
         var from = airportFrom();
         var round = isRoundTrip();
-        $('#departure-flight-group').after($('#flight-group'));
-        $('#flight-group').removeClass('col-md-12 col-md-4').addClass('col-md-6');
+        // Donald (Nov 16, 2026): the first ride's flight sits before Round trip; the ride back's
+        // date, time, passengers, and flight sit together after it.
+        var $first = from ? $('#flight-group') : $('#departure-flight-group');
+        var $second = from ? $('#departure-flight-group') : $('#flight-group');
+        $('#airport-details').append($first);
+        $('#return-flight-section').append($('#passengers-back-group'), $second);
+        $('#flight-group, #departure-flight-group, #passengers-back-group').removeClass('col-md-12 col-md-4 col-md-6').addClass('col-md-12');
         $('#flight-label').text('Arrival flight number *');
         $('#flight-slot').hide();
         // First leg: departure for To, arrival for From. Round trips ask for both.
@@ -1833,9 +1838,11 @@
         });
 
         // Clear an airport-detail error as soon as the rider answers it
-        $('#airport-details').on('input change', 'input', function() {
+        $('#airport-details').on('input change', 'input', clearAirportError);
+        $('#passengers-back-group, #flight-group, #departure-flight-group').on('input change', 'input', clearAirportError);
+        function clearAirportError() {
             $(this).closest('.form-group').removeClass('has-error').find('.help-block.text-danger').text('').hide();
-        });
+        }
 
         // Update passenger capacity on passenger input change
         $('#booking-passengers').on('input', function() {
@@ -2390,17 +2397,17 @@
             if (formData.roundTrip === 'Yes' && formData.airportTrip === 'Yes') {
                 // Return date validation
                 if (!formData.returnDate) {
-                    errors.push('Return flight date is required for round trips');
+                    errors.push('Return pickup date is required for round trips');
                     $('#booking-return-date').closest('.form-group').addClass('has-error');
-                    $('#return-date-error').text('Return flight date is required').show();
+                    $('#return-date-error').text('Return pickup date is required').show();
                     isValid = false;
                 }
 
                 // Return time validation
                 if (!formData.returnTime) {
-                    errors.push('Return flight time is required for round trips');
+                    errors.push('Return pickup time is required for round trips');
                     $('#booking-return-time').closest('.form-group').addClass('has-error');
-                    $('#return-time-error').text('Return flight time is required').show();
+                    $('#return-time-error').text('Return pickup time is required').show();
                     isValid = false;
                 } else {
                     // Validate return date is after pickup date
@@ -2432,7 +2439,7 @@
             if (formData.roundTrip === 'Yes' && formData.returnDate && formData.returnTime) {
                 const returnDateTimeValidation = await validateDateTime(formData.returnDate, formData.returnTime);
                 if (!returnDateTimeValidation.valid) {
-                    errors.push('Return flight: ' + returnDateTimeValidation.error);
+                    errors.push('Return pickup: ' + returnDateTimeValidation.error);
                     $('#booking-return-date').closest('.form-group').addClass('has-error');
                     $('#return-date-error').text(returnDateTimeValidation.error).show();
                     isValid = false;
@@ -2448,9 +2455,9 @@
                         minutes: pickupMinutes
                     }]);
                     if (hasTimeConflict(formData.returnDate, formData.returnTime, withOutbound)) {
-                        errors.push('Return flight time conflicts with outbound flight. Please choose a different time.');
+                        errors.push('Return pickup time conflicts with the first ride. Please choose a different time.');
                         $('#booking-return-time').closest('.form-group').addClass('has-error');
-                        $('#return-time-error').text('Conflicts with outbound flight').show();
+                        $('#return-time-error').text('Conflicts with the first ride').show();
                         isValid = false;
                     }
                 }

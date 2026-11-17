@@ -57,9 +57,7 @@ describe.each(scripts)("airport form %s", (script) => {
     for (const id of [
       "booking-carryon-yes",
       "booking-luggage-help-yes",
-      "booking-passengers-back",
       "booking-departure-flight",
-      "booking-flight",
     ]) {
       check(details.contains(view.document.getElementById(id)), true, {
         label: `${id} sits with the airport questions, one-way too`,
@@ -67,6 +65,47 @@ describe.each(scripts)("airport form %s", (script) => {
         loaded: script,
       });
     }
+    const returnSection = view.document.querySelector("#return-flight-section");
+    for (const id of ["booking-passengers-back", "booking-flight"]) {
+      check(returnSection.contains(view.document.getElementById(id)), true, {
+        label: `${id} sits with the round-trip fields when going to the airport`,
+        source: "js/booking.js",
+        loaded: script,
+      });
+    }
+    const order = [
+      ...view.document.querySelectorAll(
+        "#booking-departure-flight, #round-trip-section, #booking-return-date, #booking-return-time, #booking-passengers-back, #booking-flight",
+      ),
+    ].map((el) => el.id);
+    check(
+      order.join(","),
+      "booking-departure-flight,round-trip-section,booking-return-date,booking-return-time,booking-passengers-back,booking-flight",
+      {
+        label:
+          "first-ride flight, then Round trip, then the ride-back fields together",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    view.document.querySelector("#airport-direction-from").click();
+    const fromOrder = [
+      ...view.document.querySelectorAll(
+        "#booking-flight, #round-trip-section, #booking-return-date, #booking-return-time, #booking-passengers-back, #booking-departure-flight",
+      ),
+    ].map((el) => el.id);
+    check(
+      fromOrder.join(","),
+      "booking-flight,round-trip-section,booking-return-date,booking-return-time,booking-passengers-back,booking-departure-flight",
+      {
+        label:
+          "from the airport, the arrival flight comes first and the departure flight rides back",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    view.document.querySelector("#airport-direction-to").click();
+    view.document.querySelector("#airport-direction-to").checked = false;
     check(
       view.document.querySelector("#passengers-label").textContent.trim(),
       "Passengers to the airport *",

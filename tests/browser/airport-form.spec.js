@@ -12,6 +12,33 @@ const request = (page) =>
   page.getByRole("button", { name: "Request Booking", exact: true });
 const group = (page, name) => page.getByRole("group", { name });
 
+/** Asserts the fields sit top to bottom in this order on the screen. */
+async function inOrder(locators) {
+  let last = -Infinity;
+  for (const locator of locators) {
+    await expect(locator).toBeVisible();
+    const top = await locator.evaluate(
+      (el) => el.getBoundingClientRect().top + window.scrollY,
+    );
+    expect(top, `${locator} comes after the field above it`).toBeGreaterThan(
+      last,
+    );
+    last = top;
+  }
+}
+
+/** First-ride flight, Round trip, then the ride-back fields together (Donald, Nov 16 2026). */
+const rideOrder = (page, first, back) => [
+  page.getByLabel(first),
+  group(page, /Round trip/),
+  page.getByText("Return Pickup Date", { exact: true }),
+  page.getByText("Return Pickup Time", { exact: true }),
+  page.getByRole("spinbutton", {
+    name: /Passengers back (to|from) the airport/,
+  }),
+  page.getByLabel(back),
+];
+
 test.describe("airport form at phone width", () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
@@ -99,10 +126,14 @@ test.describe("airport form at phone width", () => {
     await page.goto("/#booking");
     await fillAirport(page, { round: true });
     await expect(page.getByLabel(/Arrival flight number/)).toBeVisible();
+    await settled(page);
+    await inOrder(
+      rideOrder(page, /Departure flight number/, /Arrival flight number/),
+    );
     if (shots) {
-      await group(page, /Carry-on bags/).evaluate((el) =>
-        el.scrollIntoView({ block: "start" }),
-      );
+      await page
+        .getByLabel(/Departure flight number/)
+        .evaluate((el) => el.scrollIntoView({ block: "start" }));
       await settled(page);
       await page.screenshot({
         path: shots + "/melkn-airport-form-roundtrip.png",
@@ -180,6 +211,13 @@ test.describe("airport form at phone width", () => {
       await page.screenshot({
         path: shots + "/melkn-airport-from-oneway-top.png",
       });
+      const dropoff = page.getByLabel("Drop-off address *");
+      await expect(dropoff).toHaveAttribute("required", "");
+      await dropoff.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await settled(page);
+      await page.screenshot({
+        path: shots + "/melkn-airport-from-dropoff.png",
+      });
       await group(page, /Carry-on bags/).evaluate((el) =>
         el.scrollIntoView({ block: "start" }),
       );
@@ -206,10 +244,14 @@ test.describe("airport form at phone width", () => {
     await expect(
       page.getByRole("spinbutton", { name: /Passengers back to the airport/ }),
     ).toBeVisible();
+    await settled(page);
+    await inOrder(
+      rideOrder(page, /Arrival flight number/, /Departure flight number/),
+    );
     if (shots) {
-      await group(page, /Carry-on bags/).evaluate((el) =>
-        el.scrollIntoView({ block: "start" }),
-      );
+      await page
+        .getByLabel(/Arrival flight number/)
+        .evaluate((el) => el.scrollIntoView({ block: "start" }));
       await settled(page);
       await page.screenshot({
         path: shots + "/melkn-airport-from-roundtrip.png",
