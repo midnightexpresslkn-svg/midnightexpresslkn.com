@@ -1292,6 +1292,10 @@ section button.btn {
   min-width: 0;
 }
 
+#ride-rules .ride-rule[hidden] {
+  display: none;
+}
+
 #ride-rules .ride-rule {
   display: flex;
   align-items: flex-start;

@@ -136,6 +136,24 @@ function shown(element) {
   return Boolean(element);
 }
 
+function shownRules(view) {
+  return [...view.document.querySelectorAll("#ride-rules .ride-rule")]
+    .filter((label) => !label.hidden)
+    .map((label) => label.textContent.replace(/\s+/g, " ").trim());
+}
+
+function fillBarReturn(
+  view,
+  { passengers = "2", time = "23:30:00", place = "Two Trees front door" } = {},
+) {
+  const $ = view.window.jQuery;
+  $("#bar-return-passengers").val(passengers).trigger("input");
+  view.document
+    .querySelector("#bar-return-time")
+    ._flatpickr.setDate(time, true, "H:i:S");
+  $("#bar-return-location").val(place).trigger("input");
+}
+
 describe.each(scripts)("local bars and group %s", (script) => {
   it("rounds cash to the nearest $5 (an exact $2.50 up) and keeps the card exactly 3 percent over cash (Donald, Nov 10 2026)", async () => {
     const view = await renderBooking(script);
@@ -338,9 +356,7 @@ describe.each(scripts)("local bars and group %s", (script) => {
       loaded: script,
     });
     check(
-      [...view.document.querySelectorAll("#ride-rules .ride-rule")].map(
-        (label) => label.textContent.replace(/\s+/g, " ").trim(),
-      ),
+      shownRules(view),
       [
         "Must be 21 or older *",
         "No smoking *",
@@ -348,11 +364,37 @@ describe.each(scripts)("local bars and group %s", (script) => {
       ],
       {
         label:
-          "local notices are the three required boxes in order, each with the required star",
+          "before bar or party is picked, the notices are the three required boxes in order",
         source: "js/booking.js",
         loaded: script,
       },
     );
+    const kind = view.document.querySelector("#local-kind");
+    kind.value = "bar";
+    view.window.jQuery(kind).trigger("change");
+    check(
+      shownRules(view),
+      [
+        "Must be 21 years or older, cannot smoke, and you are responsible for any damages. *",
+      ],
+      {
+        label: "a bar ride shows one combined required agreement box",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    check(view.document.querySelector("#rule-bar-agreement").required, true, {
+      label: "the bar agreement box is required",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    kind.value = "party";
+    view.window.jQuery(kind).trigger("change");
+    check(shownRules(view).length, 3, {
+      label: "a party ride keeps its three boxes",
+      source: "js/booking.js",
+      loaded: script,
+    });
     check(view.document.querySelector("#rule-age").type, "checkbox", {
       label: "the age notice is a real checkbox",
       source: "js/booking.js",
@@ -621,9 +663,29 @@ describe.each(scripts)("local bars and group %s", (script) => {
   });
 
   it("blocks a local request until every notice is checked, then sends the answers", async () => {
+    const bar = await renderBooking(script, { miles: 4 });
+    await fillValid(bar, { trip: "local", barAgreement: false });
+    await submitForm(bar);
+    check(
+      resultText(bar.document).includes(
+        "Please check the box: Must be 21 years or older, cannot smoke, and you are responsible for any damages.",
+      ),
+      true,
+      {
+        label: "a bar request waits for the agreement box",
+        actual: resultText(bar.document),
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    check(bookingPosts(bar.state).length, 0, {
+      label: "an unchecked bar request is not sent",
+      source: "js/booking.js",
+      loaded: script,
+    });
     for (const rules of [[], ["age"], ["age", "smoke"]]) {
       const view = await renderBooking(script, { miles: 4 });
-      await fillValid(view, { trip: "local", rules });
+      await fillValid(view, { trip: "local", localKind: "party", rules });
       await submitForm(view);
       check(
         resultText(view.document).includes(
@@ -631,14 +693,14 @@ describe.each(scripts)("local bars and group %s", (script) => {
         ),
         true,
         {
-          label: `bar request waits when rules are ${rules.join(",") || "none"}`,
+          label: `party request waits when rules are ${rules.join(",") || "none"}`,
           actual: resultText(view.document),
           source: "js/booking.js",
           loaded: script,
         },
       );
       check(bookingPosts(view.state).length, 0, {
-        label: "an unchecked bar request is not sent",
+        label: "an unchecked party request is not sent",
         source: "js/booking.js",
         loaded: script,
       });
@@ -1445,6 +1507,7 @@ describe.each(scripts)("local bars and group %s", (script) => {
     const round = preset.document.querySelector("#booking-round-trip");
     round.checked = true;
     preset.window.jQuery(round).trigger("change");
+    fillBarReturn(preset);
     await submitForm(preset);
     const payload = JSON.parse(
       bookingPosts(preset.state).find((request) =>

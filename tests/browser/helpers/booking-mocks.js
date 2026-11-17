@@ -119,8 +119,43 @@ export async function fillAirport(
   }
 }
 
+/** A one-way-or-round bar ride to Two Trees with every bar answer filled in. */
+export async function fillBar(page, { round = false, agree = true } = {}) {
+  await page.getByRole("combobox", { name: "Trip type" }).selectOption("local");
+  await page.locator("#local-kind").selectOption("bar");
+  await page.locator("#bar-choice").selectOption("two-trees");
+  await page.getByPlaceholder("Jane Smith").fill("Isolated QA Rider");
+  await page.getByPlaceholder("5555551234").fill("5555550199");
+  await page.getByPlaceholder("email@example.com").fill("qa@example.invalid");
+  await page.getByRole("spinbutton", { name: /Online:/ }).fill("2");
+  await page
+    .getByPlaceholder("123 Main Street, Denver NC 28037")
+    .fill("123 Main Street, Denver NC 28037");
+  await page
+    .getByRole("group", { name: /Round trip/ })
+    .getByRole("radio", { name: round ? "Yes" : "No", exact: true })
+    .check();
+  if (round) {
+    await page.getByLabel(/Passengers for the ride back/).fill("3");
+    await pick(
+      page.getByRole("textbox", { name: "Select return time" }),
+      "23:30:00",
+    );
+    await page
+      .getByLabel(/Return pickup location/)
+      .fill("Two Trees front door");
+  }
+  if (agree) {
+    await page
+      .getByRole("checkbox", {
+        name: /Must be 21 years or older, cannot smoke/,
+      })
+      .check();
+  }
+}
+
 // The visible picker box is Flatpickr's alt input; its picker lives on the input just before it.
-async function pick(box, value) {
+export async function pick(box, value) {
   await expect(box).toBeVisible();
   await box.evaluate(
     (el, v) => el.previousElementSibling._flatpickr.setDate(v, true),

@@ -28,6 +28,16 @@ async function answerRoundTrip(page, value = "No") {
   await page.locator(id).check();
 }
 
+// Bar rides have one combined agreement box (Donald, Nov 16 2026).
+const barAgreement = (page) =>
+  page.getByRole("checkbox", {
+    name: /Must be 21 years or older, cannot smoke, and you are responsible for any damages/,
+  });
+
+async function agreeBar(page) {
+  await barAgreement(page).check();
+}
+
 async function installMocks(page, { miles = 10, bookings = [] } = {}) {
   const posts = [];
   await page.route("**/*", async (route) => {
@@ -617,7 +627,7 @@ test.describe("new rides on a 375px phone", () => {
     await page.setViewportSize({ width: 375, height: 667 });
   });
 
-  test("a listed bar quotes and the three boxes block submit", async ({
+  test("a listed bar quotes and the agreement box blocks submit", async ({
     page,
   }) => {
     const posts = await installMocks(page, { miles: 4 });
@@ -639,14 +649,10 @@ test.describe("new rides on a 375px phone", () => {
     await fillIdentity(page);
     await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
     await expect(page.locator("#booking-success")).toContainText(
-      "Please check all three boxes: Must be 21 or older, No smoking, and If you damage anything, you are responsible.",
+      "Please check the box: Must be 21 years or older, cannot smoke, and you are responsible for any damages.",
     );
-    await page.locator("#rule-age").check();
-    await page.locator("#rule-smoke").check();
-    await page.locator("#rule-damage").check();
-    await expect(page.locator("#rule-age")).toBeChecked();
-    await expect(page.locator("#rule-smoke")).toBeChecked();
-    await expect(page.locator("#rule-damage")).toBeChecked();
+    await agreeBar(page);
+    await expect(barAgreement(page)).toBeChecked();
     expect(posts).toEqual([]);
   });
 
@@ -750,9 +756,8 @@ test.describe("new rides on a 375px phone", () => {
     );
     await expect(page.locator("#quote-details")).not.toContainText("Cash");
     await fillIdentity(page);
-    await page.locator("#rule-age").check();
-    await page.locator("#rule-smoke").check();
-    await page.locator("#rule-damage").check();
+    await agreeBar(page);
+    await answerRoundTrip(page);
     await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
     await expect(page.locator("#booking-success")).toContainText(
       "out of our service area.",
@@ -927,9 +932,8 @@ test.describe("group description on a 375px phone", () => {
     await page
       .locator("#booking-pickup")
       .fill("123 Main Street, Denver NC 28037");
-    await page.locator("#rule-age").check();
-    await page.locator("#rule-smoke").check();
-    await page.locator("#rule-damage").check();
+    await agreeBar(page);
+    await answerRoundTrip(page);
     await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
     await expect(page.locator("#booking-success")).toContainText(
       "Request received",

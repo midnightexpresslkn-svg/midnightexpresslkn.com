@@ -96,16 +96,18 @@ test.describe("mobile page fits the screen", () => {
       const barBox = await page.locator("#bar-choice").boundingBox();
       expect(barBox.y).toBeGreaterThan(kindBox.y);
       await expect(page.locator("#ride-map-slot")).toBeHidden();
-      await expect(page.locator("#rule-age")).toBeVisible();
-      await expect(page.locator("#ride-rules")).toContainText("No smoking");
-      await expect(page.locator("#ride-rules")).toContainText(
-        "If you damage anything, you are responsible.",
-      );
+      await expect(
+        page.getByRole("checkbox", {
+          name: /Must be 21 years or older, cannot smoke/,
+        }),
+      ).toBeVisible();
+      await expect(page.locator("#rule-age")).toBeHidden();
       const local = await offenders(page);
       expect(local.scrollWidth).toBeLessThanOrEqual(local.clientWidth + 1);
       expect(local.found).toEqual([]);
       await page.locator("#local-kind").selectOption("party");
       await expect(page.locator("#party-address")).toBeVisible();
+      await expect(page.locator("#rule-age")).toBeVisible();
       const party = await offenders(page);
       expect(party.found).toEqual([]);
 

@@ -751,6 +751,26 @@
         return (customerNote ? customerNote + '\n' : '') + 'Airport details:\n' + lines.join('\n');
     }
 
+    function twelveHour(value) {
+        var parts = value.split(':');
+        var hours = parseInt(parts[0], 10);
+        return ((hours + 11) % 12 + 1) + ':' + parts[1] + (hours < 12 ? ' AM' : ' PM');
+    }
+
+    /**
+     * New bar answers have no Google Form question yet, so they go into Notes as labeled lines.
+     */
+    function barNotes(notes, agreed, ride) {
+        var lines = ['Agreement (' + BAR_AGREEMENT + '): ' + (agreed ? 'Yes' : 'No')];
+        if (ride) {
+            lines.push('Return ride:');
+            lines.push('Passengers back: ' + ride.passengers);
+            lines.push('Return pickup time: ' + (ride.time ? twelveHour(ride.time) : ''));
+            lines.push('Return pickup location: ' + ride.location);
+        }
+        return notes + '\n' + lines.join('\n');
+    }
+
     function validateFlightNumber(flightNumber) {
         const pattern = /^[a-zA-Z0-9]{2,3}[\s-]?\d{1,4}[a-zA-Z]?$/;
         return pattern.test(flightNumber);
@@ -1013,6 +1033,9 @@
      * Local Bars and Parties and Group reuse the same contact fields.
      */
     var NOTES_PLACEHOLDER = 'Anything we should know? For example, a wheelchair, a car seat, or extra luggage.';
+    // Donald (Nov 16, 2026): the bar form uses one combined agreement box.
+    var BAR_AGREEMENT = 'Must be 21 years or older, cannot smoke, and you are responsible for any damages.';
+    var BAR_AGREEMENT_MESSAGE = 'Please check the box: ' + BAR_AGREEMENT;
     var RULES_MESSAGE = "Please check all three boxes: Must be 21 or older, No smoking, and If you damage anything, you are responsible.";
     var GROUP_NOTES_MESSAGE = 'Please tell us about your group event (what it is, how many people, and anything we should know).';
     // Donald (Nov 16, 2026): the airport form asks for a required note with these examples.
@@ -1172,6 +1195,35 @@
         $('#booking-carryon-count').prop('required', airport && yesNoChoice('carry-on') === 'Yes').attr('min', '1');
     }
 
+    function isBarRide() {
+        return localMode() === 'bar';
+    }
+
+    function clearBarReturn() {
+        var $box = $('#bar-return-details');
+        $box.attr('hidden', 'hidden').hide();
+        $('#bar-return-passengers, #bar-return-location').val('');
+        document.getElementById('bar-return-time')._flatpickr.clear();
+        $box.find('.help-block.text-danger').text('').hide();
+        $box.find('.has-error').removeClass('has-error');
+        $box.find('input').prop('required', false);
+    }
+
+    // Bar rides: one combined agreement box, and the ride back asks who, when, and where.
+    function updateBarFields() {
+        var bar = isBarRide();
+        $('#bar-agreement-rule').prop('hidden', !bar);
+        $('.party-group-rule').prop('hidden', bar);
+        $('#rule-bar-agreement').prop('required', bar);
+        if (!bar) $('#rule-bar-agreement').prop('checked', false);
+        if (bar && isRoundTrip()) {
+            $('#bar-return-details').removeAttr('hidden').show();
+            $('#bar-return-details input').prop('required', true);
+        } else {
+            clearBarReturn();
+        }
+    }
+
     function clearAirportDetails() {
         var $box = $('#airport-details');
         $box.attr('hidden', 'hidden').hide();
@@ -1220,6 +1272,7 @@
         }
         placeFlightField();
         updateAirportRequirements();
+        updateBarFields();
     }
 
     /**
@@ -1621,6 +1674,19 @@
             defaultDate: defaultDateTime
         });
 
+        // Bar ride back: a time only, shown in 12-hour time like the pickup time
+        $('#bar-return-time').flatpickr({
+            enableTime: true,
+            noCalendar: true,
+            dateFormat: "H:i:S",
+            altInput: true,
+            altFormat: "h:i K",
+            time_24hr: false,
+            minuteIncrement: 5,
+            disableMobile: "never",
+            position: 'below'
+        });
+
         // Initialize Return Flight Flatpickr (only when round trip is selected)
         let returnDateInstance = null;
         let returnTimeInstance = null;
@@ -1714,6 +1780,14 @@
         });
 
         $('input[name="checking-bags"], input[name="carry-on"]').on('change', updateAirportRequirements);
+
+        $('#bar-return-details').on('input change', 'input', function() {
+            $(this).closest('.form-group').removeClass('has-error').find('.help-block.text-danger').text('').hide();
+        });
+        $('#rule-bar-agreement').on('change', function() {
+            $('#ride-rules').removeClass('has-error');
+            $('#ride-rules-error').text('').hide();
+        });
 
         // "Other items" opens an optional box to describe them
         $('#booking-other-item').on('change', function() {
@@ -1918,8 +1992,19 @@
             if (trip === 'local' && isRoundTrip()) {
                 notes = notes ? notes + ' Round trip.' : 'Round trip.';
             }
-            const ack = (trip === 'group' || trip === 'local') ? rulesState() : null;
-            if (ack) notes = notes ? notes + ' ' + rulesLine(ack) : rulesLine(ack);
+            const barRide = trip === 'local' && mode === 'bar';
+            const barAgreed = $('#rule-bar-agreement').is(':checked');
+            const barReturn = {
+                passengers: $.trim($('#bar-return-passengers').val() || ''),
+                time: $('#bar-return-time').val() || '',
+                location: $.trim($('#bar-return-location').val() || '')
+            };
+            const rules = (trip === 'group' || trip === 'local') && !barRide ? rulesState() : null;
+            if (rules) notes = notes ? notes + ' ' + rulesLine(rules) : rulesLine(rules);
+            // The one bar box covers all three calendar answers.
+            const barAnswer = barAgreed ? 'Yes' : 'No';
+            const ack = barRide ? { mustBe21: barAnswer, noSmoking: barAnswer, damageResponsibility: barAnswer } : rules;
+            if (barRide) notes = barNotes(notes, barAgreed, isRoundTrip() ? barReturn : null);
             const asksTripDetails = trip === 'airport';
             const bagCount = readBagCount();
             const bagsChoice = checkingBagsChoice();
@@ -2138,7 +2223,12 @@
                 }
             }
 
-            if ((trip === 'group' || trip === 'local') && !rulesComplete(rulesState())) {
+            if (barRide && !barAgreed) {
+                errors.push(BAR_AGREEMENT_MESSAGE);
+                $('#ride-rules').addClass('has-error');
+                $('#ride-rules-error').text(BAR_AGREEMENT_MESSAGE).show();
+                isValid = false;
+            } else if ((trip === 'group' || trip === 'local') && !barRide && !rulesComplete(rulesState())) {
                 errors.push(RULES_MESSAGE);
                 $('#ride-rules').addClass('has-error');
                 $('#ride-rules-error').text(RULES_MESSAGE).show();
@@ -2224,6 +2314,21 @@
                     fieldError('#booking-passengers-back', 'passengers-back-error', 'Please enter how many passengers come back from the airport.');
                 } else if (backCount > maxCapacity) {
                     fieldError('#booking-passengers-back', 'passengers-back-error', overCapacityMessage(maxCapacity));
+                }
+            }
+
+            if (barRide && isRoundTrip()) {
+                var backRiders = /^\d+$/.test(barReturn.passengers) ? parseInt(barReturn.passengers, 10) : 0;
+                if (backRiders < 1) {
+                    fieldError('#bar-return-passengers', 'bar-return-passengers-error', 'Please enter how many passengers ride back.');
+                } else if (backRiders > GROUP_MAX_PASSENGERS) {
+                    fieldError('#bar-return-passengers', 'bar-return-passengers-error', overCapacityMessage(GROUP_MAX_PASSENGERS));
+                }
+                if (!barReturn.time) {
+                    fieldError('#bar-return-time', 'bar-return-time-error', 'Please choose a return pickup time.');
+                }
+                if (!barReturn.location) {
+                    fieldError('#bar-return-location', 'bar-return-location-error', 'Please enter where to pick you up for the ride back.');
                 }
             }
 

@@ -582,7 +582,13 @@ export async function fillValid(view, overrides = {}) {
       overrides.passengers ?? "2",
     );
   }
-  if (trip === "group" || trip === "local") {
+  const barRide = trip === "local" && (overrides.localKind || "bar") === "bar";
+  if (barRide) {
+    // Bar rides use one combined agreement box (Donald, Nov 16 2026).
+    const box = doc.querySelector("#rule-bar-agreement");
+    box.checked = overrides.barAgreement ?? true;
+    window.jQuery(box).trigger("change");
+  } else if (trip === "group" || trip === "local") {
     const rules = overrides.rules ?? ["age", "smoke", "damage"];
     for (const [id, key] of [
       ["rule-age", "age"],
