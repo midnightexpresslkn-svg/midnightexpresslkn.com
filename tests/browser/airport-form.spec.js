@@ -4,7 +4,9 @@ import {
   expect,
   bookingMocks,
   fillAirport,
+  formFields,
   settled,
+  formText,
 } from "./helpers/booking-mocks.js";
 
 const shots = process.env.MELKN_SHOTS_DIR;
@@ -113,11 +115,28 @@ test.describe("airport form at phone width", () => {
       page.getByRole("heading", { name: /Request received/ }),
     ).toBeVisible();
     expect(state.forms).toHaveLength(1);
-    const sent = decodeURIComponent(state.forms[0].replace(/\+/g, " "));
+    const sent = formText(state.forms[0]);
     expect(sent).toContain("Carry-on bags: Yes (2)");
     expect(sent).toContain("Help with luggage: Yes");
     expect(sent).toContain("Golf Clubs, Other: a stroller");
     expect(sent).not.toContain("Passengers back");
+    const fields = formFields(state.forms[0]);
+    expect(fields["entry.1344705029"]).toBe("To the airport");
+    expect(fields["entry.502673920"]).toBe("DL100");
+    expect(fields["entry.1977309653"]).toBe("");
+    expect(fields["entry.1991650389"]).toBe("2");
+    expect(fields["entry.276667296"]).toBe("");
+    expect(fields["entry.328412433"]).toBe("");
+    expect(fields["entry.702078471"]).toBe("");
+    expect(fields["entry.1343447537"]).toBe("");
+    expect(fields["entry.788079233"]).toBe("");
+    expect(fields["entry.791508642"]).toBe("");
+    expect(fields["entry.1994837178"]).toBe("No");
+    expect(fields["entry.1512412552"]).toBe("Yes (2)");
+    expect(fields["entry.800471512"]).toBe("Yes");
+    expect(fields["entry.64451580"]).toBe("Golf Clubs, Other: a stroller");
+    expect(fields["entry.285972615"]).toBe("");
+    expect(fields["entry.144653274"]).toBe("");
   });
 
   test("a round trip asks for the arrival flight and the riders coming back", async ({
@@ -145,8 +164,21 @@ test.describe("airport form at phone width", () => {
       page.getByRole("heading", { name: /Request received/ }),
     ).toBeVisible();
     expect(state.forms).toHaveLength(2);
-    const back = decodeURIComponent(state.forms[1].replace(/\+/g, " "));
+    const back = formText(state.forms[1]);
     expect(back).toContain("Passengers back from the airport: 2");
+    for (const raw of state.forms) {
+      const fields = formFields(raw);
+      expect(fields["entry.1344705029"]).toBe("To the airport");
+      expect(fields["entry.502673920"]).toBe("DL100");
+      expect(fields["entry.1977309653"]).toBe("AA2684");
+      expect(fields["entry.1991650389"]).toBe("2");
+      expect(fields["entry.276667296"]).toBe("2");
+      expect(fields["entry.328412433"]).toBe("12/16/2026 12:00:00");
+      expect(fields["entry.1994837178"]).toBe("No");
+      expect(fields["entry.1512412552"]).toBe("No");
+      expect(fields["entry.800471512"]).toBe("No");
+      expect(fields["entry.64451580"]).toBe("");
+    }
   });
 
   test("names each missing airport answer and sends nothing", async ({
@@ -230,10 +262,17 @@ test.describe("airport form at phone width", () => {
       page.getByRole("heading", { name: /Request received/ }),
     ).toBeVisible();
     expect(state.forms).toHaveLength(1);
-    const sent = decodeURIComponent(state.forms[0].replace(/\+/g, " "));
+    const sent = formText(state.forms[0]);
     expect(sent).toContain("Direction: Pick up from the airport");
     expect(sent).toContain("Arrival flight: AA2684");
     expect(sent).not.toContain("Departure flight");
+    const fields = formFields(state.forms[0]);
+    expect(fields["entry.1344705029"]).toBe("Pick up from the airport");
+    expect(fields["entry.502673920"]).toBe("");
+    expect(fields["entry.1977309653"]).toBe("AA2684");
+    expect(fields["entry.1343447537"]).toBe("123 Main Street, Denver NC 28037");
+    expect(fields["entry.1991650389"]).toBe("2");
+    expect(fields["entry.276667296"]).toBe("");
   });
 
   test("a round trip from the airport goes back with the departure flight", async ({
@@ -263,8 +302,19 @@ test.describe("airport form at phone width", () => {
       page.getByRole("heading", { name: /Request received/ }),
     ).toBeVisible();
     expect(state.forms).toHaveLength(2);
-    const back = decodeURIComponent(state.forms[1].replace(/\+/g, " "));
+    const back = formText(state.forms[1]);
     expect(back).toContain("DL100");
     expect(back).toContain("Passengers back to the airport: 2");
+    for (const raw of state.forms) {
+      const fields = formFields(raw);
+      expect(fields["entry.1344705029"]).toBe("Pick up from the airport");
+      expect(fields["entry.1977309653"]).toBe("AA2684");
+      expect(fields["entry.502673920"]).toBe("DL100");
+      expect(fields["entry.276667296"]).toBe("2");
+      expect(fields["entry.1343447537"]).toBe(
+        "123 Main Street, Denver NC 28037",
+      );
+      expect(fields["entry.328412433"]).toBe("12/16/2026 12:00:00");
+    }
   });
 });

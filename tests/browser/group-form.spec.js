@@ -5,6 +5,8 @@ import {
   bookingMocks,
   fillGroup,
   settled,
+  formFields,
+  formText,
 } from "./helpers/booking-mocks.js";
 import { ui } from "./helpers/ui.js";
 
@@ -112,7 +114,7 @@ test.describe("group form at phone width", () => {
       await page.screenshot({ path: shots + "/melkn-group-form-confirm.png" });
     }
     expect(state.forms).toHaveLength(1);
-    const sent = decodeURIComponent(state.forms[0].replace(/\+/g, " "));
+    const sent = formText(state.forms[0]);
     for (const line of [
       "Group details:",
       `Agreement (${AGREEMENT}): Yes`,
@@ -122,6 +124,18 @@ test.describe("group form at phone width", () => {
       expect(sent).toContain(line);
     }
     expect(sent).not.toContain("Stop 4:");
+    const fields = formFields(state.forms[0]);
+    expect(fields["entry.791508642"]).toBe(
+      "Stop 2: Two Trees Bar and Grill\nStop 3: Lake Norman Brewery",
+    );
+    expect(fields["entry.285972615"]).toBe("Yes");
+    expect(fields["entry.144653274"]).toBe(
+      "25% deposit: Cash $93.75 · Card $96.56",
+    );
+    expect(fields["entry.1344705029"]).toBe("");
+    expect(fields["entry.276667296"]).toBe("");
+    expect(fields["entry.788079233"]).toBe("");
+    expect(fields["entry.1994837178"]).toBe("");
   });
 
   test("names each missing group answer and sends nothing", async ({

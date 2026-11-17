@@ -145,6 +145,27 @@ describe.each(scripts)("group form %s", (script) => {
       "",
       meta(script, "Special Requirements stays blank on a group"),
     );
+    check(
+      [
+        entries["entry.791508642"],
+        entries["entry.285972615"],
+        entries["entry.144653274"],
+      ],
+      [
+        "Stop 2: Two Trees Bar and Grill\nStop 4: 100 Main St, Denver NC",
+        "Yes",
+        "25% deposit: Cash $93.75 · Card $96.56",
+      ],
+      meta(
+        script,
+        "the group also sends extra stops, the 21+ agreement, and the deposit",
+        [
+          entries["entry.791508642"],
+          entries["entry.285972615"],
+          entries["entry.144653274"],
+        ],
+      ),
+    );
   });
 
   it("hides and clears the stops when the trip type changes", async () => {

@@ -29,6 +29,9 @@
     /**
      * Rebuilt questions on that same form. Short answer, except notes and
      * special requirements, which are paragraphs. None are required.
+     * Donald added 16 optional questions on Nov 16, 2026
+     * (docs/form-entry-ids-20261116.md). Those answers still go into Notes
+     * as labeled lines, and also into their own entry when they apply.
      */
     var FORM_ENTRY = {
         name: 'entry.38734242',
@@ -42,8 +45,43 @@
         airportTrip: 'entry.825490469',
         flight: 'entry.149520789',
         checkingBags: 'entry.214097981',
-        specialRequirements: 'entry.853044875'
+        specialRequirements: 'entry.853044875',
+        airportDirection: 'entry.1344705029',
+        departureFlightNumber: 'entry.502673920',
+        arrivalFlightNumber: 'entry.1977309653',
+        passengersGoing: 'entry.1991650389',
+        passengersComingBack: 'entry.276667296',
+        returnPickupDateTime: 'entry.328412433',
+        returnPickupLocation: 'entry.702078471',
+        dropoffAddress: 'entry.1343447537',
+        secondPickupAddress: 'entry.788079233',
+        extraStops: 'entry.791508642',
+        checkedBags: 'entry.1994837178',
+        carryOnBags: 'entry.1512412552',
+        luggageHelp: 'entry.800471512',
+        specialItems: 'entry.64451580',
+        agreement21: 'entry.285972615',
+        groupDeposit: 'entry.144653274'
     };
+
+    var EXTRA_SHEET_KEYS = [
+        'airportDirection',
+        'departureFlightNumber',
+        'arrivalFlightNumber',
+        'passengersGoing',
+        'passengersComingBack',
+        'returnPickupDateTime',
+        'returnPickupLocation',
+        'dropoffAddress',
+        'secondPickupAddress',
+        'extraStops',
+        'checkedBags',
+        'carryOnBags',
+        'luggageHelp',
+        'specialItems',
+        'agreement21',
+        'groupDeposit'
+    ];
 
     /**
      * Calendar Apps Script web app (/exec): POST mirrors bookings onto Google Calendar.
@@ -717,20 +755,22 @@
     }
 
     /**
-     * New airport answers have no Google Form question yet, so they go into Notes as labeled lines.
+     * Airport answers also go into Notes as labeled lines, so nothing is lost
+     * if a sheet column is missing.
      */
+    function bagsAnswer(choice, count) {
+        return choice === 'Yes' ? 'Yes (' + count + ')' : choice;
+    }
+
     function airportNotes(customerNote, d) {
-        function bags(choice, count) {
-            return choice === 'Yes' ? 'Yes (' + count + ')' : choice;
-        }
         var lines = ['Direction: ' + airportDirection()];
         if (d.departureFlight) lines.push('Departure flight: ' + d.departureFlight);
         if (d.arrivalFlight) lines.push('Arrival flight: ' + d.arrivalFlight);
         lines.push((airportFrom() ? 'Passengers from the airport: ' : 'Passengers to the airport: ') + d.passengersTo);
         if (d.passengersBack) lines.push((airportFrom() ? 'Passengers back to the airport: ' : 'Passengers back from the airport: ') + d.passengersBack);
         lines = lines.concat([
-            'Checked bags: ' + bags(d.bagsChoice, d.bagCount),
-            'Carry-on bags: ' + bags(d.carryOnChoice, d.carryOnCount),
+            'Checked bags: ' + bagsAnswer(d.bagsChoice, d.bagCount),
+            'Carry-on bags: ' + bagsAnswer(d.carryOnChoice, d.carryOnCount),
             'Help with luggage: ' + d.luggageHelp
         ]);
         return (customerNote ? customerNote + '\n' : '') + 'Airport details:\n' + lines.join('\n');
@@ -780,7 +820,8 @@
     }
 
     /**
-     * New bar answers have no Google Form question yet, so they go into Notes as labeled lines.
+     * Bar answers also go into Notes as labeled lines, so nothing is lost
+     * if a sheet column is missing.
      */
     function barNotes(notes, agreed, ride) {
         var lines = ['Agreement (' + BAR_AGREEMENT + '): ' + (agreed ? 'Yes' : 'No')];
@@ -794,7 +835,8 @@
     }
 
     /**
-     * New party answers have no Google Form question yet, so they go into Notes as one labeled block.
+     * Party answers also go into Notes as one labeled block, so nothing is lost
+     * if a sheet column is missing.
      */
     function partyNotes(notes, agreed, p) {
         var lines = ['Agreement (' + BAR_AGREEMENT + '): ' + (agreed ? 'Yes' : 'No'), 'Party details:', 'Second pickup: ' + p.secondPickup];
@@ -1543,7 +1585,7 @@
         const submissions = [];
 
         // Create outbound submission
-        const outboundSubmission = {
+        const outboundSubmission = attachSheetExtras({
             name: bookingData.name,
             phone: bookingData.phone,
             email: bookingData.email,
@@ -1557,14 +1599,14 @@
             flightNumber: bookingData.airportFrom ? bookingData.flightNumber : (bookingData.departureFlight || ''),
             checkingBags: bookingData.checkingBags,
             specialRequirements: bookingData.specialRequirements
-        };
+        }, bookingData);
         submissions.push(outboundSubmission);
         console.log('Created outbound submission');
 
         // Create return submission if round trip
         if (bookingData.roundTrip === 'Yes' && bookingData.airportTrip === 'Yes') {
             console.log('Creating return submission...');
-            const returnSubmission = {
+            const returnSubmission = attachSheetExtras({
                 name: bookingData.name,
                 phone: bookingData.phone,
                 email: bookingData.email,
@@ -1578,7 +1620,7 @@
                 flightNumber: bookingData.airportFrom ? bookingData.departureFlight : bookingData.flightNumber,
                 checkingBags: bookingData.checkingBags,
                 specialRequirements: bookingData.specialRequirements
-            };
+            }, bookingData);
             submissions.push(returnSubmission);
             console.log('Created return submission');
         } else {
@@ -1627,6 +1669,18 @@
         return parts[1] + '/' + parts[2] + '/' + parts[0]; // MM/DD/YYYY
     }
 
+    function sheetDateTime(dateStr, timeStr) {
+        if (!dateStr || !timeStr) return '';
+        return formatDateForGoogleForms(dateStr) + ' ' + timeStr;
+    }
+
+    function attachSheetExtras(row, bookingData) {
+        EXTRA_SHEET_KEYS.forEach(function(key) {
+            row[key] = bookingData[key];
+        });
+        return row;
+    }
+
     /**
      * Submit booking data to Google Sheets
      * @param {Object} submissionData - Booking data to submit
@@ -1667,6 +1721,9 @@
         googleFormData.append(FORM_ENTRY.flight, submissionData.flightNumber || '');
         googleFormData.append(FORM_ENTRY.checkingBags, submissionData.checkingBags);
         googleFormData.append(FORM_ENTRY.specialRequirements, specialRequirementsParagraph(submissionData));
+        EXTRA_SHEET_KEYS.forEach(function(key) {
+            googleFormData.append(FORM_ENTRY[key], submissionData[key]);
+        });
         return googleFormData;
     }
 
@@ -2100,6 +2157,8 @@
             var hoursEntered = '';
             var hoursBilled = '';
             var durationMinutes = RIDE_DURATION_MINUTES;
+            var groupDeposit = '';
+            var extraStops = '';
             if (trip === 'group') {
                 notes = notes ? 'Group event. ' + notes : 'Group event.';
                 destinationAddress = 'Hourly charter, ' + GROUP_VEHICLE;
@@ -2109,6 +2168,7 @@
                     hoursEntered = String(fare.entered);
                     hoursBilled = String(fare.billed);
                     durationMinutes = Math.round(fare.billed * 60);
+                    groupDeposit = '25% deposit: Cash $' + (fare.depositCashCents / 100).toFixed(2) + ' · Card $' + (fare.depositCardCents / 100).toFixed(2);
                 }
             } else if (trip === 'local' && mode === 'bar' && chosenBar) {
                 destinationAddress = chosenBar.address;
@@ -2146,11 +2206,15 @@
             if (partyRide) notes = partyNotes(notes, barAgreed, party);
             if (trip === 'group') {
                 var groupLines = ['Group details:', 'Agreement (' + BAR_AGREEMENT + '): ' + barAnswer];
+                var stopLines = [];
                 [2, 3, 4].forEach(function(n) {
                     var stop = $.trim($('#group-stop-' + n).val() || '');
-                    if (stop) groupLines.push('Stop ' + n + ': ' + stop);
+                    if (stop) stopLines.push('Stop ' + n + ': ' + stop);
                 });
-                notes += '\n' + groupLines.join('\n');
+                extraStops = stopLines.join('\n');
+                notes += '\n' + groupLines.concat(stopLines).join('\n');
+            } else if (partyRide && party.moreDropoffs === 'Yes') {
+                extraStops = party.extraDropoff;
             }
             const asksTripDetails = trip === 'airport';
             const bagCount = readBagCount();
@@ -2159,12 +2223,13 @@
             const carryOnCount = readBagCount('#booking-carryon-count');
             const luggageHelp = yesNoChoice('luggage-help');
             const departureFlight = $.trim($('#booking-departure-flight').val() || '');
+            const arrivalFlight = $.trim($('#booking-flight').val() || '');
             const passengersBack = $.trim($('#booking-passengers-back').val() || '');
             const customerNote = notes;
             if (asksTripDetails) {
                 notes = airportNotes(customerNote, {
                     departureFlight: departureFlight,
-                    arrivalFlight: $('#booking-flight').val().trim(),
+                    arrivalFlight: arrivalFlight,
                     passengersTo: $('#booking-passengers').val().trim(),
                     passengersBack: passengersBack,
                     bagsChoice: bagsChoice,
@@ -2174,6 +2239,16 @@
                     luggageHelp: luggageHelp
                 });
             }
+            var returnPickupDateTime = '';
+            if (trip === 'airport' && isRoundTrip()) returnPickupDateTime = sheetDateTime(returnDate, returnTime);
+            else if (barRide && isRoundTrip()) returnPickupDateTime = sheetDateTime(pickupDate, barReturn.time);
+            var passengersComingBack = '';
+            if (trip === 'airport') passengersComingBack = passengersBack;
+            else if (barRide && isRoundTrip()) passengersComingBack = barReturn.passengers;
+            else if (partyRide && isRoundTrip()) passengersComingBack = party.people;
+            var dropoffAddress = '';
+            if (trip === 'airport' && airportFrom()) dropoffAddress = contactAddress;
+            else if (partyRide && isRoundTrip()) dropoffAddress = party.dropoff;
             const formData = {
                 name: $('#booking-name').val().trim(),
                 phone: $('#booking-phone').data('raw-value') || $('#booking-phone').val().replace(/\D/g, ''),
@@ -2185,7 +2260,7 @@
                 passengers: $('#booking-passengers').val().trim(),
                 specialNotes: notes,
                 airportTrip: trip === 'airport' ? 'Yes' : 'No',
-                flightNumber: asksTripDetails ? $('#booking-flight').val().trim() : '',
+                flightNumber: asksTripDetails ? arrivalFlight : '',
                 departureFlight: asksTripDetails ? departureFlight : '',
                 passengersBack: asksTripDetails ? passengersBack : '',
                 pickupTime: pickupTime,
@@ -2202,7 +2277,23 @@
                 noSmoking: ack ? ack.noSmoking : '',
                 damageResponsibility: ack ? ack.damageResponsibility : '',
                 hoursEntered: hoursEntered,
-                hoursBilled: hoursBilled
+                hoursBilled: hoursBilled,
+                airportDirection: trip === 'airport' ? airportDirection() : '',
+                departureFlightNumber: asksTripDetails ? departureFlight : '',
+                arrivalFlightNumber: asksTripDetails ? arrivalFlight : '',
+                passengersGoing: trip === 'airport' ? $('#booking-passengers').val().trim() : '',
+                passengersComingBack: passengersComingBack,
+                returnPickupDateTime: returnPickupDateTime,
+                returnPickupLocation: barRide && isRoundTrip() ? barReturn.location : '',
+                dropoffAddress: dropoffAddress,
+                secondPickupAddress: partyRide && party.secondPickup === 'Yes' ? party.secondAddress : '',
+                extraStops: extraStops,
+                checkedBags: asksTripDetails ? bagsAnswer(bagsChoice, bagCount.value) : '',
+                carryOnBags: asksTripDetails ? bagsAnswer(carryOnChoice, carryOnCount.value) : '',
+                luggageHelp: asksTripDetails ? luggageHelp : '',
+                specialItems: trip === 'airport' ? specialRequirements.join(', ') : '',
+                agreement21: oneBox ? barAnswer : '',
+                groupDeposit: groupDeposit
             };
 
             // Validation

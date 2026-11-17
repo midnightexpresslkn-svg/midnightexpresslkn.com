@@ -4,6 +4,7 @@ import {
   bookingMocks,
   fillAirport,
   holdChecks,
+  formText,
 } from "./helpers/booking-mocks.js";
 
 const shots = process.env.MELKN_SHOTS_DIR;
@@ -152,8 +153,6 @@ test.describe("one send per booking", () => {
     ).toBeVisible();
     await expect(another(page)).toHaveCount(1);
     expect(state.forms).toHaveLength(3);
-    expect(decodeURIComponent(state.forms[2].replace(/\+/g, " "))).toContain(
-      "Second Isolated Rider",
-    );
+    expect(formText(state.forms[2])).toContain("Second Isolated Rider");
   });
 });

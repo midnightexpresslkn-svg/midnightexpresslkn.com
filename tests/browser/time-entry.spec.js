@@ -5,6 +5,7 @@ import {
   bookingMocks,
   fillGroup,
   settled,
+  formText,
 } from "./helpers/booking-mocks.js";
 
 const shots = process.env.MELKN_SHOTS_DIR;
@@ -56,7 +57,7 @@ test.describe("typed pickup time at phone width", () => {
       page.getByRole("heading", { name: /Request received/ }),
     ).toBeVisible();
     expect(state.forms).toHaveLength(1);
-    const sent = decodeURIComponent(state.forms[0].replace(/\+/g, " "));
+    const sent = formText(state.forms[0]);
     expect(sent).toMatch(/\d{2}\/\d{2}\/\d{4} 19:30:00/);
     await expect.poll(() => state.calendars.length).toBe(1);
     expect(decodeURIComponent(state.calendars[0])).toContain("19:30:00");

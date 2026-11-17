@@ -5,6 +5,8 @@ import {
   bookingMocks,
   fillParty,
   settled,
+  formFields,
+  formText,
 } from "./helpers/booking-mocks.js";
 
 const shots = process.env.MELKN_SHOTS_DIR;
@@ -102,7 +104,7 @@ test.describe("party form at phone width", () => {
       page.getByRole("heading", { name: /Request received/ }),
     ).toBeVisible();
     expect(state.forms).toHaveLength(1);
-    const sent = decodeURIComponent(state.forms[0].replace(/\+/g, " "));
+    const sent = formText(state.forms[0]);
     for (const line of [
       `Agreement (${AGREEMENT}): Yes`,
       "Second pickup address: 300 Pine St, Denver NC",
@@ -113,6 +115,17 @@ test.describe("party form at phone width", () => {
     ]) {
       expect(sent).toContain(line);
     }
+    const fields = formFields(state.forms[0]);
+    expect(fields["entry.285972615"]).toBe("Yes");
+    expect(fields["entry.788079233"]).toBe("300 Pine St, Denver NC");
+    expect(fields["entry.1343447537"]).toBe("100 Main St, Denver NC");
+    expect(fields["entry.791508642"]).toBe("50 Lake Rd, Cornelius NC");
+    expect(fields["entry.276667296"]).toBe("4");
+    expect(fields["entry.328412433"]).toBe("");
+    expect(fields["entry.702078471"]).toBe("");
+    expect(fields["entry.1344705029"]).toBe("");
+    expect(fields["entry.144653274"]).toBe("");
+    expect(fields["entry.1994837178"]).toBe("");
   });
 
   test("names each missing party answer and sends nothing", async ({

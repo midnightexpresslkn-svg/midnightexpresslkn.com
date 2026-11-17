@@ -219,7 +219,8 @@ describe.each(scripts)("bar form %s", (script) => {
       source: "js/booking.js",
       loaded: script,
     });
-    const notes = Object.fromEntries(posts[0].formEntries)[NOTES];
+    const entries = Object.fromEntries(posts[0].formEntries);
+    const notes = entries[NOTES];
     check(
       notes.endsWith(
         `Round trip.\nAgreement (${AGREEMENT}): Yes\nReturn ride:\nPassengers back: 3\nReturn pickup time: 11:30 PM\nReturn pickup location: Front door`,
@@ -228,6 +229,21 @@ describe.each(scripts)("bar form %s", (script) => {
       {
         label: "Notes carry the agreement and the ride back as labeled lines",
         actual: notes,
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    check(
+      [
+        entries["entry.276667296"],
+        entries["entry.328412433"],
+        entries["entry.702078471"],
+        entries["entry.285972615"],
+      ],
+      ["3", "12/15/2026 23:30:00", "Front door", "Yes"],
+      {
+        label: "bar return answers also go in their own form columns",
+        actual: entries,
         source: "js/booking.js",
         loaded: script,
       },

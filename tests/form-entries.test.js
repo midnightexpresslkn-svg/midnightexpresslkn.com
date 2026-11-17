@@ -10,6 +10,7 @@ import {
   resultText,
   sameEndpoint,
   submitForm,
+  typeTime,
 } from "./helpers/render-booking.js";
 
 const scripts = ["js/booking.js", "js/booking.min.js"];
@@ -32,6 +33,22 @@ const ENTRY = {
   flight: "entry.149520789",
   checkingBags: "entry.214097981",
   specialRequirements: "entry.853044875",
+  airportDirection: "entry.1344705029",
+  departureFlightNumber: "entry.502673920",
+  arrivalFlightNumber: "entry.1977309653",
+  passengersGoing: "entry.1991650389",
+  passengersComingBack: "entry.276667296",
+  returnPickupDateTime: "entry.328412433",
+  returnPickupLocation: "entry.702078471",
+  dropoffAddress: "entry.1343447537",
+  secondPickupAddress: "entry.788079233",
+  extraStops: "entry.791508642",
+  checkedBags: "entry.1994837178",
+  carryOnBags: "entry.1512412552",
+  luggageHelp: "entry.800471512",
+  specialItems: "entry.64451580",
+  agreement21: "entry.285972615",
+  groupDeposit: "entry.144653274",
 };
 
 const RETIRED = [
@@ -98,20 +115,71 @@ function calendarBody(view) {
 }
 
 function row(values) {
+  const v = {
+    airportDirection: "",
+    departureFlightNumber: "",
+    arrivalFlightNumber: "",
+    passengersGoing: "",
+    passengersComingBack: "",
+    returnPickupDateTime: "",
+    returnPickupLocation: "",
+    dropoffAddress: "",
+    secondPickupAddress: "",
+    extraStops: "",
+    checkedBags: "",
+    carryOnBags: "",
+    luggageHelp: "",
+    specialItems: "",
+    agreement21: "",
+    groupDeposit: "",
+    ...values,
+  };
   return [
-    [ENTRY.name, values.name],
-    [ENTRY.phone, values.phone],
-    [ENTRY.email, values.email],
-    [ENTRY.pickupDateTime, values.pickupDateTime],
-    [ENTRY.pickup, values.pickup],
-    [ENTRY.destination, values.destination],
-    [ENTRY.passengers, values.passengers],
-    [ENTRY.notes, values.notes],
-    [ENTRY.airportTrip, values.airportTrip],
-    [ENTRY.flight, values.flight],
-    [ENTRY.checkingBags, values.checkingBags],
-    [ENTRY.specialRequirements, values.specialRequirements],
+    [ENTRY.name, v.name],
+    [ENTRY.phone, v.phone],
+    [ENTRY.email, v.email],
+    [ENTRY.pickupDateTime, v.pickupDateTime],
+    [ENTRY.pickup, v.pickup],
+    [ENTRY.destination, v.destination],
+    [ENTRY.passengers, v.passengers],
+    [ENTRY.notes, v.notes],
+    [ENTRY.airportTrip, v.airportTrip],
+    [ENTRY.flight, v.flight],
+    [ENTRY.checkingBags, v.checkingBags],
+    [ENTRY.specialRequirements, v.specialRequirements],
+    [ENTRY.airportDirection, v.airportDirection],
+    [ENTRY.departureFlightNumber, v.departureFlightNumber],
+    [ENTRY.arrivalFlightNumber, v.arrivalFlightNumber],
+    [ENTRY.passengersGoing, v.passengersGoing],
+    [ENTRY.passengersComingBack, v.passengersComingBack],
+    [ENTRY.returnPickupDateTime, v.returnPickupDateTime],
+    [ENTRY.returnPickupLocation, v.returnPickupLocation],
+    [ENTRY.dropoffAddress, v.dropoffAddress],
+    [ENTRY.secondPickupAddress, v.secondPickupAddress],
+    [ENTRY.extraStops, v.extraStops],
+    [ENTRY.checkedBags, v.checkedBags],
+    [ENTRY.carryOnBags, v.carryOnBags],
+    [ENTRY.luggageHelp, v.luggageHelp],
+    [ENTRY.specialItems, v.specialItems],
+    [ENTRY.agreement21, v.agreement21],
+    [ENTRY.groupDeposit, v.groupDeposit],
   ];
+}
+
+function airportFields(values = {}) {
+  return {
+    airportDirection: "To the airport",
+    departureFlightNumber: "DL100",
+    arrivalFlightNumber: "",
+    passengersGoing: "2",
+    passengersComingBack: "",
+    returnPickupDateTime: "",
+    checkedBags: "No",
+    carryOnBags: "No",
+    luggageHelp: "No",
+    specialItems: "",
+    ...values,
+  };
 }
 
 const NOTES_HINT =
@@ -294,6 +362,10 @@ describe("form entries", () => {
           flight: "DL100",
           checkingBags: "Yes",
           specialRequirements: "Wheelchair, Car Seat",
+          ...airportFields({
+            checkedBags: "Yes (2)",
+            specialItems: "Wheelchair, Car Seat",
+          }),
         }),
         {
           label: "exact form fields for a filled airport ride",
@@ -387,6 +459,7 @@ describe("form entries", () => {
           flight: "DL100",
           checkingBags: "No",
           specialRequirements: "",
+          ...airportFields(),
         }),
         {
           label: "blank optional form fields stay present and empty",
@@ -458,7 +531,7 @@ describe("form entries", () => {
         entries.map((pair) => pair[0]),
         Object.values(ENTRY),
         {
-          label: "form keys are the twelve rebuilt questions once each",
+          label: "form keys are the rebuilt questions once each",
           actual: entries.map((pair) => pair[0]),
           source: "js/booking.js",
           loaded: script,
@@ -531,6 +604,12 @@ describe("form entries", () => {
           flight: "DL100",
           checkingBags: "Yes",
           specialRequirements: "",
+          ...airportFields({
+            arrivalFlightNumber: "DL99",
+            passengersComingBack: "3",
+            returnPickupDateTime: "12/16/2026 15:00:00",
+            checkedBags: "Yes (2)",
+          }),
         }),
         {
           label: "outbound form row",
@@ -554,6 +633,12 @@ describe("form entries", () => {
           flight: "DL99",
           checkingBags: "Yes",
           specialRequirements: "",
+          ...airportFields({
+            arrivalFlightNumber: "DL99",
+            passengersComingBack: "3",
+            returnPickupDateTime: "12/16/2026 15:00:00",
+            checkedBags: "Yes (2)",
+          }),
         }),
         {
           label:
@@ -622,6 +707,8 @@ describe("form entries", () => {
           flight: "",
           checkingBags: "No",
           specialRequirements: "",
+          agreement21: "Yes",
+          groupDeposit: "25% deposit: Cash $93.75 · Card $96.56",
         }),
         {
           label:
@@ -667,6 +754,270 @@ describe("form entries", () => {
           loaded: script,
         },
       );
+    });
+
+    it("sends new airport columns for a pickup from the airport, including the drop-off", async () => {
+      const view = await renderBooking(script, { miles: 12 });
+      await fillValid(view, {
+        trip: "airport",
+        direction: "from",
+        notes: "Curb 1",
+        bags: false,
+        bagCount: "0",
+      });
+      await submitForm(view);
+      check(
+        formRows(view)[0].entries,
+        row({
+          name: "TEST, DO NOT BOOK",
+          phone: "9804229125",
+          email: "jane@example.com",
+          pickupDateTime: "12/15/2026 10:00:00",
+          pickup: "CLT",
+          destination: "123 Main Street, Denver NC 28037",
+          passengers: "2",
+          notes:
+            "Curb 1\nAirport details:\nDirection: Pick up from the airport\nArrival flight: AA2684\nPassengers from the airport: 2\nChecked bags: No\nCarry-on bags: No\nHelp with luggage: No",
+          airportTrip: "Yes",
+          flight: "AA2684",
+          checkingBags: "No",
+          specialRequirements: "",
+          ...airportFields({
+            airportDirection: "Pick up from the airport",
+            departureFlightNumber: "",
+            arrivalFlightNumber: "AA2684",
+            dropoffAddress: "123 Main Street, Denver NC 28037",
+          }),
+        }),
+        {
+          label:
+            "from-airport columns include direction, arrival, and drop-off",
+          actual: formRows(view)[0].entries,
+          source: "js/booking.js",
+          loaded: script,
+        },
+      );
+    });
+
+    it("sends bar, party, and group answers in their own columns and leaves the rest blank", async () => {
+      const viewBar = await renderBooking(script, { miles: 4 });
+      await fillValid(viewBar, { trip: "local", roundTrip: true });
+      viewBar.window.jQuery("#bar-return-passengers").val("3").trigger("input");
+      typeTime(viewBar.document, "bar-return-time", "23:30:00");
+      viewBar.window
+        .jQuery("#bar-return-location")
+        .val("Front door")
+        .trigger("input");
+      await submitForm(viewBar);
+      const bar = Object.fromEntries(formRows(viewBar)[0].entries);
+      check(
+        [
+          bar[ENTRY.passengersComingBack],
+          bar[ENTRY.returnPickupDateTime],
+          bar[ENTRY.returnPickupLocation],
+          bar[ENTRY.agreement21],
+          bar[ENTRY.airportDirection],
+          bar[ENTRY.groupDeposit],
+          bar[ENTRY.checkedBags],
+        ],
+        ["3", "12/15/2026 23:30:00", "Front door", "Yes", "", "", ""],
+        {
+          label: "a bar round trip fills return and agreement columns only",
+          actual: bar,
+          source: "js/booking.js",
+          loaded: script,
+        },
+      );
+
+      const viewParty = await renderBooking(script, { miles: 4 });
+      await fillValid(viewParty, {
+        trip: "local",
+        localKind: "party",
+        notes: "Bring water",
+        roundTrip: true,
+        secondPickup: "Yes",
+        moreDropoffs: "Yes",
+        partyPeople: "3",
+      });
+      await submitForm(viewParty);
+      const party = Object.fromEntries(formRows(viewParty)[0].entries);
+      check(
+        [
+          party[ENTRY.secondPickupAddress],
+          party[ENTRY.dropoffAddress],
+          party[ENTRY.extraStops],
+          party[ENTRY.passengersComingBack],
+          party[ENTRY.agreement21],
+          party[ENTRY.returnPickupDateTime],
+          party[ENTRY.returnPickupLocation],
+          party[ENTRY.groupDeposit],
+        ],
+        [
+          "300 Pine St, Denver NC",
+          "100 Main St, Denver NC",
+          "50 Lake Rd, Cornelius NC",
+          "3",
+          "Yes",
+          "",
+          "",
+          "",
+        ],
+        {
+          label:
+            "a party fills second pickup, drop-off, extra stop, and agreement columns",
+          actual: party,
+          source: "js/booking.js",
+          loaded: script,
+        },
+      );
+
+      const viewGroup = await renderBooking(script, { miles: 4 });
+      await fillValid(viewGroup, { trip: "group", notes: "Reunion" });
+      viewGroup.window
+        .jQuery("#group-stop-2")
+        .val("Two Trees Bar and Grill")
+        .trigger("input");
+      viewGroup.window
+        .jQuery("#group-stop-4")
+        .val("100 Main St, Denver NC")
+        .trigger("input");
+      await submitForm(viewGroup);
+      const group = Object.fromEntries(formRows(viewGroup)[0].entries);
+      check(
+        [
+          group[ENTRY.extraStops],
+          group[ENTRY.agreement21],
+          group[ENTRY.groupDeposit],
+          group[ENTRY.airportDirection],
+          group[ENTRY.secondPickupAddress],
+        ],
+        [
+          "Stop 2: Two Trees Bar and Grill\nStop 4: 100 Main St, Denver NC",
+          "Yes",
+          "25% deposit: Cash $93.75 · Card $96.56",
+          "",
+          "",
+        ],
+        {
+          label:
+            "a group fills extra stops, the 21+ agreement, and the deposit",
+          actual: group,
+          source: "js/booking.js",
+          loaded: script,
+        },
+      );
+    });
+
+    it("leaves bar and party one-way columns blank except the 21+ agreement", async () => {
+      const viewBar = await renderBooking(script, { miles: 4 });
+      await fillValid(viewBar, { trip: "local", roundTrip: false });
+      await submitForm(viewBar);
+      const bar = Object.fromEntries(formRows(viewBar)[0].entries);
+      check(
+        [
+          bar[ENTRY.agreement21],
+          bar[ENTRY.passengersComingBack],
+          bar[ENTRY.returnPickupDateTime],
+          bar[ENTRY.returnPickupLocation],
+        ],
+        ["Yes", "", "", ""],
+        {
+          label: "a one-way bar ride only fills the agreement column",
+          actual: bar,
+          source: "js/booking.js",
+          loaded: script,
+        },
+      );
+
+      const viewParty = await renderBooking(script, { miles: 4 });
+      await fillValid(viewParty, {
+        trip: "local",
+        localKind: "party",
+        roundTrip: false,
+        secondPickup: "No",
+      });
+      await submitForm(viewParty);
+      const party = Object.fromEntries(formRows(viewParty)[0].entries);
+      check(
+        [
+          party[ENTRY.agreement21],
+          party[ENTRY.secondPickupAddress],
+          party[ENTRY.dropoffAddress],
+          party[ENTRY.extraStops],
+          party[ENTRY.passengersComingBack],
+        ],
+        ["Yes", "", "", "", ""],
+        {
+          label: "a one-way party ride only fills the agreement column",
+          actual: party,
+          source: "js/booking.js",
+          loaded: script,
+        },
+      );
+    });
+
+    it("leaves extra stops blank on a party round trip with one drop-off", async () => {
+      const view = await renderBooking(script, { miles: 4 });
+      await fillValid(view, {
+        trip: "local",
+        localKind: "party",
+        roundTrip: true,
+        secondPickup: "No",
+        moreDropoffs: "No",
+      });
+      await submitForm(view);
+      const party = Object.fromEntries(formRows(view)[0].entries);
+      check(
+        [
+          party[ENTRY.secondPickupAddress],
+          party[ENTRY.dropoffAddress],
+          party[ENTRY.extraStops],
+          party[ENTRY.passengersComingBack],
+          party[ENTRY.agreement21],
+        ],
+        ["", "100 Main St, Denver NC", "", "2", "Yes"],
+        {
+          label: "one drop-off fills drop-off and riders back, not extra stops",
+          actual: party,
+          source: "js/booking.js",
+          loaded: script,
+        },
+      );
+    });
+
+    it("sends a blank return pickup time when an airport round trip is missing the time", async () => {
+      const view = await renderBooking(script, { miles: 12 });
+      await fillValid(view, {
+        trip: "airport",
+        roundTrip: true,
+        returnDate: "2026-12-16",
+        returnTime: "",
+        bags: false,
+        bagCount: "0",
+      });
+      await submitForm(view);
+      check(formRows(view).length, 0, {
+        label: "a missing return time is not sent",
+        actual: formRows(view),
+        source: "js/booking.js",
+        loaded: script,
+      });
+      const missingDate = await renderBooking(script, { miles: 12 });
+      await fillValid(missingDate, {
+        trip: "airport",
+        roundTrip: true,
+        returnDate: "",
+        returnTime: "15:00:00",
+        bags: false,
+        bagCount: "0",
+      });
+      await submitForm(missingDate);
+      check(formRows(missingDate).length, 0, {
+        label: "a missing return date is not sent",
+        actual: formRows(missingDate),
+        source: "js/booking.js",
+        loaded: script,
+      });
     });
 
     async function failFormPost(view, outcome) {

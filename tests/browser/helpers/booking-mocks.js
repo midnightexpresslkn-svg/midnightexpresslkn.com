@@ -1,4 +1,36 @@
 import { test as base, expect } from "@playwright/test";
+
+/** Parse a mocked Google Form POST body into entry-id -> answer. */
+export function formFields(raw) {
+  const text = String(raw || "");
+  if (text.includes("Content-Disposition")) {
+    const out = {};
+    const boundary = text.split("\r\n", 1)[0].trim();
+    for (const part of text.split(boundary)) {
+      const cut = part.indexOf("\r\n\r\n");
+      if (cut === -1) continue;
+      const headers = part.slice(0, cut);
+      let value = part.slice(cut + 4).replace(/\r\n/g, "\n");
+      if (value.endsWith("\n")) value = value.slice(0, -1);
+      const name = /name="([^"]+)"/.exec(headers);
+      if (name) out[name[1]] = value;
+    }
+    return out;
+  }
+  return Object.fromEntries(new URLSearchParams(text));
+}
+
+/** Searchable text from a mocked form POST. Multipart bodies are already plain text. */
+export function formText(raw) {
+  const text = String(raw || "");
+  if (text.includes("Content-Disposition")) return text;
+  try {
+    return decodeURIComponent(text.replace(/\+/g, " "));
+  } catch {
+    return text;
+  }
+}
+
 // Every external request is fulfilled locally; tests can never create a real ride.
 export async function bookingMocks(page, { miles = 10 } = {}) {
   const state = { forms: [], calendars: [], gate: null };

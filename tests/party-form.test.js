@@ -370,6 +370,26 @@ describe.each(scripts)("party form %s", (script) => {
       1,
       meta(script, "a party round trip is one Form post"),
     );
+    const fields = Object.fromEntries(formPosts(view.state)[0].formEntries);
+    check(
+      [
+        fields["entry.788079233"],
+        fields["entry.1343447537"],
+        fields["entry.791508642"],
+        fields["entry.276667296"],
+        fields["entry.285972615"],
+        fields["entry.328412433"],
+      ],
+      [
+        "300 Pine St, Denver NC",
+        "100 Main St, Denver NC",
+        "50 Lake Rd, Cornelius NC",
+        "3",
+        "Yes",
+        "",
+      ],
+      meta(script, "party answers also go in their own form columns", fields),
+    );
     const cal = calendar(view);
     check(
       [cal.mustBe21, cal.noSmoking, cal.damageResponsibility],

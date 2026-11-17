@@ -5,6 +5,8 @@ import {
   bookingMocks,
   fillBar,
   settled,
+  formFields,
+  formText,
 } from "./helpers/booking-mocks.js";
 import { ui } from "./helpers/ui.js";
 
@@ -58,13 +60,24 @@ test.describe("bar form at phone width", () => {
       page.getByRole("heading", { name: /Request received/ }),
     ).toBeVisible();
     expect(state.forms).toHaveLength(1);
-    const sent = decodeURIComponent(state.forms[0].replace(/\+/g, " "));
+    const sent = formText(state.forms[0]);
     expect(sent).toContain("Passengers back: 3");
     expect(sent).toContain("Return pickup time: 11:30 PM");
     expect(sent).toContain("Return pickup location: Two Trees front door");
     expect(sent).toContain(
       "Agreement (Must be 21 years or older, cannot smoke, and you are responsible for any damages.): Yes",
     );
+    const fields = formFields(state.forms[0]);
+    expect(fields["entry.276667296"]).toBe("3");
+    expect(fields["entry.328412433"]).toMatch(/23:30:00$/);
+    expect(fields["entry.702078471"]).toBe("Two Trees front door");
+    expect(fields["entry.285972615"]).toBe("Yes");
+    expect(fields["entry.1344705029"]).toBe("");
+    expect(fields["entry.1994837178"]).toBe("");
+    expect(fields["entry.788079233"]).toBe("");
+    expect(fields["entry.791508642"]).toBe("");
+    expect(fields["entry.144653274"]).toBe("");
+    expect(fields["entry.1343447537"]).toBe("");
   });
 
   test("names each missing bar answer and sends nothing", async ({ page }) => {
