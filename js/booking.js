@@ -321,6 +321,20 @@
      */
     let pendingBookings = [];
 
+    /**
+     * One booking ID per filled-in form. A booking ID, and each of its legs,
+     * is sent at most once; only "Make Another Booking" starts a new ID.
+     */
+    const sentBookingIds = new Set();
+    const sentLegIds = new Set();
+    let bookingSeq = 0;
+    let submitInFlight = false;
+    function newBookingId() {
+        bookingSeq += 1;
+        return 'MEL-' + Date.now().toString(36) + '-' + bookingSeq;
+    }
+    let currentBookingId = newBookingId();
+
     // =================================================================
     // BOOKING DATA MANAGEMENT
     // =================================================================
@@ -1252,7 +1266,7 @@
      * Handle Dual Submission for Round-Trip Bookings
      * Creates two separate Google Sheets entries for round-trip bookings
      */
-    async function handleDualSubmission(bookingData) {
+    async function handleDualSubmission(bookingData, bookingId) {
         console.log('=== HANDLE DUAL SUBMISSION ===');
         console.log('Round Trip?', bookingData.roundTrip);
         console.log('Airport Trip?', bookingData.airportTrip);
@@ -1317,7 +1331,15 @@
             });
         });
 
-        const submissionPromises = submissions.map(submission => submitToGoogleSheets(submission));
+        // A leg that already went (for example the outbound leg before a return-leg error) is never sent again.
+        const submissionPromises = submissions.map(function(submission, idx) {
+            const legId = bookingId + '-' + (idx + 1);
+            if (sentLegIds.has(legId)) return Promise.resolve({ delivered: 'already-sent' });
+            return submitToGoogleSheets(submission).then(function(result) {
+                sentLegIds.add(legId);
+                return result;
+            });
+        });
         const results = await Promise.allSettled(submissionPromises);
         console.log('Submission results:', results);
         const failures = results.filter(function(r) { return r.status === 'rejected'; });
@@ -1728,8 +1750,19 @@
         });
 
         // Form submission
-        $form.on('submit', async function(e) {
+        $form.on('submit', function(e) {
+            if (submitInFlight || sentBookingIds.has(currentBookingId)) { e.preventDefault(); return; }
+            submitInFlight = true;
             e.preventDefault();
+            const bookingId = currentBookingId;
+            const $lockedBtn = $form.find('button[type="submit"]').prop('disabled', true);
+            return sendBooking(bookingId).finally(function() {
+                submitInFlight = false;
+                if (!sentBookingIds.has(bookingId)) $lockedBtn.prop('disabled', false);
+            });
+        });
+
+        async function sendBooking(bookingId) {
 
             // Clear previous errors
             $('.help-block.text-danger').text('').hide();
@@ -2184,7 +2217,8 @@
                 console.log('Pending bookings:', pendingBookings.length);
 
                 // Handle dual submission for round-trip bookings
-                const submissions = await handleDualSubmission(formData);
+                const submissions = await handleDualSubmission(formData, bookingId);
+                sentBookingIds.add(bookingId);
 
                 // Best-effort calendar mirror to Apps Script
                 try {
@@ -2242,57 +2276,12 @@
                 console.log('Hiding form...');
                 $form.hide();
 
-                // Reset button
-                $submitBtn.html(originalBtnText).prop('disabled', false);
+                // The sent booking stays locked; only Make Another Booking unlocks the form.
+                $submitBtn.html(originalBtnText);
 
                 placeInView($('#booking-success'), 'center');
 
-                // Show option to make another booking after 2 seconds (like contact form)
-                setTimeout(function() {
-                    $('#booking-success').append(
-                        '<p class="text-center" style="margin-top: 20px;">' +
-                        '<button id="new-booking-btn" class="btn btn-outline">Make Another Booking</button>' +
-                        '</p>'
-                    );
-
-                    $('#new-booking-btn').on('click', function() {
-                        $form[0].reset();
-                        $('#booking-success').html('').hide();
-                        $('#timeline-container').hide();
-                        $('#checking-bags-section').hide();
-                        $('#round-trip-section').show();
-                        $('#return-flight-section').hide();
-                        $('#return-timeline-container').hide();
-                        $('#other-requirement-section').hide();
-                        $('#group-event-call').hide();
-                        $('#airfield-place').attr('hidden', 'hidden').hide();
-                        $('#booking-quote').show();
-                        $form.find('button[type="submit"]').prop('disabled', false);
-                        $form.slideDown();
-
-                        // Re-calculate default datetime using simple calculation
-                        const now = new Date();
-                        const newDefaultDateTime = calculateSimpleDefaultTime(now);
-
-                        // Reset Flatpickr date and time pickers to new defaults
-                        const datePickerInstance = $('#booking-date')[0]._flatpickr;
-                        const timePickerInstance = $('#booking-time')[0]._flatpickr;
-
-                        if (datePickerInstance) {
-                            datePickerInstance.setDate(newDefaultDateTime, true);
-                        }
-                        if (timePickerInstance) {
-                            timePickerInstance.setDate(newDefaultDateTime, true);
-                        }
-
-                        // Update timeline
-                        const dateForInput = formatLocalYmd(newDefaultDateTime);
-                        updateTimeline(dateForInput);
-
-                        // Scroll back to form
-                        placeInView($form, 'nearest');
-                    });
-                }, 2000);
+                showAnotherBookingButton();
 
             } catch (error) {
                 console.error('=== SUBMISSION ERROR CAUGHT ===');
@@ -2320,7 +2309,74 @@
 
                 placeInView($('#booking-success'), 'nearest');
             }
-        });
+        }
+
+        /**
+         * Make Another Booking: one button and one handler for the life of the page.
+         * It lives next to #booking-success (not inside it) so new messages never duplicate it.
+         */
+        let $anotherWrap = null;
+        function showAnotherBookingButton() {
+            if (!$anotherWrap) {
+                $anotherWrap = $('<p class="text-center" id="new-booking-wrap" style="margin-top: 20px;">' +
+                    '<button type="button" id="new-booking-btn" class="btn btn-outline">Make Another Booking</button>' +
+                    '</p>');
+                $('#booking-success').after($anotherWrap);
+                $anotherWrap.find('#new-booking-btn').on('click', function(ev) {
+                    ev.preventDefault();
+                    resetBookingForm();
+                });
+            }
+            $anotherWrap.show();
+        }
+
+        /**
+         * Clear every field and all code-held state for a brand-new booking. Never sends anything.
+         */
+        function resetBookingForm() {
+            // pendingBookings is kept on purpose: it holds the just-sent time for 10 seconds so the
+            // next booking cannot overbook it before the calendar catches up. It is never re-sent.
+            currentBookingId = newBookingId();
+            // Forget a ?type= / ?bar= link preset so the old trip type or bar is not filled in again
+            window.history.replaceState(null, '', window.location.pathname + window.location.hash);
+            $form[0].reset();
+            $form.find('input[type="checkbox"], input[type="radio"]').prop('checked', false);
+            $form.find('input').not('[type="checkbox"], [type="radio"]').val('');
+            $form.find('textarea').val('');
+            $form.find('select').prop('selectedIndex', 0);
+            $('#booking-phone').removeData('raw-value');
+            $form.find('.help-block.text-danger').text('').hide();
+            $form.find('.has-error').removeClass('has-error');
+            if (returnDateInstance) returnDateInstance.clear();
+            if (returnTimeInstance) returnTimeInstance.clear();
+            $('#booking-success').html('').hide();
+            $anotherWrap.hide();
+            $('#trip-type-group').show();
+            $('#timeline-container').hide();
+            $('#checking-bags-section').hide();
+            $('#round-trip-section').show();
+            $('#return-flight-section').hide();
+            $('#return-timeline-container').hide();
+            $('#other-requirement-section').hide();
+            $('#group-event-call').hide();
+            $('#airfield-place').attr('hidden', 'hidden').hide();
+            $('#booking-quote').show();
+            $form.find('button[type="submit"]').prop('disabled', false);
+            $form.slideDown();
+
+            // Fresh default pickup date and time, the same as a first page load
+            const newDefaultDateTime = calculateSimpleDefaultTime(new Date());
+            const datePickerInstance = $('#booking-date')[0]._flatpickr;
+            const timePickerInstance = $('#booking-time')[0]._flatpickr;
+            if (datePickerInstance) datePickerInstance.setDate(newDefaultDateTime, true);
+            if (timePickerInstance) timePickerInstance.setDate(newDefaultDateTime, true);
+
+            // Let both the form layout and the price box see the cleared choices
+            $('#trip-type, #local-kind, #bar-choice, #airport-choice').trigger('change');
+            updatePassengerCapacity();
+            updateTimeline(formatLocalYmd(newDefaultDateTime));
+            placeInView($form, 'nearest');
+        }
 
         // Pre-fetch bookings, then initialize timeline with default date
         const todayForTimeline = formatLocalYmd(defaultDateTime);

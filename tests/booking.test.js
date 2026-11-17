@@ -13,6 +13,7 @@ import {
   resultText,
   showAirfieldQuote,
   showQuote,
+  startAnotherBooking,
   submitForm,
 } from "./helpers/render-booking.js";
 
@@ -53,12 +54,9 @@ function quoteLabel(document) {
   return document.querySelector(".quote-label")?.textContent?.trim() || "";
 }
 
-async function submitAnother(view) {
-  const form = view.document.querySelector("#bookingForm");
-  view.window.jQuery(form).show();
-  const success = view.document.querySelector("#booking-success");
-  success.innerHTML = "";
-  view.window.jQuery(success).hide();
+async function submitAnother(view, overrides) {
+  await startAnotherBooking(view);
+  await fillValid(view, overrides);
   await submitForm(view);
 }
 
@@ -2520,7 +2518,7 @@ describe("booking", () => {
           source: SOURCE.drivers,
           loaded: script,
         });
-        await submitAnother(view);
+        await submitAnother(view, { date: day, time: "10:00:00" });
         check(resultText(view.document).includes("Request received"), true, {
           label: "second ride at the same time is accepted",
           actual: resultText(view.document),
@@ -2534,7 +2532,7 @@ describe("booking", () => {
           source: SOURCE.drivers,
           loaded: script,
         });
-        await submitAnother(view);
+        await submitAnother(view, { date: day, time: "10:00:00" });
         check(resultText(view.document).includes("That time is booked"), true, {
           label: "third ride at the same time is refused",
           expected: "That time is booked",
@@ -2564,7 +2562,12 @@ describe("booking", () => {
           source: SOURCE.group,
           loaded: script,
         });
-        await submitAnother(view);
+        await submitAnother(view, {
+          trip: "group",
+          date: day,
+          time: "10:00:00",
+          hours: "4",
+        });
         check(resultText(view.document).includes("Request received"), true, {
           label: "second group event at the same start is accepted",
           actual: resultText(view.document),
@@ -2572,7 +2575,12 @@ describe("booking", () => {
           loaded: script,
         });
         const sent = bookingPosts(view.state).length;
-        await submitAnother(view);
+        await submitAnother(view, {
+          trip: "group",
+          date: day,
+          time: "10:00:00",
+          hours: "4",
+        });
         check(resultText(view.document).includes("That time is booked"), true, {
           label: "third group event is refused",
           expected: "That time is booked",

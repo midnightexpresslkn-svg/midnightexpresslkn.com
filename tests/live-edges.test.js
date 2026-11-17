@@ -7,6 +7,7 @@ import {
   renderBooking,
   resultText,
   showQuote,
+  startAnotherBooking,
   submitForm,
 } from "./helpers/render-booking.js";
 
@@ -548,7 +549,12 @@ describe.each(scripts)("live edges %s", (script) => {
       source: "js/booking.js",
       loaded: script,
     });
-    view.document.querySelector("#booking-success").textContent = "";
+    await startAnotherBooking(view);
+    await fillValid(view, {
+      trip: "airport",
+      roundTrip: true,
+      date: "2026-12-20",
+    });
     await submitForm(view);
     check(resultText(view.document).length > 0, true, {
       label: "a second request still gets an answer while the first is pending",

@@ -271,7 +271,11 @@ export async function renderBooking(script, options = {}) {
       credentials: init.credentials || "",
       mocked: true,
     });
-    if (state.failPost && method === "POST") {
+    const failThis =
+      typeof state.failPost === "function"
+        ? state.failPost(state.requests[state.requests.length - 1])
+        : state.failPost;
+    if (failThis && method === "POST") {
       throw new Error("mocked network failure");
     }
     if (host === "router.project-osrm.org") {
@@ -666,4 +670,19 @@ export function resultText(document) {
 export function atLocal(ymd, hours, minutes) {
   const [year, month, day] = ymd.split("-").map(Number);
   return new Date(year, month - 1, day, hours, minutes, 0, 0).toISOString();
+}
+
+/** Click the one "Make Another Booking" button, the only way to start a new booking ID. */
+export async function startAnotherBooking(view) {
+  const button = await waitFor(
+    () => {
+      const found = view.document.querySelector("#new-booking-btn");
+      if (!found || found.closest("[style*='display: none']"))
+        throw new Error("waiting for another booking");
+      return found;
+    },
+    { timeout: 4000 },
+  );
+  button.click();
+  return button;
 }
