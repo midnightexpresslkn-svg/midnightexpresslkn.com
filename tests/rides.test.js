@@ -10,6 +10,7 @@ import {
   resultText,
   showQuote,
   submitForm,
+  typeTime,
 } from "./helpers/render-booking.js";
 
 const scripts = ["js/booking.js", "js/booking.min.js"];
@@ -148,9 +149,7 @@ function fillBarReturn(
 ) {
   const $ = view.window.jQuery;
   $("#bar-return-passengers").val(passengers).trigger("input");
-  view.document
-    .querySelector("#bar-return-time")
-    ._flatpickr.setDate(time, true, "H:i:S");
+  typeTime(view.document, "bar-return-time", time);
   $("#bar-return-location").val(place).trigger("input");
 }
 

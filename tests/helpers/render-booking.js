@@ -412,25 +412,38 @@ export function chooseRadio(document, inputName, value, meta = {}) {
   return el;
 }
 
+/** Types a 24-hour HH:MM:SS value as the rider would: 12-hour text plus AM or PM. */
+export function typeTime(document, id, value) {
+  const window = document.defaultView;
+  const text = document.querySelector(`#${id}-text`);
+  const radios = [...document.querySelectorAll(`input[name="${id}-period"]`)];
+  radios.forEach((radio) => {
+    radio.checked = false;
+  });
+  if (!value) {
+    window.jQuery(text).val("").trigger("input");
+    return;
+  }
+  const [hours, minutes] = value.split(":").map(Number);
+  window
+    .jQuery(text)
+    .val(`${((hours + 11) % 12) + 1}:${String(minutes).padStart(2, "0")}`)
+    .trigger("input");
+  const period = radios.find(
+    (radio) => radio.value === (hours < 12 ? "AM" : "PM"),
+  );
+  period.checked = true;
+  window.jQuery(period).trigger("change");
+}
+
 export function setWhen(document, date, time, prefix = "") {
-  const dateEl = document.querySelector(
-    prefix ? `#booking-${prefix}date`.replace("--", "-") : "#booking-date",
-  );
-  const timeEl = document.querySelector(
-    prefix ? `#booking-${prefix}time` : "#booking-time",
-  );
   const dateId =
     prefix === "return-" ? "#booking-return-date" : "#booking-date";
-  const timeId =
-    prefix === "return-" ? "#booking-return-time" : "#booking-time";
+  const timeId = prefix === "return-" ? "booking-return-time" : "booking-time";
   const dateNode = document.querySelector(dateId);
-  const timeNode = document.querySelector(timeId);
   if (dateNode._flatpickr) dateNode._flatpickr.setDate(date, true);
   dateNode.value = date;
-  if (timeNode._flatpickr) timeNode._flatpickr.setDate(time, true);
-  timeNode.value = time;
-  void dateEl;
-  void timeEl;
+  typeTime(document, timeId, time);
 }
 
 export async function fillValid(view, overrides = {}) {

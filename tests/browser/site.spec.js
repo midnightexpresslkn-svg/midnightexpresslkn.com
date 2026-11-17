@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { hostnameOf } from "../helpers/hostname.js";
+import { typeTimeAt } from "./helpers/booking-mocks.js";
 
 // Bags plus the other airport answers Donald made required on Nov 16, 2026.
 async function answerBags(page, { note = "Departure curb, please." } = {}) {
@@ -213,10 +214,7 @@ test.describe("booking page", () => {
       el._flatpickr.setDate("2026-12-15", true);
       el.value = "2026-12-15";
     });
-    await page.locator("#booking-time").evaluate((el) => {
-      el._flatpickr.setDate("10:00:00", true);
-      el.value = "10:00:00";
-    });
+    await typeTimeAt(page, "Pickup Time", "10:00", "AM");
     await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
     const result = page.locator("#booking-success");
     await expect(result).toContainText("out of our service area.");
@@ -240,10 +238,7 @@ test.describe("booking page", () => {
       el._flatpickr.setDate("2026-12-15", true);
       el.value = "2026-12-15";
     });
-    await page.locator("#booking-time").evaluate((el) => {
-      el._flatpickr.setDate("10:00:00", true);
-      el.value = "10:00:00";
-    });
+    await typeTimeAt(page, "Pickup Time", "10:00", "AM");
     await page.locator("#airport-choice").selectOption("");
     await answerRoundTrip(page);
     await page.locator("#bookingForm button[type=submit]").click();
@@ -276,10 +271,7 @@ test.describe("booking page", () => {
       el._flatpickr.setDate("2026-12-15", true);
       el.value = "2026-12-15";
     });
-    await page.locator("#booking-time").evaluate((el) => {
-      el._flatpickr.setDate("10:00:00", true);
-      el.value = "10:00:00";
-    });
+    await typeTimeAt(page, "Pickup Time", "10:00", "AM");
     await answerBags(page);
     await answerRoundTrip(page);
     await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
@@ -309,10 +301,7 @@ test.describe("booking page", () => {
       el._flatpickr.setDate("2026-12-15", true);
       el.value = "2026-12-15";
     });
-    await page.locator("#booking-time").evaluate((el) => {
-      el._flatpickr.setDate("10:00:00", true);
-      el.value = "10:00:00";
-    });
+    await typeTimeAt(page, "Pickup Time", "10:00", "AM");
     await answerBags(page);
     await answerRoundTrip(page);
     await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
@@ -505,10 +494,7 @@ test.describe("booking page", () => {
       el._flatpickr.setDate("2026-12-15", true);
       el.value = "2026-12-15";
     });
-    await page.locator("#booking-time").evaluate((el) => {
-      el._flatpickr.setDate("10:00:00", true);
-      el.value = "10:00:00";
-    });
+    await typeTimeAt(page, "Pickup Time", "10:00", "AM");
     await answerBags(page);
     await answerRoundTrip(page);
     await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
@@ -613,10 +599,7 @@ async function fillIdentity(page) {
     el._flatpickr.setDate("2026-12-15", true);
     el.value = "2026-12-15";
   });
-  await page.locator("#booking-time").evaluate((el) => {
-    el._flatpickr.setDate("10:00:00", true);
-    el.value = "10:00:00";
-  });
+  await typeTimeAt(page, "Pickup Time", "10:00", "AM");
 }
 
 test.describe("new rides on a 375px phone", () => {

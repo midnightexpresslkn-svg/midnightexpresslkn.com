@@ -112,19 +112,13 @@ export async function fillAirport(
     page.getByRole("textbox", { name: "Select date" }).first(),
     "2026-12-15",
   );
-  await pick(
-    page.getByRole("textbox", { name: "Select time" }).first(),
-    "10:00:00",
-  );
+  await typeTimeAt(page, "Pickup Time", "10:00", "AM");
   if (round) {
     await pick(
       page.getByRole("textbox", { name: "Select date" }).nth(1),
       "2026-12-16",
     );
-    await pick(
-      page.getByRole("textbox", { name: "Select time" }).nth(1),
-      "12:00:00",
-    );
+    await typeTimeAt(page, "Return Pickup Time", "12:00", "PM");
     // The arrival flight is asked only on a round trip (Donald, Nov 16 2026).
     await page
       .getByLabel(from ? /Departure flight number/ : /Arrival flight number/)
@@ -149,16 +143,14 @@ export async function fillBar(page, { round = false, agree = true } = {}) {
   await page
     .getByPlaceholder("123 Main Street, Denver NC 28037")
     .fill("123 Main Street, Denver NC 28037");
+  await typeTimeAt(page, "Pickup Time", "8:00", "PM");
   await page
     .getByRole("group", { name: /Round trip/ })
     .getByRole("radio", { name: round ? "Yes" : "No", exact: true })
     .check();
   if (round) {
     await page.getByLabel(/Passengers for the ride back/).fill("3");
-    await pick(
-      page.getByRole("textbox", { name: "Select return time" }),
-      "23:30:00",
-    );
+    await typeTimeAt(page, "Return pickup time", "11:30", "PM");
     await page
       .getByLabel(/Return pickup location/)
       .fill("Two Trees front door");
@@ -198,6 +190,17 @@ export async function settled(page) {
 }
 
 // The visible picker box is Flatpickr's alt input; its picker lives on the input just before it.
+/** Types a time like a rider: the 12-hour text, then the AM or PM button (Donald, Nov 16 2026). */
+export async function typeTimeAt(page, name, text, period) {
+  await page.getByLabel(`${name} *`, { exact: true }).fill(text);
+  if (period) {
+    await page
+      .getByRole("group", { name: `${name} AM or PM *`, exact: true })
+      .getByText(period, { exact: true })
+      .click();
+  }
+}
+
 export async function pick(box, value) {
   await expect(box).toBeVisible();
   await box.evaluate(
@@ -282,6 +285,7 @@ export async function fillParty(
   await page
     .getByPlaceholder("123 Main Street, Denver NC 28037")
     .fill("123 Main Street, Denver NC 28037");
+  await typeTimeAt(page, "Pickup Time", "8:00", "PM");
   const secondPickup = page.getByRole("group", {
     name: /Second pickup location/,
   });
@@ -332,7 +336,10 @@ export async function fillParty(
 }
 
 /** A group event with every group answer filled in (Donald, Nov 16 2026). */
-export async function fillGroup(page, { agree = true, stops = 2 } = {}) {
+export async function fillGroup(
+  page,
+  { agree = true, stops = 2, time = "8:00", period = "PM" } = {},
+) {
   await page.getByRole("combobox", { name: "Trip type" }).selectOption("group");
   await page.getByPlaceholder("Jane Smith").fill("Isolated QA Rider");
   await page.getByPlaceholder("5555551234").fill("5555550199");
@@ -342,6 +349,7 @@ export async function fillGroup(page, { agree = true, stops = 2 } = {}) {
   await page
     .getByPlaceholder("123 Main Street, Denver NC 28037")
     .fill("123 Main Street, Denver NC 28037");
+  await typeTimeAt(page, "Pickup Time", time, period);
   const places = [
     "Two Trees Bar and Grill",
     "Lake Norman Brewery",

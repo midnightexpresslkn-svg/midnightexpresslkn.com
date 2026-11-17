@@ -129,7 +129,7 @@ describe.each(scripts)("one send per booking %s", (script) => {
     // Wait for the return-date and return-time pickers so clearing them is exercised too.
     await waitFor(
       () => {
-        if (!view.document.querySelector("#booking-return-time")._flatpickr)
+        if (!view.document.querySelector("#booking-return-date")._flatpickr)
           throw new Error("waiting for return pickers");
       },
       { timeout: 2000 },

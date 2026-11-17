@@ -736,6 +736,43 @@
         return (customerNote ? customerNote + '\n' : '') + 'Airport details:\n' + lines.join('\n');
     }
 
+    /**
+     * Typed time (Donald, Nov 16 2026): "7:30", "730", "0730", "7" plus a chosen AM or PM.
+     * Returns HH:MM:SS for the Form and calendar, or '' when it is not a real time.
+     */
+    function parseTypedTime(text, period) {
+        var m = /^\s*(\d{1,2})(?:[:.]?(\d{2}))?\s*$/.exec(text || '');
+        if (!m || (period !== 'AM' && period !== 'PM')) return '';
+        var hour = Number(m[1]);
+        var minute = m[2] ? Number(m[2]) : 0;
+        if (hour < 1 || hour > 12 || minute > 59) return '';
+        var h24 = (hour % 12) + (period === 'PM' ? 12 : 0);
+        return (h24 < 10 ? '0' : '') + h24 + ':' + (minute < 10 ? '0' : '') + minute + ':00';
+    }
+
+    function typedTimeProblem(id, name) {
+        var text = $.trim($('#' + id + '-text').val() || '');
+        var period = $('input[name="' + id + '-period"]:checked').val() || '';
+        if (!text) return name + ' is required';
+        if (!parseTypedTime(text, 'AM')) return name + ': enter a real time, like 7:30';
+        // Only reached when the time is real but AM or PM is not chosen yet.
+        return 'Please choose AM or PM for the ' + name.toLowerCase();
+    }
+
+    function syncTypedTime(id) {
+        var text = $.trim($('#' + id + '-text').val() || '');
+        var period = $('input[name="' + id + '-period"]:checked').val() || '';
+        var value = parseTypedTime(text, period);
+        var $hidden = $('#' + id);
+        if ($hidden.val() !== value) $hidden.val(value).trigger('change');
+    }
+
+    function clearTypedTime(id) {
+        $('#' + id + '-text').val('');
+        $('input[name="' + id + '-period"]').prop('checked', false);
+        syncTypedTime(id);
+    }
+
     function twelveHour(value) {
         var parts = value.split(':');
         var hours = parseInt(parts[0], 10);
@@ -1047,6 +1084,7 @@
     // Donald (Nov 16, 2026): the bar form uses one combined agreement box.
     var BAR_AGREEMENT = 'Must be 21 years or older, cannot smoke, and you are responsible for any damages.';
     var PASSENGERS_TITLE = 'Online: up to 5 with carry-on, up to 4 with checked bags. For more, call (980) 422-9125.';
+    var TIME_IDS = ['booking-time', 'booking-return-time', 'bar-return-time'];
     var BAR_NOTES_PLACEHOLDER = 'Anything we should know? For example: drinks, music style.';
     var BAR_AGREEMENT_MESSAGE = 'Please check the box: ' + BAR_AGREEMENT;
     var GROUP_NOTES_MESSAGE = 'Please tell us about your group event (what it is, how many people, and anything we should know).';
@@ -1250,7 +1288,7 @@
         var $box = $('#bar-return-details');
         $box.attr('hidden', 'hidden').hide();
         $('#bar-return-passengers, #bar-return-location').val('');
-        document.getElementById('bar-return-time')._flatpickr.clear();
+        clearTypedTime('bar-return-time');
         $box.find('.help-block.text-danger').text('').hide();
         $box.find('.has-error').removeClass('has-error');
         $box.find('input').prop('required', false);
@@ -1362,7 +1400,7 @@
             $('#return-flight-section').slideUp();
             $('#return-timeline-container').slideUp();
             $('#booking-return-date').val('');
-            $('#booking-return-time').val('');
+            clearTypedTime('booking-return-time');
             $('#return-date-error').text('').hide();
             $('#return-time-error').text('').hide();
         }
@@ -1371,6 +1409,10 @@
         updateBarFields();
         updatePartyFields();
         updateGroupFields();
+        TIME_IDS.forEach(function(id) {
+            var active = id === 'booking-time' || (id === 'booking-return-time' ? isAirportTrip() && isRoundTrip() : isBarRide() && isRoundTrip());
+            $('#' + id + '-text, input[name="' + id + '-period"]').prop('required', active);
+        });
     }
 
     /**
@@ -1758,44 +1800,27 @@
             }
         });
 
-        // Initialize Pickup Time Picker
-        $('#booking-time').flatpickr({
-            enableTime: true,
-            noCalendar: true,
-            dateFormat: "H:i:S",  // Store as HH:MM:SS
-            altInput: true,
-            altFormat: "h:i K",  // Display as 12-hour with AM/PM
-            time_24hr: false,
-            minuteIncrement: 5,
-            disableMobile: "never",
-            position: 'below',
-            defaultDate: defaultDateTime
-        });
-
-        // Bar ride back: a time only, shown in 12-hour time like the pickup time
-        $('#bar-return-time').flatpickr({
-            enableTime: true,
-            noCalendar: true,
-            dateFormat: "H:i:S",
-            altInput: true,
-            altFormat: "h:i K",
-            time_24hr: false,
-            minuteIncrement: 5,
-            disableMobile: "never",
-            position: 'below'
+        // Typed times with an AM or PM choice on every ride (Donald, Nov 16 2026)
+        TIME_IDS.forEach(function(id) {
+            $('#' + id + '-text').on('input change', function() { syncTypedTime(id); });
+            $('#' + id + '-text').on('blur', function() {
+                var text = $.trim($(this).val());
+                var tidy = parseTypedTime(text, 'AM');
+                if (tidy) {
+                    var hours = Number(tidy.slice(0, 2));
+                    $(this).val((hours === 0 ? 12 : hours) + ':' + tidy.slice(3, 5));
+                }
+            });
+            $('input[name="' + id + '-period"]').on('change', function() { syncTypedTime(id); });
         });
 
         // Initialize Return Flight Flatpickr (only when round trip is selected)
         let returnDateInstance = null;
-        let returnTimeInstance = null;
 
         function initializeReturnFlatpickr() {
             // Destroy existing instances if present
             if (returnDateInstance) {
                 returnDateInstance.destroy();
-            }
-            if (returnTimeInstance) {
-                returnTimeInstance.destroy();
             }
 
             // Initialize Return Flight Date Picker
@@ -1827,30 +1852,21 @@
                 }
             });
 
-            // Initialize Return Flight Time Picker
-            returnTimeInstance = $('#booking-return-time').flatpickr({
-                enableTime: true,
-                noCalendar: true,
-                dateFormat: "H:i:S",
-                altInput: true,
-                altFormat: "h:i K",
-                time_24hr: false,
-                minuteIncrement: 5,
-                disableMobile: "never",
-                position: 'below',
-                onChange: function(selectedDates, dateStr, instance) {
-                    // Validate when time changes
-                    const pickupDate = $('#booking-date').val();
-                    const pickupTime = $('#booking-time').val();
-                    const returnDate = $('#booking-return-date').val();
-                    if (pickupDate && pickupTime && returnDate && dateStr) {
-                        const pickupDateTime = pickupDate + ' ' + pickupTime;
-                        const returnDateTime = returnDate + ' ' + dateStr;
-                        validateReturnFlight(pickupDateTime, returnDateTime);
-                    }
-                }
-            });
         }
+
+        // A changed return time re-checks it against the pickup
+        $('#booking-return-time-text, input[name="booking-return-time-period"]').on('input change', function() {
+            $('#return-time-error').text('').hide();
+        });
+        $('#booking-return-time').on('change', function() {
+            const pickupDate = $('#booking-date').val();
+            const pickupTime = $('#booking-time').val();
+            const returnDate = $('#booking-return-date').val();
+            const returnTime = $(this).val();
+            if (pickupDate && pickupTime && returnDate && returnTime) {
+                validateReturnFlight(pickupDate + ' ' + pickupTime, returnDate + ' ' + returnTime);
+            }
+        });
 
         // Initialize return Flatpickr when round trip is checked
         $('input[name="round-trip"]').on('change', function() {
@@ -1917,7 +1933,7 @@
         $('#booking-date').on('change', function() {
             $('#date-error').text('').hide();
         });
-        $('#booking-time').on('change', function() {
+        $('#booking-time-text, input[name="booking-time-period"]').on('input change', function() {
             $('#time-error').text('').hide();
         });
 
@@ -2057,7 +2073,9 @@
                 specialRequirements.push(otherDesc ? 'Other: ' + otherDesc : 'Other items');
             }
 
-            // Get datetime from hidden fields (populated by Flatpickr)
+            // Rebuild the 24-hour values from the typed text and the chosen AM/PM before sending.
+            TIME_IDS.forEach(syncTypedTime);
+            // Get datetime from hidden date/time fields.
             const pickupDate = $('#booking-date').val();
             const pickupTime = $('#booking-time').val();
 
@@ -2227,9 +2245,10 @@
 
             // Pickup time validation
             if (!formData.pickupTime) {
-                errors.push('Pickup time is required');
+                var pickupTimeProblem = typedTimeProblem('booking-time', 'Pickup time');
+                errors.push(pickupTimeProblem);
                 $('#booking-time').closest('.form-group').addClass('has-error');
-                $('#time-error').text('Pickup time is required').show();
+                $('#time-error').text(pickupTimeProblem).show();
                 isValid = false;
             }
 
@@ -2454,7 +2473,8 @@
                     fieldError('#bar-return-passengers', 'bar-return-passengers-error', overCapacityMessage(GROUP_MAX_PASSENGERS));
                 }
                 if (!barReturn.time) {
-                    fieldError('#bar-return-time', 'bar-return-time-error', 'Please choose a return pickup time.');
+                    var barTimeProblem = typedTimeProblem('bar-return-time', 'Return pickup time');
+                    fieldError('#bar-return-time', 'bar-return-time-error', barTimeProblem === 'Return pickup time is required' ? 'Please choose a return pickup time.' : barTimeProblem);
                 }
                 if (!barReturn.location) {
                     fieldError('#bar-return-location', 'bar-return-location-error', 'Please enter where to pick you up for the ride back.');
@@ -2507,9 +2527,10 @@
 
                 // Return time validation
                 if (!formData.returnTime) {
-                    errors.push('Return pickup time is required for round trips');
+                    var returnTimeProblem = typedTimeProblem('booking-return-time', 'Return pickup time');
+                    errors.push(returnTimeProblem === 'Return pickup time is required' ? 'Return pickup time is required for round trips' : returnTimeProblem);
                     $('#booking-return-time').closest('.form-group').addClass('has-error');
-                    $('#return-time-error').text('Return pickup time is required').show();
+                    $('#return-time-error').text(returnTimeProblem).show();
                     isValid = false;
                 } else {
                     // Validate return date is after pickup date
@@ -2760,7 +2781,7 @@
             $form.find('.help-block.text-danger').text('').hide();
             $form.find('.has-error').removeClass('has-error');
             if (returnDateInstance) returnDateInstance.clear();
-            if (returnTimeInstance) returnTimeInstance.clear();
+            TIME_IDS.forEach(function(id) { clearTypedTime(id); });
             $('#booking-success').html('').hide();
             $anotherWrap.hide();
             $('#trip-type-group').show();
@@ -2780,9 +2801,7 @@
             // Fresh default pickup date and time, the same as a first page load
             const newDefaultDateTime = calculateSimpleDefaultTime(new Date());
             const datePickerInstance = $('#booking-date')[0]._flatpickr;
-            const timePickerInstance = $('#booking-time')[0]._flatpickr;
             if (datePickerInstance) datePickerInstance.setDate(newDefaultDateTime, true);
-            if (timePickerInstance) timePickerInstance.setDate(newDefaultDateTime, true);
 
             // Let both the form layout and the price box see the cleared choices
             $('#trip-type, #local-kind, #bar-choice, #airport-choice').trigger('change');
@@ -2815,6 +2834,7 @@
             updateTripLayout();
         }
         globalThis.MidnightBooking = {
+            parseTypedTime: parseTypedTime,
             formatDisplayTime: formatDisplayTime,
             placeInView: placeInView
         };

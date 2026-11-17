@@ -9,6 +9,7 @@ import {
   resultText,
   startAnotherBooking,
   submitForm,
+  typeTime,
 } from "./helpers/render-booking.js";
 
 const scripts = ["js/booking.js", "js/booking.min.js"];
@@ -32,10 +33,7 @@ function fillReturn(view, { passengers, time, place }) {
   const $ = view.window.jQuery;
   if (passengers != null)
     $("#bar-return-passengers").val(passengers).trigger("input");
-  if (time != null)
-    view.document
-      .querySelector("#bar-return-time")
-      ._flatpickr.setDate(time, true, "H:i:S");
+  if (time != null) typeTime(view.document, "bar-return-time", time);
   if (place != null) $("#bar-return-location").val(place).trigger("input");
 }
 

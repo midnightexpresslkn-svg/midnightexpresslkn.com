@@ -1954,7 +1954,7 @@ describe("booking", () => {
           source: SOURCE.group,
           loaded: script,
         });
-        check(shown(view.document.querySelector("#booking-time")), true, {
+        check(shown(view.document.querySelector("#booking-time-text")), true, {
           label: "group form asks for a pickup time",
           source: SOURCE.group,
           loaded: script,
