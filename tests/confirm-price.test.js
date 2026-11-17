@@ -108,11 +108,21 @@ describe.each(scripts)("confirmation price %s", (script) => {
     const quote = await quoteShown(view);
     await submitForm(view);
     const price = priceText(view);
-    const deposit = /Deposit \$[\d.]+ cash · \$[\d.]+ card/.exec(quote)[0];
+    const deposit = /25% deposit: Cash \$[\d.]+ · Card \$[\d.]+/.exec(quote)[0];
     check(price.includes(deposit), true, {
       label: "same deposit as the quote box",
       actual: price,
       expected: deposit,
+      ...opts,
+    });
+    check(price.includes("Trip charge: Cash $375.00 · Card $386.25"), true, {
+      label: "the trip charge is its own line",
+      actual: price,
+      ...opts,
+    });
+    check(price.includes("Deposit must be paid up front."), true, {
+      label: "the confirmation says the deposit is paid up front",
+      actual: price,
       ...opts,
     });
     check(price.includes("3 hours"), true, {

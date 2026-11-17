@@ -101,7 +101,7 @@ test.describe("mobile page fits the screen", () => {
           name: /Must be 21 years or older, cannot smoke/,
         }),
       ).toBeVisible();
-      await expect(page.locator("#rule-age")).toBeHidden();
+      await expect(page.locator("#rule-age")).toHaveCount(0);
       const local = await offenders(page);
       expect(local.scrollWidth).toBeLessThanOrEqual(local.clientWidth + 1);
       expect(local.found).toEqual([]);
@@ -113,7 +113,7 @@ test.describe("mobile page fits the screen", () => {
           name: /Must be 21 years or older, cannot smoke/,
         }),
       ).toBeVisible();
-      await expect(page.locator("#rule-age")).toBeHidden();
+      await expect(page.locator("#rule-age")).toHaveCount(0);
       await expect(
         page.getByRole("group", { name: /Second pickup location/ }),
       ).toBeVisible();

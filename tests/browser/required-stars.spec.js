@@ -1,12 +1,9 @@
 import { test, expect } from "@playwright/test";
 
-// Donald, Nov 10, 2026 6:57 PM: the three required boxes show the same required star as the other required fields,
-// on the bar ride form and on the group event form.
-const RULES = [
-  ["#rule-age", "Must be 21 or older *"],
-  ["#rule-smoke", "No smoking *"],
-  ["#rule-damage", "If you damage anything, you are responsible. *"],
-];
+// Donald, Nov 10, 2026 6:57 PM: the required agreement shows the same required star as the other required fields.
+// Donald, Nov 16, 2026: bar, party, and group all use one combined required box instead of three.
+const AGREEMENT =
+  "Must be 21 years or older, cannot smoke, and you are responsible for any damages. *";
 
 async function blockNetwork(page) {
   await page.route("**/*", async (route) => {
@@ -16,55 +13,29 @@ async function blockNetwork(page) {
   });
 }
 
-async function expectStars(page) {
-  await expect(page.locator("#ride-rules")).toBeVisible();
-  for (const [id, text] of RULES) {
-    const label = page.locator(".ride-rule", { has: page.locator(id) });
-    await expect(label).toBeVisible();
-    await expect(label).toHaveText(text);
-    await expect(page.getByLabel(text)).toHaveAttribute("type", "checkbox");
-  }
+async function expectOneStarredBox(page) {
+  const box = page.getByRole("checkbox", { name: AGREEMENT });
+  await expect(box).toBeVisible();
+  await expect(box).toHaveAttribute("required", "");
+  await expect(page.locator("#ride-rules").getByRole("checkbox")).toHaveCount(
+    1,
+  );
   // same marker as the other required labels, e.g. "Trip type *"
   await expect(page.locator('label[for="trip-type"]')).toHaveText(/ \*$/);
 }
 
-// Donald, Nov 16, 2026: the bar form has one combined required box instead of three.
-test("bar ride form shows the required star on its one agreement box", async ({
-  page,
-}) => {
-  await blockNetwork(page);
-  await page.goto("/");
-  await page.locator("#trip-type").selectOption("local");
-  await page.locator("#local-kind").selectOption("bar");
-  const text =
-    "Must be 21 years or older, cannot smoke, and you are responsible for any damages. *";
-  const box = page.getByRole("checkbox", { name: text });
-  await expect(box).toBeVisible();
-  await expect(box).toHaveAttribute("required", "");
-  for (const [id] of RULES) await expect(page.locator(id)).toBeHidden();
-});
-
-// Donald, Nov 16, 2026: the party form uses the same one combined box as the bar form.
-test("party ride form shows the required star on its one agreement box", async ({
-  page,
-}) => {
-  await blockNetwork(page);
-  await page.goto("/");
-  await page.locator("#trip-type").selectOption("local");
-  await page.locator("#local-kind").selectOption("party");
-  const box = page.getByRole("checkbox", {
-    name: "Must be 21 years or older, cannot smoke, and you are responsible for any damages. *",
+for (const [name, trip, kind] of [
+  ["bar ride", "local", "bar"],
+  ["party ride", "local", "party"],
+  ["group event", "group", null],
+]) {
+  test(`${name} form shows the required star on its one agreement box`, async ({
+    page,
+  }) => {
+    await blockNetwork(page);
+    await page.goto("/");
+    await page.locator("#trip-type").selectOption(trip);
+    if (kind) await page.locator("#local-kind").selectOption(kind);
+    await expectOneStarredBox(page);
   });
-  await expect(box).toBeVisible();
-  await expect(box).toHaveAttribute("required", "");
-  for (const [id] of RULES) await expect(page.locator(id)).toBeHidden();
-});
-
-test("group event form shows the required star on all three boxes", async ({
-  page,
-}) => {
-  await blockNetwork(page);
-  await page.goto("/");
-  await page.locator("#trip-type").selectOption("group");
-  await expectStars(page);
-});
+}

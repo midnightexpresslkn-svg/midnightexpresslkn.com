@@ -325,7 +325,7 @@ describe.each(scripts)("local bars and group %s", (script) => {
     });
   });
 
-  it("asks for the local intake fields and the three notices", async () => {
+  it("asks for the local intake fields and the agreement box", async () => {
     const view = await renderBooking(script);
     chooseTrip(view.document, "local");
     check(
@@ -358,13 +358,11 @@ describe.each(scripts)("local bars and group %s", (script) => {
     check(
       shownRules(view),
       [
-        "Must be 21 or older *",
-        "No smoking *",
-        "If you damage anything, you are responsible. *",
+        "Must be 21 years or older, cannot smoke, and you are responsible for any damages. *",
       ],
       {
         label:
-          "before bar or party is picked, the notices are the three required boxes in order",
+          "before bar or party is picked, the one agreement box shows (Donald, Nov 16 2026)",
         source: "js/booking.js",
         loaded: script,
       },
@@ -395,8 +393,8 @@ describe.each(scripts)("local bars and group %s", (script) => {
       source: "js/booking.js",
       loaded: script,
     });
-    check(view.document.querySelector("#rule-age").type, "checkbox", {
-      label: "the age notice is a real checkbox",
+    check(view.document.querySelector("#rule-bar-agreement").type, "checkbox", {
+      label: "the agreement is a real checkbox",
       source: "js/booking.js",
       loaded: script,
     });
@@ -683,29 +681,6 @@ describe.each(scripts)("local bars and group %s", (script) => {
       source: "js/booking.js",
       loaded: script,
     });
-    // Group keeps its three boxes; party uses the one bar box (Donald, Nov 16 2026).
-    for (const rules of [[], ["age"], ["age", "smoke"]]) {
-      const view = await renderBooking(script, { miles: 4 });
-      await fillValid(view, { trip: "group", rules });
-      await submitForm(view);
-      check(
-        resultText(view.document).includes(
-          "Please check all three boxes: Must be 21 or older, No smoking, and If you damage anything, you are responsible.",
-        ),
-        true,
-        {
-          label: `group request waits when rules are ${rules.join(",") || "none"}`,
-          actual: resultText(view.document),
-          source: "js/booking.js",
-          loaded: script,
-        },
-      );
-      check(bookingPosts(view.state).length, 0, {
-        label: "an unchecked group request is not sent",
-        source: "js/booking.js",
-        loaded: script,
-      });
-    }
     const party = await renderBooking(script, { miles: 4 });
     await fillValid(party, {
       trip: "local",
@@ -802,7 +777,7 @@ describe.each(scripts)("local bars and group %s", (script) => {
       source: "js/booking.js",
       loaded: script,
     });
-    check(text.includes("Deposit $62.50 cash · $64.38 card"), true, {
+    check(text.includes("25% deposit: Cash $62.50 · Card $64.38"), true, {
       label: "25 percent deposit on the 2 hour minimum",
       actual: text,
       source: "js/booking.js",
@@ -832,7 +807,7 @@ describe.each(scripts)("local bars and group %s", (script) => {
       source: "js/booking.js",
       loaded: script,
     });
-    check(text.includes("Deposit $93.75 cash · $96.56 card"), true, {
+    check(text.includes("25% deposit: Cash $93.75 · Card $96.56"), true, {
       label: "25 percent of the three hour total",
       actual: text,
       source: "js/booking.js",
@@ -840,33 +815,32 @@ describe.each(scripts)("local bars and group %s", (script) => {
     });
   });
 
-  it("requires the same three notices on a group and caps the van at 6", async () => {
+  it("requires the one agreement box on a group and caps the van at 6", async () => {
     const none = await renderBooking(script);
-    await fillValid(none, { trip: "group", rules: [], hours: "2" });
+    await fillValid(none, { trip: "group", barAgreement: false, hours: "2" });
     await submitForm(none);
     check(bookingPosts(none.state).length, 0, {
-      label: "a group with no boxes checked is not sent",
+      label: "a group without the agreement box is not sent",
       source: "js/booking.js",
       loaded: script,
     });
-    const some = await renderBooking(script);
-    await fillValid(some, {
-      trip: "group",
-      rules: ["age", "damage"],
-      hours: "2",
-    });
-    await submitForm(some);
-    check(resultText(some.document).includes("No smoking"), true, {
-      label: "a group missing one box is told which notices are required",
-      actual: resultText(some.document),
-      source: "js/booking.js",
-      loaded: script,
-    });
+    check(
+      resultText(none.document).includes(
+        "Please check the box: Must be 21 years or older, cannot smoke, and you are responsible for any damages.",
+      ),
+      true,
+      {
+        label: "a group is told to check the one agreement box",
+        actual: resultText(none.document),
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
     const full = await renderBooking(script);
     await fillValid(full, { trip: "group", passengers: "6", hours: "2" });
     await submitForm(full);
     check(resultText(full.document).includes("Request received"), true, {
-      label: "six passengers with every box checked is received",
+      label: "six passengers with the agreement checked is received",
       actual: resultText(full.document),
       source: "js/booking.js",
       loaded: script,

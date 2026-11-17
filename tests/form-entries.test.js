@@ -227,9 +227,9 @@ describe("form entries", () => {
         view.document
           .querySelector("#booking-notes")
           .getAttribute("placeholder"),
-        NOTES_HINT,
+        "Anything we should know? For example: drinks, music style.",
         {
-          label: "the group description keeps the same hint",
+          label: "the group description gives drinks and music examples",
           source: "js/booking.js",
           loaded: script,
         },
@@ -617,7 +617,7 @@ describe("form entries", () => {
           destination: "Hourly charter, 2026 Toyota Sienna Platinum",
           passengers: "4",
           notes:
-            "Group event. reunion Must be 21 or older: Yes. No smoking: Yes. If you damage anything, you are responsible: Yes.",
+            "Group event. reunion\nGroup details:\nAgreement (Must be 21 years or older, cannot smoke, and you are responsible for any damages.): Yes",
           airportTrip: "No",
           flight: "",
           checkingBags: "No",
@@ -643,7 +643,7 @@ describe("form entries", () => {
           destinationAddress: "Hourly charter, 2026 Toyota Sienna Platinum",
           passengers: "4",
           specialNotes:
-            "Group event. reunion Must be 21 or older: Yes. No smoking: Yes. If you damage anything, you are responsible: Yes.",
+            "Group event. reunion\nGroup details:\nAgreement (Must be 21 years or older, cannot smoke, and you are responsible for any damages.): Yes",
           airportTrip: "No",
           flightNumber: "",
           checkingBags: "No",

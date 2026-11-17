@@ -181,10 +181,10 @@ test.describe("booking page", () => {
     await expect(page.locator("#booking-carseat")).toBeHidden();
     await expect(page.locator("#booking-notes")).toHaveAttribute(
       "placeholder",
-      "Anything we should know? For example, a wheelchair, a car seat, or extra luggage.",
+      "Anything we should know? For example: drinks, music style.",
     );
     await expect(page.locator("#notes-hint")).toHaveText(
-      "Anything we should know? For example, a wheelchair, a car seat, or extra luggage.",
+      "Anything we should know? For example: drinks, music style.",
     );
     await expect(page.locator("#notes-label")).toHaveText("Trip Description *");
     await expect(page.locator("#group-hours")).toBeVisible();
@@ -208,9 +208,7 @@ test.describe("booking page", () => {
     await page.locator("#booking-notes").fill("A wedding party downtown");
     await page.locator("#group-hours").fill("2");
     await page.locator("#booking-pickup").fill("8109 pike road charlotte");
-    await page.locator("#rule-age").check();
-    await page.locator("#rule-smoke").check();
-    await page.locator("#rule-damage").check();
+    await agreeBar(page);
     await page.locator("#booking-date").evaluate((el) => {
       el._flatpickr.setDate("2026-12-15", true);
       el.value = "2026-12-15";
@@ -801,8 +799,9 @@ test.describe("new rides on a 375px phone", () => {
     await expect(quote).toContainText("2-hour minimum");
     await expect(quote).toContainText("Cash $250.00");
     await expect(quote).toContainText("Card $257.50");
-    await expect(quote).toContainText("Deposit $62.50 cash");
-    await expect(quote).toContainText("$64.38 card");
+    await expect(quote).toContainText("25% deposit: Cash $62.50");
+    await expect(quote).toContainText("Deposit must be paid up front.");
+    await expect(quote).toContainText("Card $64.38");
     await page.locator("#booking-passengers").fill("6");
     await expect(page.locator("#passenger-capacity-message")).not.toContainText(
       "seats 6",
@@ -815,11 +814,9 @@ test.describe("new rides on a 375px phone", () => {
     await fillIdentity(page);
     await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
     await expect(page.locator("#booking-success")).toContainText(
-      "Please check all three boxes: Must be 21 or older, No smoking, and If you damage anything, you are responsible.",
+      "Please check the box: Must be 21 years or older, cannot smoke, and you are responsible for any damages.",
     );
-    await page.locator("#rule-age").check();
-    await page.locator("#rule-smoke").check();
-    await page.locator("#rule-damage").check();
+    await agreeBar(page);
     expect(posts).toEqual([]);
   });
 });
@@ -839,9 +836,7 @@ test.describe("group description on a 375px phone", () => {
     await page
       .locator("#booking-pickup")
       .fill("123 Main Street, Denver NC 28037");
-    await page.locator("#rule-age").check();
-    await page.locator("#rule-smoke").check();
-    await page.locator("#rule-damage").check();
+    await agreeBar(page);
     await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
     await expect(page.locator("#booking-success")).toContainText(
       "Please tell us about your group event (what it is, how many people, and anything we should know).",
@@ -860,9 +855,7 @@ test.describe("group description on a 375px phone", () => {
       .locator("#booking-pickup")
       .fill("123 Main Street, Denver NC 28037");
     await page.locator("#booking-notes").fill("   \n\t  ");
-    await page.locator("#rule-age").check();
-    await page.locator("#rule-smoke").check();
-    await page.locator("#rule-damage").check();
+    await agreeBar(page);
     await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
     await expect(page.locator("#booking-success")).toContainText(
       "Please tell us about your group event (what it is, how many people, and anything we should know).",
@@ -885,9 +878,7 @@ test.describe("group description on a 375px phone", () => {
       .locator("#booking-pickup")
       .fill("123 Main Street, Denver NC 28037");
     await page.locator("#booking-notes").fill("birthday dinner for 6");
-    await page.locator("#rule-age").check();
-    await page.locator("#rule-smoke").check();
-    await page.locator("#rule-damage").check();
+    await agreeBar(page);
     await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
     await expect(page.locator("#booking-success")).toContainText(
       "Request received",

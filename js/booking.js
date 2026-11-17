@@ -149,22 +149,6 @@
         }
     }
 
-    function rulesState() {
-        return {
-            mustBe21: $("#rule-age").is(":checked") ? "Yes" : "No",
-            noSmoking: $("#rule-smoke").is(":checked") ? "Yes" : "No",
-            damageResponsibility: $("#rule-damage").is(":checked") ? "Yes" : "No"
-        };
-    }
-
-    function rulesLine(state) {
-        return "Must be 21 or older: " + state.mustBe21 + ". No smoking: " + state.noSmoking + ". If you damage anything, you are responsible: " + state.damageResponsibility + ".";
-    }
-
-    function rulesComplete(state) {
-        return state.mustBe21 === "Yes" && state.noSmoking === "Yes" && state.damageResponsibility === "Yes";
-    }
-
     globalThis.MidnightRides = {
         BARS: BARS,
         LOCAL_DENIAL: LOCAL_DENIAL,
@@ -1062,9 +1046,9 @@
     var NOTES_PLACEHOLDER = 'Anything we should know? For example, a wheelchair, a car seat, or extra luggage.';
     // Donald (Nov 16, 2026): the bar form uses one combined agreement box.
     var BAR_AGREEMENT = 'Must be 21 years or older, cannot smoke, and you are responsible for any damages.';
+    var PASSENGERS_TITLE = 'Online: up to 5 with carry-on, up to 4 with checked bags. For more, call (980) 422-9125.';
     var BAR_NOTES_PLACEHOLDER = 'Anything we should know? For example: drinks, music style.';
     var BAR_AGREEMENT_MESSAGE = 'Please check the box: ' + BAR_AGREEMENT;
-    var RULES_MESSAGE = "Please check all three boxes: Must be 21 or older, No smoking, and If you damage anything, you are responsible.";
     var GROUP_NOTES_MESSAGE = 'Please tell us about your group event (what it is, how many people, and anything we should know).';
     // Donald (Nov 16, 2026): the airport form asks for a required note with these examples.
     var AIRPORT_NOTES_PLACEHOLDER = 'For example: extra stops, or where to pick you up (arrival or departure curb).';
@@ -1141,11 +1125,16 @@
             $('#booking-other-desc').val('');
             $('#other-item-group').attr('hidden', 'hidden');
             $('#notes-hint').text(NOTES_PLACEHOLDER);
+            $('#booking-notes').attr('title', NOTES_PLACEHOLDER);
+            $('#booking-passengers').attr('title', PASSENGERS_TITLE);
             hideRideExtras();
             if (kind === 'group') {
                 setFieldLabel('address-label', 'Pickup Address *');
                 setFieldLabel('notes-label', 'Trip Description *');
-                $('#booking-notes').attr('placeholder', NOTES_PLACEHOLDER);
+                $('#booking-notes').attr('placeholder', BAR_NOTES_PLACEHOLDER).attr('title', BAR_NOTES_PLACEHOLDER);
+                $('#notes-hint').text(BAR_NOTES_PLACEHOLDER);
+                // Donald (Nov 16, 2026): no bag, luggage, or airport wording on the group form.
+                $('#booking-passengers').attr('title', 'Online: up to ' + GROUP_MAX_PASSENGERS + ' riders. For more, call (980) 422-9125.');
                 $('#group-vehicle').removeAttr('hidden').show();
                 $('#group-hours-row').removeAttr('hidden').show();
                 $('#a-when').after($('#group-hours-row'));
@@ -1274,10 +1263,9 @@
 
     function updateBarFields() {
         var bar = isBarRide();
-        // Donald (Nov 16, 2026): bar and party rides share the one agreement box; group keeps three.
-        var oneBox = bar || isPartyRide();
+        // Donald (Nov 16, 2026): bar, party, and group rides share the same one agreement box.
+        var oneBox = isLocalTrip() || isGroupEvent();
         $('#bar-agreement-rule').prop('hidden', !oneBox);
-        $('.party-group-rule').prop('hidden', oneBox);
         $('#rule-bar-agreement').prop('required', oneBox);
         if (!oneBox) $('#rule-bar-agreement').prop('checked', false);
         if (bar && isRoundTrip()) {
@@ -1321,6 +1309,15 @@
         else resetPartyBox('#party-return-details');
         if (back && yesNoChoice('party-more-dropoffs') === 'Yes') showPartyBox('#party-extra-dropoff-group', '#party-extra-dropoff');
         else resetPartyBox('#party-extra-dropoff-group');
+    }
+
+    function updateGroupFields() {
+        if (isGroupEvent()) {
+            $('#a-places').after($('#group-stops'));
+            $('#group-stops').removeAttr('hidden').show();
+        } else {
+            $('#group-stops').attr('hidden', 'hidden').hide().find('input').val('');
+        }
     }
 
     function clearAirportDetails() {
@@ -1373,6 +1370,7 @@
         updateAirportRequirements();
         updateBarFields();
         updatePartyFields();
+        updateGroupFields();
     }
 
     /**
@@ -2122,14 +2120,20 @@
                 people: $.trim($('#party-people').val() || ''),
                 requests: $.trim($('#party-requests').val() || '')
             };
-            const oneBox = barRide || partyRide;
-            const rules = (trip === 'group' || trip === 'local') && !oneBox ? rulesState() : null;
-            if (rules) notes = notes ? notes + ' ' + rulesLine(rules) : rulesLine(rules);
+            const oneBox = trip === 'local' || trip === 'group';
             // The one bar/party box covers all three calendar answers.
             const barAnswer = barAgreed ? 'Yes' : 'No';
-            const ack = oneBox ? { mustBe21: barAnswer, noSmoking: barAnswer, damageResponsibility: barAnswer } : rules;
+            const ack = oneBox ? { mustBe21: barAnswer, noSmoking: barAnswer, damageResponsibility: barAnswer } : null;
             if (barRide) notes = barNotes(notes, barAgreed, isRoundTrip() ? barReturn : null);
             if (partyRide) notes = partyNotes(notes, barAgreed, party);
+            if (trip === 'group') {
+                var groupLines = ['Group details:', 'Agreement (' + BAR_AGREEMENT + '): ' + barAnswer];
+                [2, 3, 4].forEach(function(n) {
+                    var stop = $.trim($('#group-stop-' + n).val() || '');
+                    if (stop) groupLines.push('Stop ' + n + ': ' + stop);
+                });
+                notes += '\n' + groupLines.join('\n');
+            }
             const asksTripDetails = trip === 'airport';
             const bagCount = readBagCount();
             const bagsChoice = checkingBagsChoice();
@@ -2354,11 +2358,6 @@
                 errors.push(BAR_AGREEMENT_MESSAGE);
                 $('#ride-rules').addClass('has-error');
                 $('#ride-rules-error').text(BAR_AGREEMENT_MESSAGE).show();
-                isValid = false;
-            } else if ((trip === 'group' || trip === 'local') && !oneBox && !rulesComplete(rulesState())) {
-                errors.push(RULES_MESSAGE);
-                $('#ride-rules').addClass('has-error');
-                $('#ride-rules-error').text(RULES_MESSAGE).show();
                 isValid = false;
             }
 
@@ -2719,7 +2718,7 @@
             if (!quote) return '';
             return '<p class="confirm-price"><strong>Estimated price:</strong> ' + quote.label +
                 (quote.legs ? '<br>' + quote.legs + '<br>Total: ' : '<br>') +
-                'Cash ' + quote.cash + ' · Card ' + quote.card +
+                (quote.deposit ? 'Trip charge: ' : '') + 'Cash ' + quote.cash + ' · Card ' + quote.card +
                 (quote.deposit ? '<br>' + quote.deposit : '') +
                 '<br><small>Final fare confirmed by phone</small></p>';
         }
@@ -3097,7 +3096,8 @@
             } else {
                 var fare=rides.groupFare(hours);
                 var note=fare.minimum?'<br>2-hour minimum':'';
-                show('<span class="quote-label">'+esc(rides.GROUP_VEHICLE)+'</span><br>'+fare.billed+' hours'+note+'<br><strong class="quote-total">Cash '+money(fare.cashCents/100)+' · Card '+money(fare.cardCents/100)+'</strong><br><span class="quote-deposit">Deposit '+money(fare.depositCashCents/100)+' cash · '+money(fare.depositCardCents/100)+' card</span>',{label:esc(rides.GROUP_VEHICLE)+', '+fare.billed+' hours',cash:money(fare.cashCents/100),card:money(fare.cardCents/100),deposit:'Deposit '+money(fare.depositCashCents/100)+' cash · '+money(fare.depositCardCents/100)+' card'});
+                var deposit='25% deposit: Cash '+money(fare.depositCashCents/100)+' · Card '+money(fare.depositCardCents/100)+'<br>Deposit must be paid up front.';
+                show('<span class="quote-label">'+esc(rides.GROUP_VEHICLE)+'</span><br>'+fare.billed+' hours'+note+'<br><strong class="quote-total">Trip charge: Cash '+money(fare.cashCents/100)+' · Card '+money(fare.cardCents/100)+'</strong><br><span class="quote-deposit">'+deposit+'</span>',{label:esc(rides.GROUP_VEHICLE)+', '+fare.billed+' hours',cash:money(fare.cashCents/100),card:money(fare.cardCents/100),deposit:deposit});
             }
         }
         paintHours();

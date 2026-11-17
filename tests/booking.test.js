@@ -2014,14 +2014,14 @@ describe("booking", () => {
           view.document
             .querySelector("#booking-notes")
             .getAttribute("placeholder"),
-          "Anything we should know? For example, a wheelchair, a car seat, or extra luggage.",
+          "Anything we should know? For example: drinks, music style.",
           {
-            label: "trip description hint names a wheelchair and a car seat",
+            label: "trip description hint gives drinks and music examples",
             source: SOURCE.group,
             loaded: script,
           },
         );
-        check(shown(view.document.querySelector("#rule-age")), true, {
+        check(shown(view.document.querySelector("#rule-bar-agreement")), true, {
           label: "group form asks the rider to confirm they are 21",
           source: SOURCE.group,
           loaded: script,

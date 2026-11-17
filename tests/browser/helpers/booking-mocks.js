@@ -330,3 +330,36 @@ export async function fillParty(
       .check();
   }
 }
+
+/** A group event with every group answer filled in (Donald, Nov 16 2026). */
+export async function fillGroup(page, { agree = true, stops = 2 } = {}) {
+  await page.getByRole("combobox", { name: "Trip type" }).selectOption("group");
+  await page.getByPlaceholder("Jane Smith").fill("Isolated QA Rider");
+  await page.getByPlaceholder("5555551234").fill("5555550199");
+  await page.getByPlaceholder("email@example.com").fill("qa@example.invalid");
+  await page.getByRole("spinbutton", { name: /Online:/ }).fill("5");
+  await page.getByLabel("How many hours *").fill("3");
+  await page
+    .getByPlaceholder("123 Main Street, Denver NC 28037")
+    .fill("123 Main Street, Denver NC 28037");
+  const places = [
+    "Two Trees Bar and Grill",
+    "Lake Norman Brewery",
+    "Vitale Lakeside",
+  ];
+  for (let n = 2; n < 2 + stops; n++) {
+    await page
+      .getByLabel(new RegExp(`^${n}(nd|rd|th) stop`))
+      .fill(places[n - 2]);
+  }
+  await page
+    .getByRole("textbox", { name: "Trip Description *" })
+    .fill("Birthday crawl. Drinks: seltzers. Music: country.");
+  if (agree) {
+    await page
+      .getByRole("checkbox", {
+        name: /Must be 21 years or older, cannot smoke/,
+      })
+      .check();
+  }
+}

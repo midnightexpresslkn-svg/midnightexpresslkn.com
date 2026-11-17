@@ -593,22 +593,11 @@ export async function fillValid(view, overrides = {}) {
   }
   const barRide = trip === "local" && (overrides.localKind || "bar") === "bar";
   const partyRide = trip === "local" && overrides.localKind === "party";
-  if (barRide || partyRide) {
+  if (barRide || partyRide || trip === "group") {
     // Bar and party rides use one combined agreement box (Donald, Nov 16 2026).
     const box = doc.querySelector("#rule-bar-agreement");
     box.checked = overrides.barAgreement ?? true;
     window.jQuery(box).trigger("change");
-  } else if (trip === "group" || trip === "local") {
-    const rules = overrides.rules ?? ["age", "smoke", "damage"];
-    for (const [id, key] of [
-      ["rule-age", "age"],
-      ["rule-smoke", "smoke"],
-      ["rule-damage", "damage"],
-    ]) {
-      const box = doc.querySelector(`#${id}`);
-      box.checked = rules.includes(key);
-      window.jQuery(box).trigger("change");
-    }
   }
   if (trip === "airport" || trip === "local") {
     if (overrides.roundTrip === true) {
