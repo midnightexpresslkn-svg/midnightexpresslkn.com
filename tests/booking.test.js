@@ -1748,9 +1748,20 @@ describe("booking", () => {
           source: SOURCE.passengers,
           loaded: script,
         });
-        check(text.includes("Please enter how many bags"), true, {
-          label: "an empty bag count shows an error",
+        check(text.includes("Please enter how many checked bags"), false, {
+          label: "How many? is not asked until the rider picks Yes",
           actual: text,
+          source: SOURCE.passengers,
+          loaded: script,
+        });
+        const yes = view.document.querySelector("#booking-checking-bags-yes");
+        yes.checked = true;
+        view.window.jQuery(yes).trigger("change");
+        await submitForm(view);
+        const afterYes = resultText(view.document);
+        check(afterYes.includes("Please enter how many checked bags"), true, {
+          label: "Yes with an empty How many? shows an error",
+          actual: afterYes,
           source: SOURCE.passengers,
           loaded: script,
         });

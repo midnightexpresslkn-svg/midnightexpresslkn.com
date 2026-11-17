@@ -2219,7 +2219,7 @@ const GROUP_DETAILS =
   "Please tell us about your group event (what it is, how many people, and anything we should know).";
 
 describe.each(scripts)("group description %s", (script) => {
-  it("blocks an empty or blank group description and keeps other rides optional", async () => {
+  it("blocks an empty group or airport note and keeps a bar note optional", async () => {
     const empty = await renderBooking(script, { miles: 4 });
     await fillValid(empty, { trip: "group", notes: "" });
     check(
@@ -2295,24 +2295,24 @@ describe.each(scripts)("group description %s", (script) => {
     });
 
     const airport = await renderBooking(script, { miles: 10 });
-    await fillValid(airport, { trip: "airport", notes: "" });
-    check(airport.document.querySelector("#booking-notes").required, false, {
-      label: "an airport note stays optional",
+    await fillValid(airport, { trip: "airport", notes: " \n " });
+    check(airport.document.querySelector("#booking-notes").required, true, {
+      label: "an airport note is required (Donald, Nov 16 2026)",
       source: "js/booking.js",
       loaded: script,
     });
     check(
       airport.document.querySelector("#notes-label").textContent.trim(),
-      "Special Notes",
+      "Special Notes *",
       {
-        label: "an airport note is not marked required",
+        label: "an airport note is marked required",
         source: "js/booking.js",
         loaded: script,
       },
     );
     await submitForm(airport);
-    check(resultText(airport.document).includes("Request received"), true, {
-      label: "an airport ride can be requested with no description",
+    check(bookingPosts(airport.state).length, 0, {
+      label: "an airport ride with a blank note sends nothing",
       actual: resultText(airport.document),
       source: "js/booking.js",
       loaded: script,
@@ -2348,14 +2348,23 @@ describe.each(scripts)("group description %s", (script) => {
     choosePrivate(field, "Smith Field", "100 Runway Rd, Charlotte NC 28202");
     field.document.querySelector("#booking-notes").value = "";
     await submitForm(field);
-    check(resultText(field.document).includes("Request received"), true, {
-      label: "a private airfield can be requested with no description",
+    check(bookingPosts(field.state).length, 0, {
+      label: "a private airfield ride also needs a note",
       actual: resultText(field.document),
       source: "js/booking.js",
       loaded: script,
     });
-    check(field.document.querySelector("#booking-notes").required, false, {
-      label: "a private airfield note stays optional",
+    check(field.document.querySelector("#booking-notes").required, true, {
+      label: "a private airfield note is required like any airport ride",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    field.document.querySelector("#booking-notes").value = "Meet at the FBO";
+    field.document.querySelector("#booking-flight").value = "N123AB";
+    await submitForm(field);
+    check(resultText(field.document).includes("Request received"), true, {
+      label: "a private airfield accepts a tail number and a note",
+      actual: resultText(field.document),
       source: "js/booking.js",
       loaded: script,
     });

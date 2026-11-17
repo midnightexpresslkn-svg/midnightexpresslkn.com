@@ -525,13 +525,12 @@ export async function fillValid(view, overrides = {}) {
     }
     if (groupHours) setControl(groupHours, overrides.hours ?? "3");
   }
-  if (overrides.flight) {
-    setControl(doc.querySelector("#booking-flight"), overrides.flight);
-  }
   if (overrides.notes != null) {
     setControl(doc.querySelector("#booking-notes"), overrides.notes);
   } else if (trip === "group") {
     setControl(doc.querySelector("#booking-notes"), "Family reunion");
+  } else if (trip === "airport") {
+    setControl(doc.querySelector("#booking-notes"), "Departure curb, please.");
   }
   if (trip === "airport") {
     const choice = doc.querySelector(
@@ -548,6 +547,40 @@ export async function fillValid(view, overrides = {}) {
       count.value = overrides.bagCount ?? (overrides.bags ? "2" : "0");
       window.jQuery(count).trigger("input");
     }
+  }
+  if (trip === "airport") {
+    // Required airport answers (Donald, Nov 16 2026); pass null to leave one blank.
+    const pick = (name, value) => {
+      if (value == null) return;
+      const box = doc.querySelector(`input[name="${name}"][value="${value}"]`);
+      box.checked = true;
+      window.jQuery(box).trigger("change");
+    };
+    pick(
+      "carry-on",
+      overrides.carryOn === undefined ? "No" : overrides.carryOn,
+    );
+    if (overrides.carryOnCount != null) {
+      setControl(
+        doc.querySelector("#booking-carryon-count"),
+        overrides.carryOnCount,
+      );
+    }
+    pick(
+      "luggage-help",
+      overrides.luggageHelp === undefined ? "No" : overrides.luggageHelp,
+    );
+    const fill = (selector, value, fallback) => {
+      const next = value === undefined ? fallback : value;
+      if (next != null) setControl(doc.querySelector(selector), next);
+    };
+    fill("#booking-departure-flight", overrides.departureFlight, "DL100");
+    fill("#booking-flight", overrides.flight, "AA2684");
+    fill(
+      "#booking-passengers-back",
+      overrides.passengersBack,
+      overrides.passengers ?? "2",
+    );
   }
   if (trip === "group" || trip === "local") {
     const rules = overrides.rules ?? ["age", "smoke", "damage"];

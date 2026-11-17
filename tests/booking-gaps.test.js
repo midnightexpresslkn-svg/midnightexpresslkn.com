@@ -104,12 +104,16 @@ describe.each(scripts)("booking gaps %s", (script) => {
     phone.value = "12345";
     view.window.jQuery(phone).trigger("input");
     await expectVisible(view, "Please enter a valid 10-digit phone number");
-    check(text(view).includes("Please enter a valid flight number"), true, {
-      label: "bad flight number",
-      actual: text(view),
-      source: "js/booking.js",
-      loaded: script,
-    });
+    check(
+      text(view).includes("Please enter a valid arrival flight number"),
+      true,
+      {
+        label: "bad flight number",
+        actual: text(view),
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
   });
 
   it("asks for a home address on an airport trip and a destination on a group trip", async () => {
@@ -448,7 +452,7 @@ describe.each(scripts)("booking gaps %s", (script) => {
       source: "js/booking.js",
       loaded: script,
     });
-    await expectVisible(fraction, "Please enter how many bags");
+    await expectVisible(fraction, "Please enter how many checked bags");
     check(formPosts(fraction.state).length, 0, {
       label: "a fractional bag count is not sent",
       source: "js/booking.js",
@@ -457,7 +461,7 @@ describe.each(scripts)("booking gaps %s", (script) => {
 
     const tooMany = await renderBooking(script);
     await fillValid(tooMany, { trip: "airport", bags: true, bagCount: "21" });
-    await expectVisible(tooMany, "Please enter how many bags");
+    await expectVisible(tooMany, "Please enter how many checked bags");
     check(formPosts(tooMany.state).length, 0, {
       label: "more than twenty bags is not sent",
       source: "js/booking.js",

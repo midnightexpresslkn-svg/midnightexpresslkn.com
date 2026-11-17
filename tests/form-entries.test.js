@@ -117,6 +117,28 @@ function row(values) {
 const NOTES_HINT =
   "Anything we should know? For example, a wheelchair, a car seat, or extra luggage.";
 
+// New airport answers have no Google Form question yet, so they ride in Notes.
+function airportBlock({
+  departure = "DL100",
+  arrival = "AA2684",
+  to = "2",
+  back = "2",
+  bags = "No",
+  carryOn = "No",
+  help = "No",
+} = {}) {
+  return [
+    "Airport details:",
+    `Departure flight: ${departure}`,
+    `Arrival flight: ${arrival}`,
+    `Passengers to the airport: ${to}`,
+    `Passengers back from the airport: ${back}`,
+    `Checked bags: ${bags}`,
+    `Carry-on bags: ${carryOn}`,
+    `Help with luggage: ${help}`,
+  ].join("\n");
+}
+
 function checkBoxes(document, { wheelchair = false, carSeat = false } = {}) {
   document.querySelector("#booking-wheelchair").checked = wheelchair;
   document.querySelector("#booking-carseat").checked = carSeat;
@@ -264,9 +286,9 @@ describe("form entries", () => {
           pickup: "123 Main Street, Denver NC 28037",
           destination: "CLT",
           passengers: "2",
-          notes: "gate note",
+          notes: `gate note\n${airportBlock({ arrival: "AA1234", bags: "Yes (2)" })}`,
           airportTrip: "Yes",
-          flight: "",
+          flight: "DL100",
           checkingBags: "Yes",
           specialRequirements: "Wheelchair, Car Seat",
         }),
@@ -315,7 +337,7 @@ describe("form entries", () => {
           pickupAddress: "123 Main Street, Denver NC 28037",
           destinationAddress: "CLT",
           passengers: "2",
-          specialNotes: "gate note\nSpecial requirements: Wheelchair, Car Seat",
+          specialNotes: `gate note\n${airportBlock({ arrival: "AA1234", bags: "Yes (2)" })}\nSpecial requirements: Wheelchair, Car Seat`,
           airportTrip: "Yes",
           flightNumber: "AA1234",
           checkingBags: "Yes (2 bags)",
@@ -341,7 +363,7 @@ describe("form entries", () => {
       await fillValid(view, {
         trip: "airport",
         email: "",
-        notes: "",
+        notes: "Curb 3",
         bags: false,
         bagCount: "0",
       });
@@ -357,9 +379,9 @@ describe("form entries", () => {
           pickup: "123 Main Street, Denver NC 28037",
           destination: "CLT",
           passengers: "2",
-          notes: "",
+          notes: `Curb 3\n${airportBlock()}`,
           airportTrip: "Yes",
-          flight: "",
+          flight: "DL100",
           checkingBags: "No",
           specialRequirements: "",
         }),
@@ -376,14 +398,14 @@ describe("form entries", () => {
         source: "js/booking.js",
         loaded: script,
       });
-      check(calendarBody(view).body.flightNumber, "", {
-        label: "calendar flight stays blank when none was typed",
+      check(calendarBody(view).body.flightNumber, "AA2684", {
+        label: "calendar gets the arrival flight",
         source: "js/booking.js",
         loaded: script,
       });
     });
 
-    it("keeps a typed flight off the outbound form row", async () => {
+    it("puts the departure flight on the outbound form row and the arrival flight on the calendar", async () => {
       const view = await renderBooking(script, { miles: 12 });
       await fillValid(view, {
         trip: "airport",
@@ -403,8 +425,8 @@ describe("form entries", () => {
           loaded: script,
         },
       );
-      check(entries.find((pair) => pair[0] === ENTRY.flight)[1], "", {
-        label: "outbound form row still has no flight number",
+      check(entries.find((pair) => pair[0] === ENTRY.flight)[1], "DL100", {
+        label: "outbound form row carries the departure flight",
         actual: entries,
         source: "js/booking.js",
         loaded: script,
@@ -438,7 +460,8 @@ describe("form entries", () => {
           loaded: script,
         },
       );
-      check(entries.find((pair) => pair[0] === ENTRY.notes)[1], note, {
+      const sentNote = `${note}\n${airportBlock()}`;
+      check(entries.find((pair) => pair[0] === ENTRY.notes)[1], sentNote, {
         label:
           "the typed note, including a wheelchair and a car seat, is the notes answer",
         actual: entries,
@@ -455,7 +478,7 @@ describe("form entries", () => {
           loaded: script,
         },
       );
-      check(calendarBody(view).body.specialNotes, note, {
+      check(calendarBody(view).body.specialNotes, sentNote, {
         label: "the same note is the calendar description",
         actual: calendarBody(view).body.specialNotes,
         source: "js/booking.js",
@@ -474,6 +497,7 @@ describe("form entries", () => {
       await fillValid(view, {
         trip: "airport",
         flight: "DL99",
+        passengersBack: "3",
         bags: true,
         bagCount: "2",
         roundTrip: true,
@@ -498,9 +522,9 @@ describe("form entries", () => {
           pickup: "123 Main Street, Denver NC 28037",
           destination: "CLT",
           passengers: "2",
-          notes: "",
+          notes: `Departure curb, please.\n${airportBlock({ arrival: "DL99", back: "3", bags: "Yes (2)" })}`,
           airportTrip: "Yes",
-          flight: "",
+          flight: "DL100",
           checkingBags: "Yes",
           specialRequirements: "",
         }),
@@ -520,15 +544,16 @@ describe("form entries", () => {
           pickupDateTime: "12/16/2026 15:00:00",
           pickup: "CLT",
           destination: "123 Main Street, Denver NC 28037",
-          passengers: "2",
-          notes: "",
+          passengers: "3",
+          notes: `Departure curb, please.\n${airportBlock({ arrival: "DL99", back: "3", bags: "Yes (2)" })}`,
           airportTrip: "Yes",
           flight: "DL99",
           checkingBags: "Yes",
           specialRequirements: "",
         }),
         {
-          label: "return form row swaps the ends and keeps the flight",
+          label:
+            "return form row swaps the ends, keeps the arrival flight, and counts riders coming back",
           actual: forms[1].entries,
           source: "js/booking.js",
           loaded: script,
@@ -545,7 +570,7 @@ describe("form entries", () => {
           pickupAddress: "123 Main Street, Denver NC 28037",
           destinationAddress: "CLT",
           passengers: "2",
-          specialNotes: "",
+          specialNotes: `Departure curb, please.\n${airportBlock({ arrival: "DL99", back: "3", bags: "Yes (2)" })}`,
           airportTrip: "Yes",
           flightNumber: "DL99",
           checkingBags: "Yes (2 bags)",
@@ -829,8 +854,9 @@ describe("form entries", () => {
       await submitForm(view);
       const form = Object.fromEntries(formRows(view)[0].entries);
       const calendar = calendarBody(view).body;
-      check(form[ENTRY.notes], "QA note", {
-        label: "form notes stay the typed note",
+      const sentNote = `QA note\n${airportBlock({ bags: "Yes (1)" })}`;
+      check(form[ENTRY.notes], sentNote, {
+        label: "form notes start with the typed note, then the airport details",
         actual: form[ENTRY.notes],
         source: "js/booking.js",
         loaded: script,
@@ -883,8 +909,8 @@ describe("form entries", () => {
         source: "js/booking.js",
         loaded: script,
       });
-      check(calendar.specialNotes, "QA note", {
-        label: "calendar description is the typed note",
+      check(calendar.specialNotes, sentNote, {
+        label: "calendar description is the same labeled note",
         actual: calendar.specialNotes,
         source: "js/booking.js",
         loaded: script,

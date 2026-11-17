@@ -92,7 +92,7 @@ test.describe("one send per booking", () => {
     await fillAirport(page, { round: true });
     await page.getByRole("checkbox", { name: "Wheelchair" }).check();
     await page
-      .getByPlaceholder(/Anything we should know/)
+      .getByRole("textbox", { name: /Special Notes/ })
       .fill("Gate C, two kids");
     await request(page).click();
     await expect(confirmation(page)).toBeVisible();
@@ -111,9 +111,11 @@ test.describe("one send per booking", () => {
       "5555551234",
       "email@example.com",
       "123 Main Street, Denver NC 28037",
-      "AA1234",
     ]) {
       await expect(page.getByPlaceholder(ph, { exact: true })).toHaveValue("");
+    }
+    for (const label of [/Departure flight number/, /Arrival flight number/]) {
+      await expect(page.getByLabel(label)).toHaveValue("");
     }
     await expect(page.getByPlaceholder(/Anything we should know/)).toHaveValue(
       "",

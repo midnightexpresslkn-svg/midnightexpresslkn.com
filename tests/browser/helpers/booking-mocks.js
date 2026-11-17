@@ -78,7 +78,23 @@ export async function fillAirport(
   await page.getByPlaceholder("123 Main Street, Denver NC 28037").fill(pickup);
   // "Checked bags? *" has no group role; its Yes/No pair is the first on the form.
   await page.getByRole("radio", { name: "No", exact: true }).first().check();
-  await page.getByRole("spinbutton", { name: "Number of bags" }).fill("0");
+  // Airport answers Donald made required on Nov 16, 2026.
+  await page
+    .getByRole("group", { name: /Carry-on bags/ })
+    .getByRole("radio", { name: "No", exact: true })
+    .check();
+  await page
+    .getByRole("group", { name: /help with your luggage/ })
+    .getByRole("radio", { name: "No", exact: true })
+    .check();
+  await page
+    .getByRole("spinbutton", { name: /Passengers back from the airport/ })
+    .fill("2");
+  await page.getByLabel(/Departure flight number/).fill("DL100");
+  await page.getByLabel(/Arrival flight number/).fill("AA2684");
+  await page
+    .getByRole("textbox", { name: /Special Notes/ })
+    .fill("Departure curb, please.");
   await page
     .getByRole("group", { name: /Round trip/ })
     .getByRole("radio", { name: round ? "Yes" : "No", exact: true })
@@ -100,7 +116,6 @@ export async function fillAirport(
       page.getByRole("textbox", { name: "Select time" }).nth(1),
       "12:00:00",
     );
-    await page.getByPlaceholder("AA1234").fill("AA2684");
   }
 }
 

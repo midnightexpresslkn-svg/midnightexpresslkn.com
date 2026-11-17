@@ -1,9 +1,24 @@
 import { test, expect } from "@playwright/test";
 import { hostnameOf } from "../helpers/hostname.js";
 
-async function answerBags(page) {
+// Bags plus the other airport answers Donald made required on Nov 16, 2026.
+async function answerBags(page, { note = "Departure curb, please." } = {}) {
   await page.locator("#booking-checking-bags-no").check();
   await page.locator("#booking-bag-count").fill("0");
+  await page
+    .getByRole("group", { name: /Carry-on bags/ })
+    .getByRole("radio", { name: "No", exact: true })
+    .check();
+  await page
+    .getByRole("group", { name: /help with your luggage/ })
+    .getByRole("radio", { name: "No", exact: true })
+    .check();
+  await page
+    .getByRole("spinbutton", { name: /Passengers back from the airport/ })
+    .fill("2");
+  await page.getByLabel(/Departure flight number/).fill("DL100");
+  await page.getByLabel(/Arrival flight number/).fill("AA2684");
+  await page.getByRole("textbox", { name: /Special Notes/ }).fill(note);
 }
 
 async function answerRoundTrip(page, value = "No") {
@@ -329,8 +344,12 @@ test.describe("booking page", () => {
       await page.goto("/?type=airport#booking");
       const bags = page.locator("#checking-bags-label");
       const bagsYes = page.locator("#checking-bags-section label").first();
-      const legend = page.locator(".round-trip-choice legend");
-      const options = page.locator("label.round-trip-option");
+      const legend = page.locator(
+        "#round-trip-section .round-trip-choice legend",
+      );
+      const options = page.locator(
+        "#round-trip-section label.round-trip-option",
+      );
       await expect(bags).toBeVisible();
       await expect(legend).toHaveText("Round trip *");
       const bagsStyle = await bags.evaluate((el) => {
@@ -352,8 +371,12 @@ test.describe("booking page", () => {
       const passengers = page
         .locator("#passengers-label, #passengers-group label")
         .first();
-      const barLegend = page.locator(".round-trip-choice legend");
-      const barOptions = page.locator("label.round-trip-option");
+      const barLegend = page.locator(
+        "#round-trip-section .round-trip-choice legend",
+      );
+      const barOptions = page.locator(
+        "#round-trip-section label.round-trip-option",
+      );
       await expect(barLegend).toBeVisible();
       const paxStyle = await passengers.evaluate((el) => {
         const s = getComputedStyle(el);
@@ -870,13 +893,14 @@ test.describe("group description on a 375px phone", () => {
     );
   });
 
-  test("an airport ride can omit the description", async ({ page }) => {
+  test("an airport ride needs a description", async ({ page }) => {
     const posts = await installMocks(page, { miles: 10 });
     await page.goto("/");
     await page.locator("#trip-type").selectOption("airport");
-    await expect(page.locator("#notes-label")).toHaveText("Special Notes");
-    await expect(page.locator("#booking-notes")).not.toHaveAttribute(
+    await expect(page.locator("#notes-label")).toHaveText("Special Notes *");
+    await expect(page.locator("#booking-notes")).toHaveAttribute(
       "required",
+      "",
     );
     await fillIdentity(page);
     await page.locator("#airport-choice").selectOption("CLT");
@@ -934,13 +958,14 @@ test.describe("group description on a 375px phone", () => {
     expect(posts.length).toBeGreaterThan(0);
   });
 
-  test("a private airfield can omit the description", async ({ page }) => {
+  test("a private airfield needs a description too", async ({ page }) => {
     const posts = await installMocks(page, { miles: 40 });
     await page.goto("/");
     await page.locator("#trip-type").selectOption("airport");
     await page.locator("#airport-choice").selectOption("PRIVATE");
-    await expect(page.locator("#booking-notes")).not.toHaveAttribute(
+    await expect(page.locator("#booking-notes")).toHaveAttribute(
       "required",
+      "",
     );
     await fillIdentity(page);
     await page.locator("#airfield-name").fill("Smith Field");

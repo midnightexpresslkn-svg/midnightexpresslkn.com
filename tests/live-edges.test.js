@@ -26,7 +26,7 @@ function chooseAndQuote(view) {
 
 const scripts = ["js/booking.js", "js/booking.min.js"];
 const HINT =
-  "Anything we should know? For example, a wheelchair, a car seat, or extra luggage.";
+  "For example: extra stops, or where to pick you up (arrival or departure curb).";
 
 function calendarNotes(view) {
   const post = view.state.requests.find(
@@ -39,7 +39,7 @@ function calendarNotes(view) {
 }
 
 describe.each(scripts)("live edges %s", (script) => {
-  it("pads a January date and keeps an empty note optional", async () => {
+  it("pads a January date and requires an airport note", async () => {
     const view = await renderBooking(script);
     await fillValid(view, {
       trip: "airport",
@@ -48,17 +48,39 @@ describe.each(scripts)("live edges %s", (script) => {
       notes: "",
     });
     await submitForm(view);
+    check(formPosts(view.state).length, 0, {
+      label: "an airport request with no note is not sent",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    check(
+      view.document.querySelector("#notes-error").textContent,
+      "Please add a note for your driver (for example extra stops, or arrival or departure curb).",
+      {
+        label: "the note error names the examples",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    const notes = view.document.querySelector("#booking-notes");
+    notes.value = "Curb 2";
+    await submitForm(view);
     const entries = Object.fromEntries(formPosts(view.state)[0].formEntries);
     check(entries["entry.1258152069"], "01/05/2027 09:00:00", {
       label: "January 5 is sent with a leading zero",
       source: "js/booking.js",
       loaded: script,
     });
-    check(entries["entry.1643147243"], "", {
-      label: "a blank note is still accepted",
-      source: "js/booking.js",
-      loaded: script,
-    });
+    check(
+      entries["entry.1643147243"].startsWith("Curb 2\nAirport details:"),
+      true,
+      {
+        label: "the typed note leads the labeled airport details",
+        actual: entries["entry.1643147243"],
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
     check(view.document.querySelector("#notes-hint").textContent, HINT, {
       label: "the example hint stays on the page",
       source: "js/booking.js",
@@ -80,14 +102,19 @@ describe.each(scripts)("live edges %s", (script) => {
 
   it("puts a wheelchair, and a car seat alone, on the calendar description", async () => {
     const onlyChair = await renderBooking(script);
-    await fillValid(onlyChair, { trip: "airport", notes: "" });
+    await fillValid(onlyChair, { trip: "airport", notes: "Curb 2" });
     onlyChair.document.querySelector("#booking-wheelchair").checked = true;
     await submitForm(onlyChair);
-    check(calendarNotes(onlyChair), "Special requirements: Wheelchair", {
-      label: "a wheelchair with no typed note is the calendar description",
-      source: "js/booking.js",
-      loaded: script,
-    });
+    check(
+      calendarNotes(onlyChair).endsWith("\nSpecial requirements: Wheelchair"),
+      true,
+      {
+        label: "a wheelchair is added to the end of the calendar description",
+        actual: calendarNotes(onlyChair),
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
     const chairSheet = Object.fromEntries(
       formPosts(onlyChair.state)[0].formEntries,
     );
@@ -104,8 +131,9 @@ describe.each(scripts)("live edges %s", (script) => {
     });
     onlySeat.document.querySelector("#booking-carseat").checked = true;
     await submitForm(onlySeat);
-    check(calendarNotes(onlySeat), "Driver asked for Car Seat", {
+    check(calendarNotes(onlySeat).includes("Special requirements"), false, {
       label: "a note that already names the car seat is not repeated",
+      actual: calendarNotes(onlySeat),
       source: "js/booking.js",
       loaded: script,
     });
