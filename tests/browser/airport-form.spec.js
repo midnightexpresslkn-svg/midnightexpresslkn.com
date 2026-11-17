@@ -145,4 +145,83 @@ test.describe("airport form at phone width", () => {
       await page.screenshot({ path: shots + "/melkn-airport-form-error.png" });
     }
   });
+
+  test("picking up from the airport one way asks for the arrival flight and a drop-off address", async ({
+    page,
+  }) => {
+    const state = await bookingMocks(page);
+    await page.goto("/#booking");
+    await page
+      .getByRole("combobox", { name: "Trip type" })
+      .selectOption("airport");
+    const to = page.getByRole("radio", { name: "To the airport", exact: true });
+    const from = page.getByRole("radio", {
+      name: "Pick up from the airport",
+      exact: true,
+    });
+    await expect(to).not.toBeChecked();
+    await expect(from).not.toBeChecked();
+    await fillAirport(page, { from: true });
+    await expect(page.getByLabel(/Departure flight number/)).toBeHidden();
+    await expect(page.getByLabel(/Arrival flight number/)).toHaveAttribute(
+      "required",
+      "",
+    );
+    await expect(page.getByLabel("Drop-off address *")).toBeVisible();
+    await expect(
+      page.getByText("One way from Charlotte Douglas"),
+    ).toBeVisible();
+    await expect(page.getByText("Cash $65.00 · Card $66.95")).toBeVisible();
+    if (shots) {
+      await page
+        .getByRole("combobox", { name: "Trip type" })
+        .evaluate((el) => el.scrollIntoView({ block: "start" }));
+      await settled(page);
+      await page.screenshot({
+        path: shots + "/melkn-airport-from-oneway-top.png",
+      });
+      await group(page, /Carry-on bags/).evaluate((el) =>
+        el.scrollIntoView({ block: "start" }),
+      );
+      await settled(page);
+      await page.screenshot({ path: shots + "/melkn-airport-from-oneway.png" });
+    }
+    await request(page).click();
+    await expect(
+      page.getByRole("heading", { name: /Request received/ }),
+    ).toBeVisible();
+    expect(state.forms).toHaveLength(1);
+    const sent = decodeURIComponent(state.forms[0].replace(/\+/g, " "));
+    expect(sent).toContain("Direction: Pick up from the airport");
+    expect(sent).toContain("Arrival flight: AA2684");
+    expect(sent).not.toContain("Departure flight");
+  });
+
+  test("a round trip from the airport goes back with the departure flight", async ({
+    page,
+  }) => {
+    const state = await bookingMocks(page);
+    await page.goto("/#booking");
+    await fillAirport(page, { from: true, round: true });
+    await expect(
+      page.getByRole("spinbutton", { name: /Passengers back to the airport/ }),
+    ).toBeVisible();
+    if (shots) {
+      await group(page, /Carry-on bags/).evaluate((el) =>
+        el.scrollIntoView({ block: "start" }),
+      );
+      await settled(page);
+      await page.screenshot({
+        path: shots + "/melkn-airport-from-roundtrip.png",
+      });
+    }
+    await request(page).click();
+    await expect(
+      page.getByRole("heading", { name: /Request received/ }),
+    ).toBeVisible();
+    expect(state.forms).toHaveLength(2);
+    const back = decodeURIComponent(state.forms[1].replace(/\+/g, " "));
+    expect(back).toContain("DL100");
+    expect(back).toContain("Passengers back to the airport: 2");
+  });
 });

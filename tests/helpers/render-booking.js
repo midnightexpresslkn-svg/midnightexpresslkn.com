@@ -533,6 +533,15 @@ export async function fillValid(view, overrides = {}) {
     setControl(doc.querySelector("#booking-notes"), "Departure curb, please.");
   }
   if (trip === "airport") {
+    const direction =
+      overrides.direction === undefined ? "to" : overrides.direction;
+    if (direction != null) {
+      const radio = doc.querySelector(
+        `input[name="airport-direction"][value="${direction}"]`,
+      );
+      radio.checked = true;
+      view.window.jQuery(radio).trigger("change");
+    }
     const choice = doc.querySelector(
       overrides.bags
         ? "#booking-checking-bags-yes"

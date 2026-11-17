@@ -3,6 +3,9 @@ import { hostnameOf } from "../helpers/hostname.js";
 
 // Bags plus the other airport answers Donald made required on Nov 16, 2026.
 async function answerBags(page, { note = "Departure curb, please." } = {}) {
+  await page
+    .getByRole("radio", { name: "To the airport", exact: true })
+    .check();
   await page.locator("#booking-checking-bags-no").check();
   await page.locator("#booking-bag-count").fill("0");
   await page

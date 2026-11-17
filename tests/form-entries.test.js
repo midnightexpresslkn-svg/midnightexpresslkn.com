@@ -129,6 +129,7 @@ function airportBlock({
 } = {}) {
   return [
     "Airport details:",
+    "Direction: To the airport",
     `Departure flight: ${departure}`,
     // A one-way ride to the airport has no arrival flight (Donald, Nov 16 2026).
     ...(arrival ? [`Arrival flight: ${arrival}`] : []),

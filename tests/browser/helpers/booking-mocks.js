@@ -61,6 +61,7 @@ export async function fillAirport(
   page,
   {
     round = false,
+    from = false,
     name = "Isolated QA Rider",
     pickup = "123 Main Street, Denver NC 28037",
   } = {},
@@ -69,7 +70,16 @@ export async function fillAirport(
     .getByRole("combobox", { name: "Trip type" })
     .selectOption("airport");
   await page
-    .getByRole("combobox", { name: "Airport", exact: true })
+    .getByRole("radio", {
+      name: from ? "Pick up from the airport" : "To the airport",
+      exact: true,
+    })
+    .check();
+  await page
+    .getByRole("combobox", {
+      name: from ? "Pickup airport" : "Airport",
+      exact: true,
+    })
     .selectOption("CLT");
   await page.getByPlaceholder("Jane Smith").fill(name);
   await page.getByPlaceholder("5555551234").fill("5555550199");
@@ -87,7 +97,10 @@ export async function fillAirport(
     .getByRole("group", { name: /help with your luggage/ })
     .getByRole("radio", { name: "No", exact: true })
     .check();
-  await page.getByLabel(/Departure flight number/).fill("DL100");
+  // One way asks only for the first flight: departure to the airport, arrival from it.
+  await page
+    .getByLabel(from ? /Arrival flight number/ : /Departure flight number/)
+    .fill(from ? "AA2684" : "DL100");
   await page
     .getByRole("textbox", { name: /Special Notes/ })
     .fill("Departure curb, please.");
@@ -113,9 +126,13 @@ export async function fillAirport(
       "12:00:00",
     );
     // The arrival flight is asked only on a round trip (Donald, Nov 16 2026).
-    await page.getByLabel(/Arrival flight number/).fill("AA2684");
     await page
-      .getByRole("spinbutton", { name: /Passengers back from the airport/ })
+      .getByLabel(from ? /Departure flight number/ : /Arrival flight number/)
+      .fill(from ? "DL100" : "AA2684");
+    await page
+      .getByRole("spinbutton", {
+        name: /Passengers back (from|to) the airport/,
+      })
       .fill("2");
   }
 }

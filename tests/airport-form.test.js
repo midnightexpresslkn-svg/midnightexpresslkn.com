@@ -1,5 +1,6 @@
 // Airport form fields from Donald's Nov 16, 2026 spec.
 import { afterEach, describe, it } from "vitest";
+import { waitFor } from "@testing-library/dom";
 import { check } from "./helpers/failure.js";
 import {
   chooseTrip,
@@ -381,6 +382,247 @@ describe.each(scripts)("airport form %s", (script) => {
     await submitForm(plain);
     check(sent(plain)[SPECIAL], "Other items", {
       label: "Other with no description is still named",
+      source: "js/booking.js",
+      loaded: script,
+    });
+  });
+});
+
+// Donald (Nov 16, 2026): one Airport trip type with a required direction question.
+describe.each(scripts)("airport direction %s", (script) => {
+  it("asks which way, with nothing picked, and requires an answer", async () => {
+    const view = await renderBooking(script);
+    await fillValid(view, { direction: null });
+    const radios = [
+      ...view.document.querySelectorAll('input[name="airport-direction"]'),
+    ];
+    check(
+      radios.map((r) => [r.checked, r.required]),
+      [
+        [false, true],
+        [false, true],
+      ],
+      {
+        label: "neither direction is pre-picked and one is required",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    await submitForm(view);
+    check(
+      errorText(view, "airport-direction-error"),
+      "Please choose To the airport or Pick up from the airport.",
+      {
+        label: "a missing direction is named",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    check(formPosts(view.state).length, 0, {
+      label: "no direction, no request",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    tick(view, "#airport-direction-to");
+    check(errorText(view, "airport-direction-error"), "", {
+      label: "picking a direction clears its error",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    chooseTrip(view.document, "local");
+    check(
+      [
+        view.document.querySelector("#airport-direction-group").hidden,
+        view.document.querySelector("#airport-direction-to").checked,
+      ],
+      [true, false],
+      {
+        label: "another trip type hides and clears the direction",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+  });
+
+  it("picks up at the airport one way with only the arrival flight", async () => {
+    const view = await renderBooking(script);
+    await fillValid(view, {
+      direction: "from",
+      departureFlight: null,
+      flight: "AA2684",
+    });
+    const shown = (id) =>
+      view.document.querySelector(id).style.display !== "none";
+    check(
+      [
+        shown("#flight-group"),
+        shown("#departure-flight-group"),
+        view.document.querySelector("#booking-flight").required,
+        view.document.querySelector("#booking-departure-flight").required,
+        view.document.querySelector("#address-label").textContent.trim(),
+        view.document.querySelector("#passengers-label").textContent.trim(),
+        view.document.querySelector("#airport-choice-row label").textContent,
+      ],
+      [
+        true,
+        false,
+        true,
+        false,
+        "Drop-off address *",
+        "Passengers from the airport *",
+        "Pickup airport",
+      ],
+      {
+        label:
+          "from the airport asks for the arrival flight and a drop-off address",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    await submitForm(view);
+    const row = sent(view);
+    check(
+      [row["entry.1915297843"], row["entry.814545959"], row[FLIGHT]],
+      ["CLT", "123 Main Street, Denver NC 28037", "AA2684"],
+      {
+        label: "the ride starts at the airport and carries the arrival flight",
+        actual: row,
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    check(
+      row[NOTES].includes(
+        "Direction: Pick up from the airport\nArrival flight: AA2684\nPassengers from the airport: 2",
+      ),
+      true,
+      {
+        label: "Notes name the direction and the arrival flight",
+        actual: row[NOTES],
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    const calendar = JSON.parse(
+      view.state.requests.find(
+        (r) => r.method === "POST" && r.url.includes("script.google.com"),
+      ).body,
+    );
+    check(
+      [
+        calendar.pickupAddress,
+        calendar.destinationAddress,
+        calendar.flightNumber,
+      ],
+      ["CLT", "123 Main Street, Denver NC 28037", "AA2684"],
+      {
+        label: "the calendar gets the same direction and flight",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+  });
+
+  it("prices from the airport at the same flat rate and says from", async () => {
+    const view = await renderBooking(script, { miles: 10 });
+    await fillValid(view, { direction: "to", roundTrip: null });
+    const quote = () =>
+      view.document.querySelector("#quote-details").textContent;
+    await waitFor(() => {
+      if (!quote().includes("One way to")) throw new Error(quote());
+    });
+    const toPrice = quote().replace(/^.*?Cash/, "Cash");
+    tick(view, "#airport-direction-from");
+    await waitFor(() => {
+      if (!quote().includes("One way from")) throw new Error(quote());
+    });
+    check(quote().replace(/^.*?Cash/, "Cash"), toPrice, {
+      label: "the same flat price each way",
+      actual: quote(),
+      source: "js/booking.js",
+      loaded: script,
+    });
+    tick(view, "#booking-round-trip");
+    await waitFor(() => {
+      if (!quote().includes("Round trip, from")) throw new Error(quote());
+    });
+  });
+
+  it("names a missing arrival flight and drop-off address when picking up at the airport", async () => {
+    const view = await renderBooking(script);
+    await fillValid(view, { direction: "from", flight: "", pickup: "" });
+    await submitForm(view);
+    check(
+      [errorText(view, "flight-error"), errorText(view, "pickup-error")],
+      [
+        "Please enter your arrival flight number",
+        "Drop-off address is required",
+      ],
+      {
+        label: "arrival flight and drop-off address are required",
+        actual: resultText(view.document),
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    check(formPosts(view.state).length, 0, {
+      label: "missing answers send nothing",
+      source: "js/booking.js",
+      loaded: script,
+    });
+  });
+
+  it("sends a from-the-airport round trip back to the airport with the departure flight", async () => {
+    const view = await renderBooking(script);
+    await fillValid(view, {
+      direction: "from",
+      flight: "AA2684",
+      departureFlight: "UA55",
+      passengers: "2",
+      passengersBack: "3",
+      roundTrip: true,
+    });
+    check(
+      view.document.querySelector("#passengers-back-label").textContent.trim(),
+      "Passengers back to the airport *",
+      {
+        label: "the ride back count is named for the airport",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    await submitForm(view);
+    const first = sent(view, 0);
+    const back = sent(view, 1);
+    check(
+      [
+        first["entry.1915297843"],
+        first[FLIGHT],
+        first[PASSENGERS],
+        back["entry.1915297843"],
+        back["entry.814545959"],
+        back[FLIGHT],
+        back[PASSENGERS],
+      ],
+      [
+        "CLT",
+        "AA2684",
+        "2",
+        "123 Main Street, Denver NC 28037",
+        "CLT",
+        "UA55",
+        "3",
+      ],
+      {
+        label:
+          "first leg from the airport on the arrival flight, ride back to the airport on the departure flight",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    check(back[NOTES].includes("Passengers back to the airport: 3"), true, {
+      label: "Notes count the riders going back to the airport",
+      actual: back[NOTES],
       source: "js/booking.js",
       loaded: script,
     });

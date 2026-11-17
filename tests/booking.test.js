@@ -540,11 +540,14 @@ describe("booking", () => {
           source: SOURCE.airport,
           loaded: script,
         });
+        const underTrip =
+          view.document.querySelector("#trip-type-group").nextElementSibling;
         check(
-          view.document.querySelector("#trip-type-group").nextElementSibling.id,
-          "airport-choice-row",
+          [underTrip.id, underTrip.nextElementSibling.id],
+          ["airport-direction-group", "airport-choice-row"],
           {
-            label: "airport menu sits under the trip type",
+            label:
+              "the direction question sits right under the trip type, then the airport menu",
             source: SOURCE.airport,
             loaded: script,
           },
