@@ -4,31 +4,12 @@ import {
   expect,
   bookingMocks,
   fillBar,
+  settled,
 } from "./helpers/booking-mocks.js";
 
 const shots = process.env.MELKN_SHOTS_DIR;
 const request = (page) =>
   page.getByRole("button", { name: "Request Booking", exact: true });
-// Let the scroll and the header's shrink transition finish before a screenshot.
-async function settled(page) {
-  await page.waitForFunction(
-    () =>
-      new Promise((done) => {
-        const y = window.scrollY;
-        requestAnimationFrame(() =>
-          requestAnimationFrame(() =>
-            done(
-              window.scrollY === y &&
-                document
-                  .getAnimations()
-                  .every((a) => a.playState !== "running"),
-            ),
-          ),
-        );
-      }),
-  );
-}
-
 const agreement = (page) =>
   page.getByRole("checkbox", {
     name: "Must be 21 years or older, cannot smoke, and you are responsible for any damages. *",

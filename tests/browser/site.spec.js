@@ -17,7 +17,6 @@ async function answerBags(page, { note = "Departure curb, please." } = {}) {
     .getByRole("spinbutton", { name: /Passengers back from the airport/ })
     .fill("2");
   await page.getByLabel(/Departure flight number/).fill("DL100");
-  await page.getByLabel(/Arrival flight number/).fill("AA2684");
   await page.getByRole("textbox", { name: /Special Notes/ }).fill(note);
 }
 

@@ -739,15 +739,15 @@
         function bags(choice, count) {
             return choice === 'Yes' ? 'Yes (' + count + ')' : choice;
         }
-        var lines = [
-            'Departure flight: ' + d.departureFlight,
-            'Arrival flight: ' + d.arrivalFlight,
+        var lines = ['Departure flight: ' + d.departureFlight];
+        if (d.arrivalFlight) lines.push('Arrival flight: ' + d.arrivalFlight);
+        lines = lines.concat([
             'Passengers to the airport: ' + d.passengersTo,
             'Passengers back from the airport: ' + d.passengersBack,
             'Checked bags: ' + bags(d.bagsChoice, d.bagCount),
             'Carry-on bags: ' + bags(d.carryOnChoice, d.carryOnCount),
             'Help with luggage: ' + d.luggageHelp
-        ];
+        ]);
         return (customerNote ? customerNote + '\n' : '') + 'Airport details:\n' + lines.join('\n');
     }
 
@@ -892,7 +892,8 @@
             passengers: formData.passengers,
             specialNotes: notesForCalendar(formData),
             airportTrip: formData.airportTrip,
-            flightNumber: formData.flightNumber || '',
+            // Round trip: the arrival flight the driver meets. One way to the airport: the departure flight.
+            flightNumber: formData.flightNumber || formData.departureFlight || '',
             checkingBags: formData.airportTrip === 'Yes'
                 ? bagsForCalendar(formData.checkingBags, formData.bagCount)
                 : formData.checkingBags,
@@ -1174,23 +1175,27 @@
      */
     function placeFlightField() {
         var $flight = $('#flight-group');
-        if (isGroupEvent() || isLocalTrip()) {
+        $('#departure-flight-group').after($flight);
+        // Donald (Nov 16, 2026): the arrival flight is asked only when the rider flies back in (a round trip).
+        // A one-way ride to the airport asks for the departure flight only.
+        if (isGroupEvent() || isLocalTrip() || !isRoundTrip()) {
             $flight.hide();
             $('#flight-slot').hide();
             $('#booking-flight').val('');
+            $('#flight-error').text('').hide();
+            $flight.removeClass('has-error');
             return;
         }
-        // Donald (Nov 16, 2026): arrival and departure flight numbers sit together and are both required.
         $flight.show();
         $flight.removeClass('col-md-12 col-md-4').addClass('col-md-6');
         $('#flight-label').text('Arrival flight number *');
-        $('#departure-flight-group').after($flight);
         $('#flight-slot').hide();
     }
 
     function updateAirportRequirements() {
         var airport = isAirportTrip();
-        $('#booking-departure-flight, #booking-flight, #booking-passengers-back, input[name="checking-bags"], input[name="carry-on"], input[name="luggage-help"]').prop('required', airport);
+        $('#booking-departure-flight, #booking-passengers-back, input[name="checking-bags"], input[name="carry-on"], input[name="luggage-help"]').prop('required', airport);
+        $('#booking-flight').prop('required', airport && isRoundTrip());
         $('#booking-bag-count').prop('required', airport && checkingBagsChoice() === 'Yes').attr('min', '1');
         $('#booking-carryon-count').prop('required', airport && yesNoChoice('carry-on') === 'Yes').attr('min', '1');
     }
@@ -2262,10 +2267,11 @@
                     fieldError('#booking-luggage-help-yes', 'luggage-help-error', 'Please choose Yes or No for help with your luggage');
                 }
                 var privateField = $('#airport-choice').val() === 'PRIVATE';
-                [
-                    { value: departureFlight, selector: '#booking-departure-flight', errorId: 'departure-flight-error', name: 'departure' },
-                    { value: formData.flightNumber, selector: '#booking-flight', errorId: 'flight-error', name: 'arrival' }
-                ].forEach(function(f) {
+                var flights = [{ value: departureFlight, selector: '#booking-departure-flight', errorId: 'departure-flight-error', name: 'departure' }];
+                if (isRoundTrip()) {
+                    flights.push({ value: formData.flightNumber, selector: '#booking-flight', errorId: 'flight-error', name: 'arrival' });
+                }
+                flights.forEach(function(f) {
                     if (!f.value) {
                         fieldError(f.selector, f.errorId, 'Please enter your ' + f.name + ' flight number');
                     } else if (!(privateField ? validateTailNumber(f.value) : validateFlightNumber(f.value))) {

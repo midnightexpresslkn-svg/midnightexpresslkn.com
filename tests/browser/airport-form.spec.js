@@ -4,6 +4,7 @@ import {
   expect,
   bookingMocks,
   fillAirport,
+  settled,
 } from "./helpers/booking-mocks.js";
 
 const shots = process.env.MELKN_SHOTS_DIR;
@@ -25,7 +26,15 @@ test.describe("airport form at phone width", () => {
     await expect(carryOn).toBeVisible();
     await expect(help).toBeVisible();
     await expect(page.getByLabel(/Departure flight number/)).toBeVisible();
-    await expect(page.getByLabel(/Arrival flight number/)).toBeVisible();
+    // One way to the airport: only the departure flight is asked.
+    const arrival = page.getByLabel(/Arrival flight number/);
+    await expect(arrival).toBeHidden();
+    const round = page.getByRole("group", { name: /Round trip/ });
+    await round.getByRole("radio", { name: "Yes", exact: true }).check();
+    await expect(arrival).toBeVisible();
+    await expect(arrival).toHaveAttribute("required", "");
+    await round.getByRole("radio", { name: "No", exact: true }).check();
+    await expect(arrival).toBeHidden();
     await expect(
       page.getByRole("spinbutton", {
         name: /Passengers back from the airport/,
@@ -57,10 +66,12 @@ test.describe("airport form at phone width", () => {
       await page
         .getByRole("combobox", { name: "Trip type" })
         .evaluate((el) => el.scrollIntoView({ block: "start" }));
+      await settled(page);
       await page.screenshot({ path: shots + "/melkn-airport-form-top.png" });
       await page
         .getByLabel(/Departure flight number/)
         .evaluate((el) => el.scrollIntoView({ block: "start" }));
+      await settled(page);
       await page.screenshot({ path: shots + "/melkn-airport-form-lower.png" });
     }
     await request(page).click();
@@ -79,7 +90,7 @@ test.describe("airport form at phone width", () => {
   }) => {
     const state = await bookingMocks(page);
     await page.goto("/#booking");
-    await fillAirport(page);
+    await fillAirport(page, { round: true });
     await page.getByLabel(/Departure flight number/).fill("");
     await page.getByLabel(/Arrival flight number/).fill("");
     await page.getByRole("textbox", { name: /Special Notes/ }).fill("");
@@ -98,6 +109,7 @@ test.describe("airport form at phone width", () => {
     expect(state.forms).toHaveLength(0);
     if (shots) {
       await page.getByLabel(/Departure flight number/).scrollIntoViewIfNeeded();
+      await settled(page);
       await page.screenshot({ path: shots + "/melkn-airport-form-error.png" });
     }
   });

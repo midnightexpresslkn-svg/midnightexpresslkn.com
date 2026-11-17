@@ -97,6 +97,58 @@ describe.each(scripts)("airport form %s", (script) => {
     );
   });
 
+  it("asks for the arrival flight only on a round trip", async () => {
+    const view = await renderBooking(script);
+    await fillValid(view, { roundTrip: null, flight: null });
+    const arrival = view.document.querySelector("#booking-flight");
+    const group = view.document.querySelector("#flight-group");
+    check([group.style.display !== "none", arrival.required], [false, false], {
+      label: "before round trip is answered, only the departure flight shows",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    tick(view, "#booking-round-trip");
+    check([group.style.display !== "none", arrival.required], [true, true], {
+      label: "a round trip shows and requires the arrival flight",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    type(view, "#booking-flight", "AA2684");
+    tick(view, "#booking-round-trip-no");
+    check(
+      [group.style.display !== "none", arrival.required, arrival.value],
+      [false, false, ""],
+      {
+        label:
+          "a one-way ride to the airport hides and clears the arrival flight",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    check(
+      view.document.querySelector("#booking-departure-flight").required,
+      true,
+      {
+        label: "the departure flight stays required one-way",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    await submitForm(view);
+    check(resultText(view.document).includes("Request received"), true, {
+      label: "a one-way ride sends with only the departure flight",
+      actual: resultText(view.document),
+      source: "js/booking.js",
+      loaded: script,
+    });
+    check(sent(view)[NOTES].includes("Arrival flight"), false, {
+      label: "a one-way note has no arrival flight line",
+      actual: sent(view)[NOTES],
+      source: "js/booking.js",
+      loaded: script,
+    });
+  });
+
   it("names each missing airport answer and sends nothing", async () => {
     const view = await renderBooking(script);
     await fillValid(view, {
@@ -105,6 +157,7 @@ describe.each(scripts)("airport form %s", (script) => {
       departureFlight: "",
       flight: "",
       passengersBack: "",
+      roundTrip: true,
     });
     await submitForm(view);
     check(formPosts(view.state).length, 0, {

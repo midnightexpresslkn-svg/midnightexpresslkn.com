@@ -91,7 +91,6 @@ export async function fillAirport(
     .getByRole("spinbutton", { name: /Passengers back from the airport/ })
     .fill("2");
   await page.getByLabel(/Departure flight number/).fill("DL100");
-  await page.getByLabel(/Arrival flight number/).fill("AA2684");
   await page
     .getByRole("textbox", { name: /Special Notes/ })
     .fill("Departure curb, please.");
@@ -116,6 +115,8 @@ export async function fillAirport(
       page.getByRole("textbox", { name: "Select time" }).nth(1),
       "12:00:00",
     );
+    // The arrival flight is asked only on a round trip (Donald, Nov 16 2026).
+    await page.getByLabel(/Arrival flight number/).fill("AA2684");
   }
 }
 
@@ -152,6 +153,26 @@ export async function fillBar(page, { round = false, agree = true } = {}) {
       })
       .check();
   }
+}
+
+// Let the scroll and the header's shrink transition finish before a screenshot.
+export async function settled(page) {
+  await page.waitForFunction(
+    () =>
+      new Promise((done) => {
+        const y = window.scrollY;
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() =>
+            done(
+              window.scrollY === y &&
+                document
+                  .getAnimations()
+                  .every((a) => a.playState !== "running"),
+            ),
+          ),
+        );
+      }),
+  );
 }
 
 // The visible picker box is Flatpickr's alt input; its picker lives on the input just before it.

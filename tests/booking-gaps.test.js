@@ -99,7 +99,7 @@ describe.each(scripts)("booking gaps %s", (script) => {
 
   it("rejects a short phone number and a bad flight number", async () => {
     const view = await renderBooking(script);
-    await fillValid(view, { trip: "airport", flight: "!!" });
+    await fillValid(view, { trip: "airport", flight: "!!", roundTrip: true });
     const phone = view.document.querySelector("#booking-phone");
     phone.value = "12345";
     view.window.jQuery(phone).trigger("input");

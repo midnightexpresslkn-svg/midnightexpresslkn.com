@@ -120,7 +120,7 @@ const NOTES_HINT =
 // New airport answers have no Google Form question yet, so they ride in Notes.
 function airportBlock({
   departure = "DL100",
-  arrival = "AA2684",
+  arrival = null,
   to = "2",
   back = "2",
   bags = "No",
@@ -130,7 +130,8 @@ function airportBlock({
   return [
     "Airport details:",
     `Departure flight: ${departure}`,
-    `Arrival flight: ${arrival}`,
+    // A one-way ride to the airport has no arrival flight (Donald, Nov 16 2026).
+    ...(arrival ? [`Arrival flight: ${arrival}`] : []),
     `Passengers to the airport: ${to}`,
     `Passengers back from the airport: ${back}`,
     `Checked bags: ${bags}`,
@@ -286,7 +287,7 @@ describe("form entries", () => {
           pickup: "123 Main Street, Denver NC 28037",
           destination: "CLT",
           passengers: "2",
-          notes: `gate note\n${airportBlock({ arrival: "AA1234", bags: "Yes (2)" })}`,
+          notes: `gate note\n${airportBlock({ bags: "Yes (2)" })}`,
           airportTrip: "Yes",
           flight: "DL100",
           checkingBags: "Yes",
@@ -337,9 +338,9 @@ describe("form entries", () => {
           pickupAddress: "123 Main Street, Denver NC 28037",
           destinationAddress: "CLT",
           passengers: "2",
-          specialNotes: `gate note\n${airportBlock({ arrival: "AA1234", bags: "Yes (2)" })}\nSpecial requirements: Wheelchair, Car Seat`,
+          specialNotes: `gate note\n${airportBlock({ bags: "Yes (2)" })}\nSpecial requirements: Wheelchair, Car Seat`,
           airportTrip: "Yes",
-          flightNumber: "AA1234",
+          flightNumber: "DL100",
           checkingBags: "Yes (2 bags)",
           bagCount: 2,
           roundTrip: "No",
@@ -398,14 +399,14 @@ describe("form entries", () => {
         source: "js/booking.js",
         loaded: script,
       });
-      check(calendarBody(view).body.flightNumber, "AA2684", {
-        label: "calendar gets the arrival flight",
+      check(calendarBody(view).body.flightNumber, "DL100", {
+        label: "a one-way calendar entry gets the departure flight",
         source: "js/booking.js",
         loaded: script,
       });
     });
 
-    it("puts the departure flight on the outbound form row and the arrival flight on the calendar", async () => {
+    it("puts the departure flight on a one-way outbound row and drops a hidden arrival flight", async () => {
       const view = await renderBooking(script, { miles: 12 });
       await fillValid(view, {
         trip: "airport",
@@ -431,8 +432,9 @@ describe("form entries", () => {
         source: "js/booking.js",
         loaded: script,
       });
-      check(calendarBody(view).body.flightNumber, "AA1234", {
-        label: "calendar still receives the flight number",
+      check(calendarBody(view).body.flightNumber, "DL100", {
+        label:
+          "a one-way calendar entry gets the departure flight, not a hidden arrival",
         actual: calendarBody(view).body.flightNumber,
         source: "js/booking.js",
         loaded: script,
