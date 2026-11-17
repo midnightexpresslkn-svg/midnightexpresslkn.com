@@ -107,7 +107,16 @@ test.describe("mobile page fits the screen", () => {
       expect(local.found).toEqual([]);
       await page.locator("#local-kind").selectOption("party");
       await expect(page.locator("#party-address")).toBeVisible();
-      await expect(page.locator("#rule-age")).toBeVisible();
+      // Party uses the bar form's one agreement box (Donald, Nov 16 2026).
+      await expect(
+        page.getByRole("checkbox", {
+          name: /Must be 21 years or older, cannot smoke/,
+        }),
+      ).toBeVisible();
+      await expect(page.locator("#rule-age")).toBeHidden();
+      await expect(
+        page.getByRole("group", { name: /Second pickup location/ }),
+      ).toBeVisible();
       const party = await offenders(page);
       expect(party.found).toEqual([]);
 

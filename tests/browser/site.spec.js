@@ -734,7 +734,7 @@ test.describe("new rides on a 375px phone", () => {
     await fillIdentity(page);
     await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
     await expect(page.locator("#booking-success")).toContainText(
-      "Please check all three boxes",
+      "Please check the box: Must be 21 years or older",
     );
     expect(posts).toEqual([]);
   });
@@ -951,9 +951,12 @@ test.describe("group description on a 375px phone", () => {
     await page
       .locator("#booking-pickup")
       .fill("123 Main Street, Denver NC 28037");
-    await page.locator("#rule-age").check();
-    await page.locator("#rule-smoke").check();
-    await page.locator("#rule-damage").check();
+    await page
+      .getByRole("group", { name: /Second pickup location/ })
+      .getByRole("radio", { name: "No", exact: true })
+      .check();
+    await answerRoundTrip(page);
+    await agreeBar(page);
     await page.locator("#bookingForm").evaluate((form) => form.requestSubmit());
     await expect(page.locator("#booking-success")).toContainText(
       "Request received",

@@ -266,3 +266,67 @@ export const test = base.extend({
   },
 });
 export { expect };
+
+/** A party ride with every party answer filled in (Donald, Nov 16 2026). */
+export async function fillParty(
+  page,
+  { round = false, agree = true, second = true, more = true } = {},
+) {
+  await page.getByRole("combobox", { name: "Trip type" }).selectOption("local");
+  await page
+    .getByRole("combobox", { name: "Bar, restaurant, or party" })
+    .selectOption("party");
+  await page
+    .getByLabel("Party address *", { exact: true })
+    .fill("200 Oak St, Sherrills Ford NC");
+  await page
+    .getByPlaceholder("123 Main Street, Denver NC 28037")
+    .fill("123 Main Street, Denver NC 28037");
+  const secondPickup = page.getByRole("group", {
+    name: /Second pickup location/,
+  });
+  await secondPickup
+    .getByRole("radio", { name: second ? "Yes" : "No", exact: true })
+    .check();
+  if (second) {
+    await page
+      .getByLabel("Second pickup address *")
+      .fill("300 Pine St, Denver NC");
+  }
+  await page.getByPlaceholder("Jane Smith").fill("Isolated QA Rider");
+  await page.getByPlaceholder("5555551234").fill("5555550199");
+  await page.getByPlaceholder("email@example.com").fill("qa@example.invalid");
+  await page.getByRole("spinbutton", { name: /Online:/ }).fill("4");
+  await page
+    .getByRole("group", { name: /Round trip/ })
+    .getByRole("radio", { name: round ? "Yes" : "No", exact: true })
+    .check();
+  if (round) {
+    await page
+      .getByPlaceholder("Where should we take you after the party?")
+      .fill("100 Main St, Denver NC");
+    await page
+      .getByRole("group", { name: /More than one drop-off location/ })
+      .getByRole("radio", { name: more ? "Yes" : "No", exact: true })
+      .check();
+    if (more) {
+      await page
+        .getByLabel("Other drop-off location *")
+        .fill("50 Lake Rd, Cornelius NC");
+    }
+    await page.getByLabel(/How many people for the ride back/).fill("4");
+  }
+  await page
+    .getByRole("textbox", { name: "Special Notes" })
+    .fill("Drinks: water. Music: 90s pop.");
+  await page
+    .getByRole("textbox", { name: "Special requests" })
+    .fill("Birthday banner on the door");
+  if (agree) {
+    await page
+      .getByRole("checkbox", {
+        name: /Must be 21 years or older, cannot smoke/,
+      })
+      .check();
+  }
+}

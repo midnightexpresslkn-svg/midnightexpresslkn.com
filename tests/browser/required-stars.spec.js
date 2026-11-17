@@ -44,14 +44,20 @@ test("bar ride form shows the required star on its one agreement box", async ({
   for (const [id] of RULES) await expect(page.locator(id)).toBeHidden();
 });
 
-test("party ride form keeps the required star on all three boxes", async ({
+// Donald, Nov 16, 2026: the party form uses the same one combined box as the bar form.
+test("party ride form shows the required star on its one agreement box", async ({
   page,
 }) => {
   await blockNetwork(page);
   await page.goto("/");
   await page.locator("#trip-type").selectOption("local");
   await page.locator("#local-kind").selectOption("party");
-  await expectStars(page);
+  const box = page.getByRole("checkbox", {
+    name: "Must be 21 years or older, cannot smoke, and you are responsible for any damages. *",
+  });
+  await expect(box).toBeVisible();
+  await expect(box).toHaveAttribute("required", "");
+  for (const [id] of RULES) await expect(page.locator(id)).toBeHidden();
 });
 
 test("group event form shows the required star on all three boxes", async ({

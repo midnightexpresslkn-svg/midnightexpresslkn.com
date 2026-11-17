@@ -592,8 +592,9 @@ export async function fillValid(view, overrides = {}) {
     );
   }
   const barRide = trip === "local" && (overrides.localKind || "bar") === "bar";
-  if (barRide) {
-    // Bar rides use one combined agreement box (Donald, Nov 16 2026).
+  const partyRide = trip === "local" && overrides.localKind === "party";
+  if (barRide || partyRide) {
+    // Bar and party rides use one combined agreement box (Donald, Nov 16 2026).
     const box = doc.querySelector("#rule-bar-agreement");
     box.checked = overrides.barAgreement ?? true;
     window.jQuery(box).trigger("change");
@@ -624,6 +625,48 @@ export async function fillValid(view, overrides = {}) {
       const no = doc.querySelector("#booking-round-trip-no");
       no.checked = true;
       window.jQuery(no).trigger("change");
+    }
+  }
+  if (partyRide) {
+    // Required party answers (Donald, Nov 16 2026); pass null to leave one blank.
+    const pick = (name, value) => {
+      if (value == null) return;
+      const box = doc.querySelector(`input[name="${name}"][value="${value}"]`);
+      box.checked = true;
+      window.jQuery(box).trigger("change");
+    };
+    const fill = (selector, value, fallback) => {
+      const next = value === undefined ? fallback : value;
+      if (next != null) setControl(doc.querySelector(selector), next);
+    };
+    pick(
+      "party-second-pickup",
+      overrides.secondPickup === undefined ? "No" : overrides.secondPickup,
+    );
+    if (overrides.secondPickup === "Yes") {
+      fill(
+        "#party-second-pickup-address",
+        overrides.secondAddress,
+        "300 Pine St, Denver NC",
+      );
+    }
+    if (overrides.roundTrip === true) {
+      fill("#party-dropoff", overrides.dropoff, "100 Main St, Denver NC");
+      pick(
+        "party-more-dropoffs",
+        overrides.moreDropoffs === undefined ? "No" : overrides.moreDropoffs,
+      );
+      if (overrides.moreDropoffs === "Yes") {
+        fill(
+          "#party-extra-dropoff",
+          overrides.extraDropoff,
+          "50 Lake Rd, Cornelius NC",
+        );
+      }
+      fill("#party-people", overrides.partyPeople, "2");
+    }
+    if (overrides.requests != null) {
+      setControl(doc.querySelector("#party-requests"), overrides.requests);
     }
   }
   setWhen(doc, overrides.date ?? "2026-12-15", overrides.time ?? "10:00:00");

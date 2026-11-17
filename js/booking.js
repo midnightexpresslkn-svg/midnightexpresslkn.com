@@ -772,6 +772,23 @@
         return notes + '\n' + lines.join('\n');
     }
 
+    /**
+     * New party answers have no Google Form question yet, so they go into Notes as one labeled block.
+     */
+    function partyNotes(notes, agreed, p) {
+        var lines = ['Agreement (' + BAR_AGREEMENT + '): ' + (agreed ? 'Yes' : 'No'), 'Party details:', 'Second pickup: ' + p.secondPickup];
+        if (p.secondPickup === 'Yes') lines.push('Second pickup address: ' + p.secondAddress);
+        if (p.round) {
+            lines.push('Return ride:');
+            lines.push('Drop-off location: ' + p.dropoff);
+            lines.push('More than one drop-off: ' + p.moreDropoffs);
+            if (p.moreDropoffs === 'Yes') lines.push('Other drop-off location: ' + p.extraDropoff);
+            lines.push('People for the ride back: ' + p.people);
+        }
+        if (p.requests) lines.push('Special requests: ' + p.requests);
+        return notes + '\n' + lines.join('\n');
+    }
+
     function validateFlightNumber(flightNumber) {
         const pattern = /^[a-zA-Z0-9]{2,3}[\s-]?\d{1,4}[a-zA-Z]?$/;
         return pattern.test(flightNumber);
@@ -1138,11 +1155,14 @@
             } else if (kind === 'local') {
                 setFieldLabel('address-label', 'Address *');
                 setFieldLabel('notes-label', 'Special Notes');
-                // Donald (Nov 16, 2026): bar notes give drink and music examples; party keeps the old ones.
-                var localHint = $('#local-kind').val() === 'bar' ? BAR_NOTES_PLACEHOLDER : NOTES_PLACEHOLDER;
+                // Donald (Nov 16, 2026): bar and party notes give drink and music examples.
+                var localKind = $('#local-kind').val();
+                var localHint = localKind === 'bar' || localKind === 'party' ? BAR_NOTES_PLACEHOLDER : NOTES_PLACEHOLDER;
                 $('#booking-notes').attr('placeholder', localHint);
                 $('#notes-hint').text(localHint);
-                $('#local-intro, #local-bar-list').removeAttr('hidden').show();
+                $('#local-intro').removeAttr('hidden').show();
+                // Donald (Nov 16, 2026): the party form has no bar list.
+                if (localKind !== 'party') $('#local-bar-list').removeAttr('hidden').show();
                 showLocalPickers();
                 $('#ride-rules').removeAttr('hidden').show();
                 $('#booking-quote').show();
@@ -1248,18 +1268,59 @@
     }
 
     // Bar rides: one combined agreement box, and the ride back asks who, when, and where.
+    function isPartyRide() {
+        return localMode() === 'party';
+    }
+
     function updateBarFields() {
         var bar = isBarRide();
-        $('#bar-agreement-rule').prop('hidden', !bar);
-        $('.party-group-rule').prop('hidden', bar);
-        $('#rule-bar-agreement').prop('required', bar);
-        if (!bar) $('#rule-bar-agreement').prop('checked', false);
+        // Donald (Nov 16, 2026): bar and party rides share the one agreement box; group keeps three.
+        var oneBox = bar || isPartyRide();
+        $('#bar-agreement-rule').prop('hidden', !oneBox);
+        $('.party-group-rule').prop('hidden', oneBox);
+        $('#rule-bar-agreement').prop('required', oneBox);
+        if (!oneBox) $('#rule-bar-agreement').prop('checked', false);
         if (bar && isRoundTrip()) {
             $('#bar-return-details').removeAttr('hidden').show();
             $('#bar-return-details input').prop('required', true);
         } else {
             clearBarReturn();
         }
+    }
+
+    function resetPartyBox(selector) {
+        var $box = $(selector);
+        $box.attr('hidden', 'hidden').hide();
+        $box.find('input[type="radio"]').prop('checked', false);
+        $box.find('input, textarea').not('[type="radio"]').val('');
+        $box.find('.help-block.text-danger').text('').hide();
+        $box.find('.has-error').removeClass('has-error');
+        $box.find('input').prop('required', false);
+    }
+
+    function showPartyBox(selector, required) {
+        $(selector).removeAttr('hidden').show();
+        $(required).prop('required', true);
+    }
+
+    // Party rides: pickup sits under the party address, then optional second pickup and return drop-offs.
+    function updatePartyFields() {
+        var party = isPartyRide();
+        if (party) {
+            setCols($('#address-group'), true);
+            setFieldLabel('address-label', 'Pickup address *');
+            $('#party-pickup-slot').append($('#address-group'), $('#party-pickup-extra'));
+            showPartyBox('#party-pickup-extra, #party-requests-group', 'input[name="party-second-pickup"]');
+        } else {
+            resetPartyBox('#party-pickup-extra, #party-requests-group');
+        }
+        if (party && yesNoChoice('party-second-pickup') === 'Yes') showPartyBox('#party-second-pickup-group', '#party-second-pickup-address');
+        else resetPartyBox('#party-second-pickup-group');
+        var back = party && isRoundTrip();
+        if (back) showPartyBox('#party-return-details', '#party-dropoff, #party-people, input[name="party-more-dropoffs"]');
+        else resetPartyBox('#party-return-details');
+        if (back && yesNoChoice('party-more-dropoffs') === 'Yes') showPartyBox('#party-extra-dropoff-group', '#party-extra-dropoff');
+        else resetPartyBox('#party-extra-dropoff-group');
     }
 
     function clearAirportDetails() {
@@ -1311,6 +1372,7 @@
         placeFlightField();
         updateAirportRequirements();
         updateBarFields();
+        updatePartyFields();
     }
 
     /**
@@ -1822,6 +1884,10 @@
         $('#bar-return-details').on('input change', 'input', function() {
             $(this).closest('.form-group').removeClass('has-error').find('.help-block.text-danger').text('').hide();
         });
+        $('#party-pickup-extra, #party-return-details, #party-requests-group').on('input change', 'input, textarea', function() {
+            $(this).closest('.form-group').removeClass('has-error').find('.help-block.text-danger').text('').hide();
+        });
+        $('input[name="party-second-pickup"], input[name="party-more-dropoffs"]').on('change', updatePartyFields);
         $('#rule-bar-agreement').on('change', function() {
             $('#ride-rules').removeClass('has-error');
             $('#ride-rules-error').text('').hide();
@@ -2045,12 +2111,25 @@
                 time: $('#bar-return-time').val() || '',
                 location: $.trim($('#bar-return-location').val() || '')
             };
-            const rules = (trip === 'group' || trip === 'local') && !barRide ? rulesState() : null;
+            const partyRide = trip === 'local' && mode === 'party';
+            const party = {
+                secondPickup: yesNoChoice('party-second-pickup'),
+                secondAddress: $.trim($('#party-second-pickup-address').val() || ''),
+                round: isRoundTrip(),
+                dropoff: $.trim($('#party-dropoff').val() || ''),
+                moreDropoffs: yesNoChoice('party-more-dropoffs'),
+                extraDropoff: $.trim($('#party-extra-dropoff').val() || ''),
+                people: $.trim($('#party-people').val() || ''),
+                requests: $.trim($('#party-requests').val() || '')
+            };
+            const oneBox = barRide || partyRide;
+            const rules = (trip === 'group' || trip === 'local') && !oneBox ? rulesState() : null;
             if (rules) notes = notes ? notes + ' ' + rulesLine(rules) : rulesLine(rules);
-            // The one bar box covers all three calendar answers.
+            // The one bar/party box covers all three calendar answers.
             const barAnswer = barAgreed ? 'Yes' : 'No';
-            const ack = barRide ? { mustBe21: barAnswer, noSmoking: barAnswer, damageResponsibility: barAnswer } : rules;
+            const ack = oneBox ? { mustBe21: barAnswer, noSmoking: barAnswer, damageResponsibility: barAnswer } : rules;
             if (barRide) notes = barNotes(notes, barAgreed, isRoundTrip() ? barReturn : null);
+            if (partyRide) notes = partyNotes(notes, barAgreed, party);
             const asksTripDetails = trip === 'airport';
             const bagCount = readBagCount();
             const bagsChoice = checkingBagsChoice();
@@ -2271,12 +2350,12 @@
                 }
             }
 
-            if (barRide && !barAgreed) {
+            if (oneBox && !barAgreed) {
                 errors.push(BAR_AGREEMENT_MESSAGE);
                 $('#ride-rules').addClass('has-error');
                 $('#ride-rules-error').text(BAR_AGREEMENT_MESSAGE).show();
                 isValid = false;
-            } else if ((trip === 'group' || trip === 'local') && !barRide && !rulesComplete(rulesState())) {
+            } else if ((trip === 'group' || trip === 'local') && !oneBox && !rulesComplete(rulesState())) {
                 errors.push(RULES_MESSAGE);
                 $('#ride-rules').addClass('has-error');
                 $('#ride-rules-error').text(RULES_MESSAGE).show();
@@ -2380,6 +2459,30 @@
                 }
                 if (!barReturn.location) {
                     fieldError('#bar-return-location', 'bar-return-location-error', 'Please enter where to pick you up for the ride back.');
+                }
+            }
+
+            if (partyRide) {
+                if (!party.secondPickup) {
+                    fieldError('#party-second-pickup-yes', 'party-second-pickup-error', 'Please choose Yes or No for a second pickup location.');
+                } else if (party.secondPickup === 'Yes' && !party.secondAddress) {
+                    fieldError('#party-second-pickup-address', 'party-second-pickup-address-error', 'Please enter the second pickup address.');
+                }
+                if (party.round) {
+                    if (!party.dropoff) {
+                        fieldError('#party-dropoff', 'party-dropoff-error', 'Please enter where to drop you off after the party.');
+                    }
+                    if (!party.moreDropoffs) {
+                        fieldError('#party-more-dropoffs-yes', 'party-more-dropoffs-error', 'Please choose Yes or No for more than one drop-off location.');
+                    } else if (party.moreDropoffs === 'Yes' && !party.extraDropoff) {
+                        fieldError('#party-extra-dropoff', 'party-extra-dropoff-error', 'Please enter the other drop-off location.');
+                    }
+                    var partyPeople = /^\d+$/.test(party.people) ? parseInt(party.people, 10) : 0;
+                    if (partyPeople < 1) {
+                        fieldError('#party-people', 'party-people-error', 'Please enter how many people ride back.');
+                    } else if (partyPeople > GROUP_MAX_PASSENGERS) {
+                        fieldError('#party-people', 'party-people-error', overCapacityMessage(GROUP_MAX_PASSENGERS));
+                    }
                 }
             }
 

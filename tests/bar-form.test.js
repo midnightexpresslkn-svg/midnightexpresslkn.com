@@ -309,7 +309,7 @@ describe.each(scripts)("bar form %s", (script) => {
     });
   });
 
-  it("uses drinks and music examples for bar notes only", async () => {
+  it("uses drinks and music examples for bar and party notes", async () => {
     const view = await renderBooking(script, { miles: 4 });
     await fillValid(view, { trip: "local" });
     const box = view.document.querySelector("#booking-notes");
@@ -325,16 +325,14 @@ describe.each(scripts)("bar form %s", (script) => {
     const kind = view.document.querySelector("#local-kind");
     kind.value = "party";
     view.window.jQuery(kind).trigger("change");
-    const oldHint =
-      "Anything we should know? For example, a wheelchair, a car seat, or extra luggage.";
-    check([box.placeholder, hint.textContent], [oldHint, oldHint], {
-      label: "a party ride keeps its old examples",
+    check([box.placeholder, hint.textContent], [barHint, barHint], {
+      label: "a party ride gives the same drinks and music examples",
       source: "js/booking.js",
       loaded: script,
     });
   });
 
-  it("leaves the party form as it was", async () => {
+  it("keeps the bar ride-back questions off the party form", async () => {
     const view = await renderBooking(script, { miles: 4 });
     await fillValid(view, {
       trip: "local",
@@ -347,12 +345,13 @@ describe.each(scripts)("bar form %s", (script) => {
       source: "js/booking.js",
       loaded: script,
     });
+    pickRound(view, "No");
     await submitForm(view);
     const notes = Object.fromEntries(formPosts(view.state)[0].formEntries)[
       NOTES
     ];
-    check(notes.includes("Agreement ("), false, {
-      label: "a party ride keeps its three-box notes",
+    check(notes.includes("Return pickup time:"), false, {
+      label: "a party ride has no bar ride-back lines",
       actual: notes,
       source: "js/booking.js",
       loaded: script,

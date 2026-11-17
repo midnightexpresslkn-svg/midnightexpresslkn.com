@@ -31,8 +31,8 @@ async function inOrder(locators) {
 const rideOrder = (page, first, back) => [
   page.getByLabel(first),
   group(page, /Round trip/),
-  page.getByText("Return Pickup Date", { exact: true }),
-  page.getByText("Return Pickup Time", { exact: true }),
+  page.getByText("Return Pickup Date *", { exact: true }),
+  page.getByText("Return Pickup Time *", { exact: true }),
   page.getByRole("spinbutton", {
     name: /Passengers back (to|from) the airport/,
   }),

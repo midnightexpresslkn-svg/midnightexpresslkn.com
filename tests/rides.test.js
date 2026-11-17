@@ -390,8 +390,8 @@ describe.each(scripts)("local bars and group %s", (script) => {
     });
     kind.value = "party";
     view.window.jQuery(kind).trigger("change");
-    check(shownRules(view).length, 3, {
-      label: "a party ride keeps its three boxes",
+    check(shownRules(view).length, 1, {
+      label: "a party ride shows the same one agreement box as a bar ride",
       source: "js/booking.js",
       loaded: script,
     });
@@ -683,9 +683,10 @@ describe.each(scripts)("local bars and group %s", (script) => {
       source: "js/booking.js",
       loaded: script,
     });
+    // Group keeps its three boxes; party uses the one bar box (Donald, Nov 16 2026).
     for (const rules of [[], ["age"], ["age", "smoke"]]) {
       const view = await renderBooking(script, { miles: 4 });
-      await fillValid(view, { trip: "local", localKind: "party", rules });
+      await fillValid(view, { trip: "group", rules });
       await submitForm(view);
       check(
         resultText(view.document).includes(
@@ -693,14 +694,14 @@ describe.each(scripts)("local bars and group %s", (script) => {
         ),
         true,
         {
-          label: `party request waits when rules are ${rules.join(",") || "none"}`,
+          label: `group request waits when rules are ${rules.join(",") || "none"}`,
           actual: resultText(view.document),
           source: "js/booking.js",
           loaded: script,
         },
       );
       check(bookingPosts(view.state).length, 0, {
-        label: "an unchecked party request is not sent",
+        label: "an unchecked group request is not sent",
         source: "js/booking.js",
         loaded: script,
       });
@@ -709,11 +710,23 @@ describe.each(scripts)("local bars and group %s", (script) => {
     await fillValid(party, {
       trip: "local",
       localKind: "party",
-      rules: ["smoke"],
+      barAgreement: false,
     });
     await submitForm(party);
+    check(
+      resultText(party.document).includes(
+        "Please check the box: Must be 21 years or older, cannot smoke, and you are responsible for any damages.",
+      ),
+      true,
+      {
+        label: "a party request waits for the one agreement box",
+        actual: resultText(party.document),
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
     check(bookingPosts(party.state).length, 0, {
-      label: "a party request with one box checked is not sent",
+      label: "a party request without the agreement box is not sent",
       source: "js/booking.js",
       loaded: script,
     });
@@ -721,7 +734,7 @@ describe.each(scripts)("local bars and group %s", (script) => {
     await fillValid(sent, { trip: "local", localKind: "party" });
     await submitForm(sent);
     check(resultText(sent.document).includes("Request received"), true, {
-      label: "a party request with all three boxes is received",
+      label: "a party request with the agreement box is received",
       actual: resultText(sent.document),
       source: "js/booking.js",
       loaded: script,
