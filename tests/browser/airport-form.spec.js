@@ -30,16 +30,22 @@ test.describe("airport form at phone width", () => {
     const arrival = page.getByLabel(/Arrival flight number/);
     await expect(arrival).toBeHidden();
     const round = page.getByRole("group", { name: /Round trip/ });
+    // Passengers back is asked only on a round trip too.
+    const back = page.getByRole("spinbutton", {
+      name: /Passengers back from the airport/,
+      includeHidden: true,
+    });
+    await expect(back).toBeHidden();
     await round.getByRole("radio", { name: "Yes", exact: true }).check();
     await expect(arrival).toBeVisible();
     await expect(arrival).toHaveAttribute("required", "");
+    await expect(back).toBeVisible();
+    await expect(back).toHaveAttribute("required", "");
+    await back.fill("3");
     await round.getByRole("radio", { name: "No", exact: true }).check();
     await expect(arrival).toBeHidden();
-    await expect(
-      page.getByRole("spinbutton", {
-        name: /Passengers back from the airport/,
-      }),
-    ).toBeVisible();
+    await expect(back).toBeHidden();
+    await expect(back).toHaveValue("");
     await expect(
       page.getByRole("textbox", { name: /Special Notes \*/ }),
     ).toHaveAttribute("placeholder", /extra stops.*arrival or departure curb/);
@@ -69,10 +75,10 @@ test.describe("airport form at phone width", () => {
       await settled(page);
       await page.screenshot({ path: shots + "/melkn-airport-form-top.png" });
       await page
-        .getByLabel(/Departure flight number/)
+        .getByRole("group", { name: /Carry-on bags/ })
         .evaluate((el) => el.scrollIntoView({ block: "start" }));
       await settled(page);
-      await page.screenshot({ path: shots + "/melkn-airport-form-lower.png" });
+      await page.screenshot({ path: shots + "/melkn-airport-form-oneway.png" });
     }
     await request(page).click();
     await expect(
@@ -83,6 +89,32 @@ test.describe("airport form at phone width", () => {
     expect(sent).toContain("Carry-on bags: Yes (2)");
     expect(sent).toContain("Help with luggage: Yes");
     expect(sent).toContain("Golf Clubs, Other: a stroller");
+    expect(sent).not.toContain("Passengers back");
+  });
+
+  test("a round trip asks for the arrival flight and the riders coming back", async ({
+    page,
+  }) => {
+    const state = await bookingMocks(page);
+    await page.goto("/#booking");
+    await fillAirport(page, { round: true });
+    await expect(page.getByLabel(/Arrival flight number/)).toBeVisible();
+    if (shots) {
+      await group(page, /Carry-on bags/).evaluate((el) =>
+        el.scrollIntoView({ block: "start" }),
+      );
+      await settled(page);
+      await page.screenshot({
+        path: shots + "/melkn-airport-form-roundtrip.png",
+      });
+    }
+    await request(page).click();
+    await expect(
+      page.getByRole("heading", { name: /Request received/ }),
+    ).toBeVisible();
+    expect(state.forms).toHaveLength(2);
+    const back = decodeURIComponent(state.forms[1].replace(/\+/g, " "));
+    expect(back).toContain("Passengers back from the airport: 2");
   });
 
   test("names each missing airport answer and sends nothing", async ({

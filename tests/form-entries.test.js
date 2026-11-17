@@ -122,7 +122,7 @@ function airportBlock({
   departure = "DL100",
   arrival = null,
   to = "2",
-  back = "2",
+  back = null,
   bags = "No",
   carryOn = "No",
   help = "No",
@@ -133,7 +133,8 @@ function airportBlock({
     // A one-way ride to the airport has no arrival flight (Donald, Nov 16 2026).
     ...(arrival ? [`Arrival flight: ${arrival}`] : []),
     `Passengers to the airport: ${to}`,
-    `Passengers back from the airport: ${back}`,
+    // Asked only on a round trip (Donald, Nov 16 2026).
+    ...(back ? [`Passengers back from the airport: ${back}`] : []),
     `Checked bags: ${bags}`,
     `Carry-on bags: ${carryOn}`,
     `Help with luggage: ${help}`,

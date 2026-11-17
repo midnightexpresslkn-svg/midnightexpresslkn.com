@@ -87,9 +87,6 @@ export async function fillAirport(
     .getByRole("group", { name: /help with your luggage/ })
     .getByRole("radio", { name: "No", exact: true })
     .check();
-  await page
-    .getByRole("spinbutton", { name: /Passengers back from the airport/ })
-    .fill("2");
   await page.getByLabel(/Departure flight number/).fill("DL100");
   await page
     .getByRole("textbox", { name: /Special Notes/ })
@@ -117,6 +114,9 @@ export async function fillAirport(
     );
     // The arrival flight is asked only on a round trip (Donald, Nov 16 2026).
     await page.getByLabel(/Arrival flight number/).fill("AA2684");
+    await page
+      .getByRole("spinbutton", { name: /Passengers back from the airport/ })
+      .fill("2");
   }
 }
 
@@ -157,6 +157,10 @@ export async function fillBar(page, { round = false, agree = true } = {}) {
 
 // Let the scroll and the header's shrink transition finish before a screenshot.
 export async function settled(page) {
+  // jQuery slide animations (for example the return-trip section) finish first.
+  await expect
+    .poll(() => page.evaluate(() => window.jQuery(":animated").length))
+    .toBe(0);
   await page.waitForFunction(
     () =>
       new Promise((done) => {
@@ -167,7 +171,8 @@ export async function settled(page) {
               window.scrollY === y &&
                 document
                   .getAnimations()
-                  .every((a) => a.playState !== "running"),
+                  .every((a) => a.playState !== "running") &&
+                !window.jQuery(":animated").length,
             ),
           ),
         );

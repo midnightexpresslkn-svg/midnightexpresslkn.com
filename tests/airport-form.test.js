@@ -125,6 +125,27 @@ describe.each(scripts)("airport form %s", (script) => {
         loaded: script,
       },
     );
+    const back = view.document.querySelector("#booking-passengers-back");
+    const backGroup = view.document.querySelector("#passengers-back-group");
+    check([backGroup.style.display, back.required], ["none", false], {
+      label:
+        "a one-way ride hides the passengers-back count and does not require it",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    tick(view, "#booking-round-trip");
+    type(view, "#booking-passengers-back", "3");
+    check([backGroup.style.display !== "none", back.required], [true, true], {
+      label: "a round trip shows and requires the passengers-back count",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    tick(view, "#booking-round-trip-no");
+    check(back.value, "", {
+      label: "switching to No clears the passengers-back count",
+      source: "js/booking.js",
+      loaded: script,
+    });
     check(
       view.document.querySelector("#booking-departure-flight").required,
       true,
@@ -138,6 +159,12 @@ describe.each(scripts)("airport form %s", (script) => {
     check(resultText(view.document).includes("Request received"), true, {
       label: "a one-way ride sends with only the departure flight",
       actual: resultText(view.document),
+      source: "js/booking.js",
+      loaded: script,
+    });
+    check(sent(view)[NOTES].includes("Passengers back"), false, {
+      label: "a one-way note leaves out passengers back",
+      actual: sent(view)[NOTES],
       source: "js/booking.js",
       loaded: script,
     });
@@ -241,7 +268,11 @@ describe.each(scripts)("airport form %s", (script) => {
 
   it("checks both flight numbers and the passengers coming back", async () => {
     const bad = await renderBooking(script);
-    await fillValid(bad, { departureFlight: "!!", passengersBack: "6" });
+    await fillValid(bad, {
+      departureFlight: "!!",
+      passengersBack: "6",
+      roundTrip: true,
+    });
     await submitForm(bad);
     check(
       errorText(bad, "departure-flight-error"),

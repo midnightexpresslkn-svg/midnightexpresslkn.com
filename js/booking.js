@@ -743,7 +743,9 @@
         if (d.arrivalFlight) lines.push('Arrival flight: ' + d.arrivalFlight);
         lines = lines.concat([
             'Passengers to the airport: ' + d.passengersTo,
-            'Passengers back from the airport: ' + d.passengersBack,
+        ]);
+        if (d.passengersBack) lines.push('Passengers back from the airport: ' + d.passengersBack);
+        lines = lines.concat([
             'Checked bags: ' + bags(d.bagsChoice, d.bagCount),
             'Carry-on bags: ' + bags(d.carryOnChoice, d.carryOnCount),
             'Help with luggage: ' + d.luggageHelp
@@ -1036,6 +1038,7 @@
     var NOTES_PLACEHOLDER = 'Anything we should know? For example, a wheelchair, a car seat, or extra luggage.';
     // Donald (Nov 16, 2026): the bar form uses one combined agreement box.
     var BAR_AGREEMENT = 'Must be 21 years or older, cannot smoke, and you are responsible for any damages.';
+    var BAR_NOTES_PLACEHOLDER = 'Anything we should know? For example: drinks, music style.';
     var BAR_AGREEMENT_MESSAGE = 'Please check the box: ' + BAR_AGREEMENT;
     var RULES_MESSAGE = "Please check all three boxes: Must be 21 or older, No smoking, and If you damage anything, you are responsible.";
     var GROUP_NOTES_MESSAGE = 'Please tell us about your group event (what it is, how many people, and anything we should know).';
@@ -1128,7 +1131,10 @@
             } else if (kind === 'local') {
                 setFieldLabel('address-label', 'Address *');
                 setFieldLabel('notes-label', 'Special Notes');
-                $('#booking-notes').attr('placeholder', NOTES_PLACEHOLDER);
+                // Donald (Nov 16, 2026): bar notes give drink and music examples; party keeps the old ones.
+                var localHint = $('#local-kind').val() === 'bar' ? BAR_NOTES_PLACEHOLDER : NOTES_PLACEHOLDER;
+                $('#booking-notes').attr('placeholder', localHint);
+                $('#notes-hint').text(localHint);
                 $('#local-intro, #local-bar-list').removeAttr('hidden').show();
                 showLocalPickers();
                 $('#ride-rules').removeAttr('hidden').show();
@@ -1184,9 +1190,14 @@
             $('#booking-flight').val('');
             $('#flight-error').text('').hide();
             $flight.removeClass('has-error');
+            // Donald (Nov 16, 2026): the passengers-back count is asked only on a round trip too.
+            $('#passengers-back-group').hide().removeClass('has-error');
+            $('#booking-passengers-back').val('');
+            $('#passengers-back-error').text('').hide();
             return;
         }
         $flight.show();
+        $('#passengers-back-group').show();
         $flight.removeClass('col-md-12 col-md-4').addClass('col-md-6');
         $('#flight-label').text('Arrival flight number *');
         $('#flight-slot').hide();
@@ -1194,8 +1205,8 @@
 
     function updateAirportRequirements() {
         var airport = isAirportTrip();
-        $('#booking-departure-flight, #booking-passengers-back, input[name="checking-bags"], input[name="carry-on"], input[name="luggage-help"]').prop('required', airport);
-        $('#booking-flight').prop('required', airport && isRoundTrip());
+        $('#booking-departure-flight, input[name="checking-bags"], input[name="carry-on"], input[name="luggage-help"]').prop('required', airport);
+        $('#booking-flight, #booking-passengers-back').prop('required', airport && isRoundTrip());
         $('#booking-bag-count').prop('required', airport && checkingBagsChoice() === 'Yes').attr('min', '1');
         $('#booking-carryon-count').prop('required', airport && yesNoChoice('carry-on') === 'Yes').attr('min', '1');
     }
@@ -2314,7 +2325,7 @@
                 $('#booking-passengers').closest('.form-group').addClass('has-error').find('.help-block').text(callMsg).show();
                 isValid = false;
             }
-            if (trip === 'airport') {
+            if (trip === 'airport' && isRoundTrip()) {
                 const backCount = /^\d+$/.test(passengersBack) ? parseInt(passengersBack, 10) : 0;
                 if (backCount < 1) {
                     fieldError('#booking-passengers-back', 'passengers-back-error', 'Please enter how many passengers come back from the airport.');

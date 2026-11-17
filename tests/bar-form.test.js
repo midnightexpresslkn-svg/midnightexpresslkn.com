@@ -309,6 +309,31 @@ describe.each(scripts)("bar form %s", (script) => {
     });
   });
 
+  it("uses drinks and music examples for bar notes only", async () => {
+    const view = await renderBooking(script, { miles: 4 });
+    await fillValid(view, { trip: "local" });
+    const box = view.document.querySelector("#booking-notes");
+    const hint = view.document.querySelector("#notes-hint");
+    const barHint =
+      "Anything we should know? For example: drinks, music style.";
+    check([box.placeholder, hint.textContent], [barHint, barHint], {
+      label:
+        "a bar ride gives drinks and music examples on the box and below it",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    const kind = view.document.querySelector("#local-kind");
+    kind.value = "party";
+    view.window.jQuery(kind).trigger("change");
+    const oldHint =
+      "Anything we should know? For example, a wheelchair, a car seat, or extra luggage.";
+    check([box.placeholder, hint.textContent], [oldHint, oldHint], {
+      label: "a party ride keeps its old examples",
+      source: "js/booking.js",
+      loaded: script,
+    });
+  });
+
   it("leaves the party form as it was", async () => {
     const view = await renderBooking(script, { miles: 4 });
     await fillValid(view, {
