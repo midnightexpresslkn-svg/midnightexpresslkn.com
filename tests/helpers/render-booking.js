@@ -271,7 +271,11 @@ export async function renderBooking(script, options = {}) {
       credentials: init.credentials || "",
       mocked: true,
     });
-    if (state.failPost && method === "POST") {
+    const failThis =
+      typeof state.failPost === "function"
+        ? state.failPost(state.requests[state.requests.length - 1])
+        : state.failPost;
+    if (failThis && method === "POST") {
       throw new Error("mocked network failure");
     }
     if (host === "router.project-osrm.org") {
@@ -408,25 +412,38 @@ export function chooseRadio(document, inputName, value, meta = {}) {
   return el;
 }
 
+/** Types a 24-hour HH:MM:SS value as the rider would: 12-hour text plus AM or PM. */
+export function typeTime(document, id, value) {
+  const window = document.defaultView;
+  const text = document.querySelector(`#${id}-text`);
+  const radios = [...document.querySelectorAll(`input[name="${id}-period"]`)];
+  radios.forEach((radio) => {
+    radio.checked = false;
+  });
+  if (!value) {
+    window.jQuery(text).val("").trigger("input");
+    return;
+  }
+  const [hours, minutes] = value.split(":").map(Number);
+  window
+    .jQuery(text)
+    .val(`${((hours + 11) % 12) + 1}:${String(minutes).padStart(2, "0")}`)
+    .trigger("input");
+  const period = radios.find(
+    (radio) => radio.value === (hours < 12 ? "AM" : "PM"),
+  );
+  period.checked = true;
+  window.jQuery(period).trigger("change");
+}
+
 export function setWhen(document, date, time, prefix = "") {
-  const dateEl = document.querySelector(
-    prefix ? `#booking-${prefix}date`.replace("--", "-") : "#booking-date",
-  );
-  const timeEl = document.querySelector(
-    prefix ? `#booking-${prefix}time` : "#booking-time",
-  );
   const dateId =
     prefix === "return-" ? "#booking-return-date" : "#booking-date";
-  const timeId =
-    prefix === "return-" ? "#booking-return-time" : "#booking-time";
+  const timeId = prefix === "return-" ? "booking-return-time" : "booking-time";
   const dateNode = document.querySelector(dateId);
-  const timeNode = document.querySelector(timeId);
   if (dateNode._flatpickr) dateNode._flatpickr.setDate(date, true);
   dateNode.value = date;
-  if (timeNode._flatpickr) timeNode._flatpickr.setDate(time, true);
-  timeNode.value = time;
-  void dateEl;
-  void timeEl;
+  typeTime(document, timeId, time);
 }
 
 export async function fillValid(view, overrides = {}) {
@@ -521,15 +538,23 @@ export async function fillValid(view, overrides = {}) {
     }
     if (groupHours) setControl(groupHours, overrides.hours ?? "3");
   }
-  if (overrides.flight) {
-    setControl(doc.querySelector("#booking-flight"), overrides.flight);
-  }
   if (overrides.notes != null) {
     setControl(doc.querySelector("#booking-notes"), overrides.notes);
   } else if (trip === "group") {
     setControl(doc.querySelector("#booking-notes"), "Family reunion");
+  } else if (trip === "airport") {
+    setControl(doc.querySelector("#booking-notes"), "Departure curb, please.");
   }
   if (trip === "airport") {
+    const direction =
+      overrides.direction === undefined ? "to" : overrides.direction;
+    if (direction != null) {
+      const radio = doc.querySelector(
+        `input[name="airport-direction"][value="${direction}"]`,
+      );
+      radio.checked = true;
+      view.window.jQuery(radio).trigger("change");
+    }
     const choice = doc.querySelector(
       overrides.bags
         ? "#booking-checking-bags-yes"
@@ -545,17 +570,47 @@ export async function fillValid(view, overrides = {}) {
       window.jQuery(count).trigger("input");
     }
   }
-  if (trip === "group" || trip === "local") {
-    const rules = overrides.rules ?? ["age", "smoke", "damage"];
-    for (const [id, key] of [
-      ["rule-age", "age"],
-      ["rule-smoke", "smoke"],
-      ["rule-damage", "damage"],
-    ]) {
-      const box = doc.querySelector(`#${id}`);
-      box.checked = rules.includes(key);
+  if (trip === "airport") {
+    // Required airport answers (Donald, Nov 16 2026); pass null to leave one blank.
+    const pick = (name, value) => {
+      if (value == null) return;
+      const box = doc.querySelector(`input[name="${name}"][value="${value}"]`);
+      box.checked = true;
       window.jQuery(box).trigger("change");
+    };
+    pick(
+      "carry-on",
+      overrides.carryOn === undefined ? "No" : overrides.carryOn,
+    );
+    if (overrides.carryOnCount != null) {
+      setControl(
+        doc.querySelector("#booking-carryon-count"),
+        overrides.carryOnCount,
+      );
     }
+    pick(
+      "luggage-help",
+      overrides.luggageHelp === undefined ? "No" : overrides.luggageHelp,
+    );
+    const fill = (selector, value, fallback) => {
+      const next = value === undefined ? fallback : value;
+      if (next != null) setControl(doc.querySelector(selector), next);
+    };
+    fill("#booking-departure-flight", overrides.departureFlight, "DL100");
+    fill("#booking-flight", overrides.flight, "AA2684");
+    fill(
+      "#booking-passengers-back",
+      overrides.passengersBack,
+      overrides.passengers ?? "2",
+    );
+  }
+  const barRide = trip === "local" && (overrides.localKind || "bar") === "bar";
+  const partyRide = trip === "local" && overrides.localKind === "party";
+  if (barRide || partyRide || trip === "group") {
+    // Bar and party rides use one combined agreement box (Donald, Nov 16 2026).
+    const box = doc.querySelector("#rule-bar-agreement");
+    box.checked = overrides.barAgreement ?? true;
+    window.jQuery(box).trigger("change");
   }
   if (trip === "airport" || trip === "local") {
     if (overrides.roundTrip === true) {
@@ -572,6 +627,48 @@ export async function fillValid(view, overrides = {}) {
       const no = doc.querySelector("#booking-round-trip-no");
       no.checked = true;
       window.jQuery(no).trigger("change");
+    }
+  }
+  if (partyRide) {
+    // Required party answers (Donald, Nov 16 2026); pass null to leave one blank.
+    const pick = (name, value) => {
+      if (value == null) return;
+      const box = doc.querySelector(`input[name="${name}"][value="${value}"]`);
+      box.checked = true;
+      window.jQuery(box).trigger("change");
+    };
+    const fill = (selector, value, fallback) => {
+      const next = value === undefined ? fallback : value;
+      if (next != null) setControl(doc.querySelector(selector), next);
+    };
+    pick(
+      "party-second-pickup",
+      overrides.secondPickup === undefined ? "No" : overrides.secondPickup,
+    );
+    if (overrides.secondPickup === "Yes") {
+      fill(
+        "#party-second-pickup-address",
+        overrides.secondAddress,
+        "300 Pine St, Denver NC",
+      );
+    }
+    if (overrides.roundTrip === true) {
+      fill("#party-dropoff", overrides.dropoff, "100 Main St, Denver NC");
+      pick(
+        "party-more-dropoffs",
+        overrides.moreDropoffs === undefined ? "No" : overrides.moreDropoffs,
+      );
+      if (overrides.moreDropoffs === "Yes") {
+        fill(
+          "#party-extra-dropoff",
+          overrides.extraDropoff,
+          "50 Lake Rd, Cornelius NC",
+        );
+      }
+      fill("#party-people", overrides.partyPeople, "2");
+    }
+    if (overrides.requests != null) {
+      setControl(doc.querySelector("#party-requests"), overrides.requests);
     }
   }
   setWhen(doc, overrides.date ?? "2026-12-15", overrides.time ?? "10:00:00");
@@ -666,4 +763,19 @@ export function resultText(document) {
 export function atLocal(ymd, hours, minutes) {
   const [year, month, day] = ymd.split("-").map(Number);
   return new Date(year, month - 1, day, hours, minutes, 0, 0).toISOString();
+}
+
+/** Click the one "Make Another Booking" button, the only way to start a new booking ID. */
+export async function startAnotherBooking(view) {
+  const button = await waitFor(
+    () => {
+      const found = view.document.querySelector("#new-booking-btn");
+      if (!found || found.closest("[style*='display: none']"))
+        throw new Error("waiting for another booking");
+      return found;
+    },
+    { timeout: 4000 },
+  );
+  button.click();
+  return button;
 }

@@ -29,6 +29,9 @@
     /**
      * Rebuilt questions on that same form. Short answer, except notes and
      * special requirements, which are paragraphs. None are required.
+     * Donald added 16 optional questions on Nov 16, 2026
+     * (docs/form-entry-ids-20261116.md). Those answers still go into Notes
+     * as labeled lines, and also into their own entry when they apply.
      */
     var FORM_ENTRY = {
         name: 'entry.38734242',
@@ -42,8 +45,43 @@
         airportTrip: 'entry.825490469',
         flight: 'entry.149520789',
         checkingBags: 'entry.214097981',
-        specialRequirements: 'entry.853044875'
+        specialRequirements: 'entry.853044875',
+        airportDirection: 'entry.1344705029',
+        departureFlightNumber: 'entry.502673920',
+        arrivalFlightNumber: 'entry.1977309653',
+        passengersGoing: 'entry.1991650389',
+        passengersComingBack: 'entry.276667296',
+        returnPickupDateTime: 'entry.328412433',
+        returnPickupLocation: 'entry.702078471',
+        dropoffAddress: 'entry.1343447537',
+        secondPickupAddress: 'entry.788079233',
+        extraStops: 'entry.791508642',
+        checkedBags: 'entry.1994837178',
+        carryOnBags: 'entry.1512412552',
+        luggageHelp: 'entry.800471512',
+        specialItems: 'entry.64451580',
+        agreement21: 'entry.285972615',
+        groupDeposit: 'entry.144653274'
     };
+
+    var EXTRA_SHEET_KEYS = [
+        'airportDirection',
+        'departureFlightNumber',
+        'arrivalFlightNumber',
+        'passengersGoing',
+        'passengersComingBack',
+        'returnPickupDateTime',
+        'returnPickupLocation',
+        'dropoffAddress',
+        'secondPickupAddress',
+        'extraStops',
+        'checkedBags',
+        'carryOnBags',
+        'luggageHelp',
+        'specialItems',
+        'agreement21',
+        'groupDeposit'
+    ];
 
     /**
      * Calendar Apps Script web app (/exec): POST mirrors bookings onto Google Calendar.
@@ -147,22 +185,6 @@
             void err;
             return "";
         }
-    }
-
-    function rulesState() {
-        return {
-            mustBe21: $("#rule-age").is(":checked") ? "Yes" : "No",
-            noSmoking: $("#rule-smoke").is(":checked") ? "Yes" : "No",
-            damageResponsibility: $("#rule-damage").is(":checked") ? "Yes" : "No"
-        };
-    }
-
-    function rulesLine(state) {
-        return "Must be 21 or older: " + state.mustBe21 + ". No smoking: " + state.noSmoking + ". If you damage anything, you are responsible: " + state.damageResponsibility + ".";
-    }
-
-    function rulesComplete(state) {
-        return state.mustBe21 === "Yes" && state.noSmoking === "Yes" && state.damageResponsibility === "Yes";
     }
 
     globalThis.MidnightRides = {
@@ -321,6 +343,20 @@
      */
     let pendingBookings = [];
 
+    /**
+     * One booking ID per filled-in form. A booking ID, and each of its legs,
+     * is sent at most once; only "Make Another Booking" starts a new ID.
+     */
+    const sentBookingIds = new Set();
+    const sentLegIds = new Set();
+    let bookingSeq = 0;
+    let submitInFlight = false;
+    function newBookingId() {
+        bookingSeq += 1;
+        return 'MEL-' + Date.now().toString(36) + '-' + bookingSeq;
+    }
+    let currentBookingId = newBookingId();
+
     // =================================================================
     // BOOKING DATA MANAGEMENT
     // =================================================================
@@ -467,8 +503,9 @@
         return formatTimeFromMinutes(hours * 60 + minutes);
     }
 
-    function placeInView(el, align) {
+    function placeInView(el, align, endEl) {
         var node = el && el.jquery ? el[0] : el;
+        var endNode = endEl && endEl.jquery ? endEl[0] : endEl;
         if (!node || !node.getBoundingClientRect || !window.scrollTo) return;
         var nav = document.querySelector('.navbar-fixed-top');
         var navHeight = 0;
@@ -477,6 +514,11 @@
         }
         var topBar = navHeight + 12;
         var rect = node.getBoundingClientRect();
+        // With endEl, place the span from the top of el to the bottom of endEl
+        if (endNode) {
+            var endRect = endNode.getBoundingClientRect();
+            rect = { top: rect.top, bottom: endRect.bottom, height: endRect.bottom - rect.top };
+        }
         var viewH = window.innerHeight || document.documentElement.clientHeight;
         var top = window.pageYOffset + rect.top - topBar;
         if (align === 'center' && rect.height + topBar < viewH) {
@@ -707,6 +749,109 @@
      * @param {string} flightNumber - Flight number
      * @returns {boolean}
      */
+    // A private airfield flight may use a tail number (for example N123AB) instead of an airline flight number.
+    function validateTailNumber(value) {
+        return /^[A-Za-z0-9][A-Za-z0-9-]{1,9}$/.test(value);
+    }
+
+    /**
+     * Airport answers also go into Notes as labeled lines, so nothing is lost
+     * if a sheet column is missing.
+     */
+    function bagsAnswer(choice, count) {
+        return choice === 'Yes' ? 'Yes (' + count + ')' : choice;
+    }
+
+    function airportNotes(customerNote, d) {
+        var lines = ['Direction: ' + airportDirection()];
+        if (d.departureFlight) lines.push('Departure flight: ' + d.departureFlight);
+        if (d.arrivalFlight) lines.push('Arrival flight: ' + d.arrivalFlight);
+        lines.push((airportFrom() ? 'Passengers from the airport: ' : 'Passengers to the airport: ') + d.passengersTo);
+        if (d.passengersBack) lines.push((airportFrom() ? 'Passengers back to the airport: ' : 'Passengers back from the airport: ') + d.passengersBack);
+        lines = lines.concat([
+            'Checked bags: ' + bagsAnswer(d.bagsChoice, d.bagCount),
+            'Carry-on bags: ' + bagsAnswer(d.carryOnChoice, d.carryOnCount),
+            'Help with luggage: ' + d.luggageHelp
+        ]);
+        return (customerNote ? customerNote + '\n' : '') + 'Airport details:\n' + lines.join('\n');
+    }
+
+    /**
+     * Typed time (Donald, Nov 16 2026): "7:30", "730", "0730", "7" plus a chosen AM or PM.
+     * Returns HH:MM:SS for the Form and calendar, or '' when it is not a real time.
+     */
+    function parseTypedTime(text, period) {
+        var m = /^\s*(\d{1,2})(?:[:.]?(\d{2}))?\s*$/.exec(text || '');
+        if (!m || (period !== 'AM' && period !== 'PM')) return '';
+        var hour = Number(m[1]);
+        var minute = m[2] ? Number(m[2]) : 0;
+        if (hour < 1 || hour > 12 || minute > 59) return '';
+        var h24 = (hour % 12) + (period === 'PM' ? 12 : 0);
+        return (h24 < 10 ? '0' : '') + h24 + ':' + (minute < 10 ? '0' : '') + minute + ':00';
+    }
+
+    function typedTimeProblem(id, name) {
+        var text = $.trim($('#' + id + '-text').val() || '');
+        var period = $('input[name="' + id + '-period"]:checked').val() || '';
+        if (!text) return name + ' is required';
+        if (!parseTypedTime(text, 'AM')) return name + ': enter a real time, like 7:30';
+        // Only reached when the time is real but AM or PM is not chosen yet.
+        return 'Please choose AM or PM for the ' + name.toLowerCase();
+    }
+
+    function syncTypedTime(id) {
+        var text = $.trim($('#' + id + '-text').val() || '');
+        var period = $('input[name="' + id + '-period"]:checked').val() || '';
+        var value = parseTypedTime(text, period);
+        var $hidden = $('#' + id);
+        if ($hidden.val() !== value) $hidden.val(value).trigger('change');
+    }
+
+    function clearTypedTime(id) {
+        $('#' + id + '-text').val('');
+        $('input[name="' + id + '-period"]').prop('checked', false);
+        syncTypedTime(id);
+    }
+
+    function twelveHour(value) {
+        var parts = value.split(':');
+        var hours = parseInt(parts[0], 10);
+        return ((hours + 11) % 12 + 1) + ':' + parts[1] + (hours < 12 ? ' AM' : ' PM');
+    }
+
+    /**
+     * Bar answers also go into Notes as labeled lines, so nothing is lost
+     * if a sheet column is missing.
+     */
+    function barNotes(notes, agreed, ride) {
+        var lines = ['Agreement (' + BAR_AGREEMENT + '): ' + (agreed ? 'Yes' : 'No')];
+        if (ride) {
+            lines.push('Return ride:');
+            lines.push('Passengers back: ' + ride.passengers);
+            lines.push('Return pickup time: ' + (ride.time ? twelveHour(ride.time) : ''));
+            lines.push('Return pickup location: ' + ride.location);
+        }
+        return notes + '\n' + lines.join('\n');
+    }
+
+    /**
+     * Party answers also go into Notes as one labeled block, so nothing is lost
+     * if a sheet column is missing.
+     */
+    function partyNotes(notes, agreed, p) {
+        var lines = ['Agreement (' + BAR_AGREEMENT + '): ' + (agreed ? 'Yes' : 'No'), 'Party details:', 'Second pickup: ' + p.secondPickup];
+        if (p.secondPickup === 'Yes') lines.push('Second pickup address: ' + p.secondAddress);
+        if (p.round) {
+            lines.push('Return ride:');
+            lines.push('Drop-off location: ' + p.dropoff);
+            lines.push('More than one drop-off: ' + p.moreDropoffs);
+            if (p.moreDropoffs === 'Yes') lines.push('Other drop-off location: ' + p.extraDropoff);
+            lines.push('People for the ride back: ' + p.people);
+        }
+        if (p.requests) lines.push('Special requests: ' + p.requests);
+        return notes + '\n' + lines.join('\n');
+    }
+
     function validateFlightNumber(flightNumber) {
         const pattern = /^[a-zA-Z0-9]{2,3}[\s-]?\d{1,4}[a-zA-Z]?$/;
         return pattern.test(flightNumber);
@@ -828,7 +973,8 @@
             passengers: formData.passengers,
             specialNotes: notesForCalendar(formData),
             airportTrip: formData.airportTrip,
-            flightNumber: formData.flightNumber || '',
+            // Round trip: the arrival flight the driver meets. One way to the airport: the departure flight.
+            flightNumber: formData.airportFrom ? formData.flightNumber : (formData.flightNumber || formData.departureFlight || ''),
             checkingBags: formData.airportTrip === 'Yes'
                 ? bagsForCalendar(formData.checkingBags, formData.bagCount)
                 : formData.checkingBags,
@@ -890,6 +1036,14 @@
         return tripKind() === 'airport';
     }
 
+    function airportFrom() {
+        return isAirportTrip() && $('input[name="airport-direction"]:checked').val() === 'from';
+    }
+
+    function airportDirection() {
+        return airportFrom() ? 'Pick up from the airport' : 'To the airport';
+    }
+
     function roundTripChoice() {
         return $('input[name="round-trip"]:checked').val() || '';
     }
@@ -922,8 +1076,13 @@
         return chosen === 'Yes' || chosen === 'No' ? chosen : '';
     }
 
-    function readBagCount() {
-        var raw = $.trim($('#booking-bag-count').val() || '');
+    function yesNoChoice(name) {
+        var chosen = $('input[name="' + name + '"]:checked').val() || '';
+        return chosen === 'Yes' || chosen === 'No' ? chosen : '';
+    }
+
+    function readBagCount(selector) {
+        var raw = $.trim($(selector || '#booking-bag-count').val() || '');
         if (!raw) return { filled: false, value: 0, valid: true };
         if (!/^\d+$/.test(raw)) return { filled: true, value: 0, valid: false };
         var count = parseInt(raw, 10);
@@ -964,8 +1123,23 @@
      * Local Bars and Parties and Group reuse the same contact fields.
      */
     var NOTES_PLACEHOLDER = 'Anything we should know? For example, a wheelchair, a car seat, or extra luggage.';
-    var RULES_MESSAGE = "Please check all three boxes: Must be 21 or older, No smoking, and If you damage anything, you are responsible.";
+    // Donald (Nov 16, 2026): the bar form uses one combined agreement box.
+    var BAR_AGREEMENT = 'Must be 21 years or older, cannot smoke, and you are responsible for any damages.';
+    var PASSENGERS_TITLE = 'Online: up to 5 with carry-on, up to 4 with checked bags. For more, call (980) 422-9125.';
+    var TIME_IDS = ['booking-time', 'booking-return-time', 'bar-return-time'];
+    var BAR_NOTES_PLACEHOLDER = 'Anything we should know? For example: drinks, music style.';
+    var BAR_AGREEMENT_MESSAGE = 'Please check the box: ' + BAR_AGREEMENT;
     var GROUP_NOTES_MESSAGE = 'Please tell us about your group event (what it is, how many people, and anything we should know).';
+    // Donald (Nov 16, 2026): the airport form asks for a required note with these examples.
+    var AIRPORT_NOTES_PLACEHOLDER = 'For example: extra stops, or where to pick you up (arrival or departure curb).';
+    var AIRPORT_NOTES_MESSAGE = 'Please add a note for your driver (for example extra stops, or arrival or departure curb).';
+    var SPECIAL_ITEMS = [
+        { id: 'booking-wheelchair', label: 'Wheelchair' },
+        { id: 'booking-carseat', label: 'Car Seat' },
+        { id: 'booking-golf', label: 'Golf Clubs' },
+        { id: 'booking-skis', label: 'Skis' }
+    ];
+    var SPECIAL_ITEM_BOXES = '#booking-wheelchair, #booking-carseat, #booking-golf, #booking-skis, #booking-other-item';
 
     function fillBarChoices() {
         var select = document.getElementById('bar-choice');
@@ -1027,12 +1201,20 @@
             $('#airport-choice-row').hide();
             $('#dest-group').hide();
             $('#special-requirements-section').hide();
-            $('#booking-wheelchair, #booking-carseat').prop('checked', false);
+            $(SPECIAL_ITEM_BOXES).prop('checked', false);
+            $('#booking-other-desc').val('');
+            $('#other-item-group').attr('hidden', 'hidden');
+            $('#notes-hint').text(NOTES_PLACEHOLDER);
+            $('#booking-notes').attr('title', NOTES_PLACEHOLDER);
+            $('#booking-passengers').attr('title', PASSENGERS_TITLE);
             hideRideExtras();
             if (kind === 'group') {
                 setFieldLabel('address-label', 'Pickup Address *');
                 setFieldLabel('notes-label', 'Trip Description *');
-                $('#booking-notes').attr('placeholder', NOTES_PLACEHOLDER);
+                $('#booking-notes').attr('placeholder', BAR_NOTES_PLACEHOLDER).attr('title', BAR_NOTES_PLACEHOLDER);
+                $('#notes-hint').text(BAR_NOTES_PLACEHOLDER);
+                // Donald (Nov 16, 2026): no bag, luggage, or airport wording on the group form.
+                $('#booking-passengers').attr('title', 'Online: up to ' + GROUP_MAX_PASSENGERS + ' riders. For more, call (980) 422-9125.');
                 $('#group-vehicle').removeAttr('hidden').show();
                 $('#group-hours-row').removeAttr('hidden').show();
                 $('#a-when').after($('#group-hours-row'));
@@ -1042,8 +1224,14 @@
             } else if (kind === 'local') {
                 setFieldLabel('address-label', 'Address *');
                 setFieldLabel('notes-label', 'Special Notes');
-                $('#booking-notes').attr('placeholder', NOTES_PLACEHOLDER);
-                $('#local-intro, #local-bar-list').removeAttr('hidden').show();
+                // Donald (Nov 16, 2026): bar and party notes give drink and music examples.
+                var localKind = $('#local-kind').val();
+                var localHint = localKind === 'bar' || localKind === 'party' ? BAR_NOTES_PLACEHOLDER : NOTES_PLACEHOLDER;
+                $('#booking-notes').attr('placeholder', localHint);
+                $('#notes-hint').text(localHint);
+                $('#local-intro').removeAttr('hidden').show();
+                // Donald (Nov 16, 2026): the party form has no bar list.
+                if (localKind !== 'party') $('#local-bar-list').removeAttr('hidden').show();
                 showLocalPickers();
                 $('#ride-rules').removeAttr('hidden').show();
                 $('#booking-quote').show();
@@ -1056,8 +1244,10 @@
                 setCols($('#address-group'), false);
                 $('#airport-choice-row').show();
                 $('#booking-destination').attr('placeholder', 'CLT Airport');
-                setFieldLabel('notes-label', 'Special Notes');
-                $('#booking-notes').attr('placeholder', NOTES_PLACEHOLDER);
+                setFieldLabel('passengers-label', 'Passengers to the airport *');
+                setFieldLabel('notes-label', 'Special Notes *');
+                $('#booking-notes').attr('placeholder', AIRPORT_NOTES_PLACEHOLDER);
+                $('#notes-hint').text(AIRPORT_NOTES_PLACEHOLDER);
                 $('#special-requirements-section').show();
                 $('#booking-quote').show();
             }
@@ -1066,8 +1256,13 @@
             $('#airport-choice-row').hide();
             hideRideExtras();
             $('#booking-quote').hide();
+            $('#booking-notes').attr('placeholder', NOTES_PLACEHOLDER);
+            $('#notes-hint').text(NOTES_PLACEHOLDER);
         }
-        $('#booking-notes').prop('required', kind === 'group');
+        $('#airport-direction-group').prop('hidden', kind !== 'airport');
+        $('input[name="airport-direction"]').prop('required', kind === 'airport');
+        if (kind !== 'airport') $('input[name="airport-direction"]').prop('checked', false);
+        $('#booking-notes').prop('required', kind === 'group' || kind === 'airport');
         var airfield = tripKind() === 'airport' && $('#airport-choice').val() === 'PRIVATE';
         if (airfield) $('#airfield-place').removeAttr('hidden').show();
         else $('#airfield-place').attr('hidden', 'hidden').hide();
@@ -1084,18 +1279,134 @@
      * Follows existing show/hide patterns from booking.js
      */
     function placeFlightField() {
-        var $flight = $('#flight-group');
-        if (isGroupEvent() || isLocalTrip()) {
-            $flight.hide();
-            $('#flight-slot').hide();
-            $('#booking-flight').val('');
-            return;
-        }
-        $flight.show();
-        $flight.removeClass('col-md-12').addClass('col-md-4');
-        $('#flight-label').text('Return Flight Number');
-        $('#return-flight-section').append($flight);
+        var airport = isAirportTrip();
+        var from = airportFrom();
+        var round = isRoundTrip();
+        // Donald (Nov 16, 2026): the first ride's flight sits before Round trip; the ride back's
+        // date, time, passengers, and flight sit together after it.
+        var $first = from ? $('#flight-group') : $('#departure-flight-group');
+        var $second = from ? $('#departure-flight-group') : $('#flight-group');
+        $('#airport-details').append($first);
+        $('#return-flight-section').append($('#passengers-back-group'), $second);
+        $('#flight-group, #departure-flight-group, #passengers-back-group').removeClass('col-md-12 col-md-4 col-md-6').addClass('col-md-12');
+        $('#flight-label').text('Arrival flight number *');
         $('#flight-slot').hide();
+        // First leg: departure for To, arrival for From. Round trips ask for both.
+        [
+            { group: '#flight-group', input: '#booking-flight', error: '#flight-error', show: airport && (from || round) },
+            { group: '#departure-flight-group', input: '#booking-departure-flight', error: '#departure-flight-error', show: airport && (!from || round) },
+            { group: '#passengers-back-group', input: '#booking-passengers-back', error: '#passengers-back-error', show: airport && round }
+        ].forEach(function(f) {
+            $(f.group).toggle(f.show);
+            if (!f.show) {
+                $(f.input).val('');
+                $(f.error).text('').hide();
+                $(f.group).removeClass('has-error');
+            }
+        });
+        if (airport) {
+            setFieldLabel('address-label', from ? 'Drop-off address *' : 'Home address *');
+            setFieldLabel('passengers-label', from ? 'Passengers from the airport *' : 'Passengers to the airport *');
+            setFieldLabel('passengers-back-label', from ? 'Passengers back to the airport *' : 'Passengers back from the airport *');
+            $('#airport-choice-row label').text(from ? 'Pickup airport' : 'Airport');
+        }
+    }
+
+    function updateAirportRequirements() {
+        var airport = isAirportTrip();
+        $('input[name="checking-bags"], input[name="carry-on"], input[name="luggage-help"]').prop('required', airport);
+        $('#booking-departure-flight').prop('required', airport && (!airportFrom() || isRoundTrip()));
+        $('#booking-flight').prop('required', airport && (airportFrom() || isRoundTrip()));
+        $('#booking-passengers-back').prop('required', airport && isRoundTrip());
+        $('#booking-bag-count').prop('required', airport && checkingBagsChoice() === 'Yes').attr('min', '1');
+        $('#booking-carryon-count').prop('required', airport && yesNoChoice('carry-on') === 'Yes').attr('min', '1');
+    }
+
+    function isBarRide() {
+        return localMode() === 'bar';
+    }
+
+    function clearBarReturn() {
+        var $box = $('#bar-return-details');
+        $box.attr('hidden', 'hidden').hide();
+        $('#bar-return-passengers, #bar-return-location').val('');
+        clearTypedTime('bar-return-time');
+        $box.find('.help-block.text-danger').text('').hide();
+        $box.find('.has-error').removeClass('has-error');
+        $box.find('input').prop('required', false);
+    }
+
+    // Bar rides: one combined agreement box, and the ride back asks who, when, and where.
+    function isPartyRide() {
+        return localMode() === 'party';
+    }
+
+    function updateBarFields() {
+        var bar = isBarRide();
+        // Donald (Nov 16, 2026): bar, party, and group rides share the same one agreement box.
+        var oneBox = isLocalTrip() || isGroupEvent();
+        $('#bar-agreement-rule').prop('hidden', !oneBox);
+        $('#rule-bar-agreement').prop('required', oneBox);
+        if (!oneBox) $('#rule-bar-agreement').prop('checked', false);
+        if (bar && isRoundTrip()) {
+            $('#bar-return-details').removeAttr('hidden').show();
+            $('#bar-return-details input').prop('required', true);
+        } else {
+            clearBarReturn();
+        }
+    }
+
+    function resetPartyBox(selector) {
+        var $box = $(selector);
+        $box.attr('hidden', 'hidden').hide();
+        $box.find('input[type="radio"]').prop('checked', false);
+        $box.find('input, textarea').not('[type="radio"]').val('');
+        $box.find('.help-block.text-danger').text('').hide();
+        $box.find('.has-error').removeClass('has-error');
+        $box.find('input').prop('required', false);
+    }
+
+    function showPartyBox(selector, required) {
+        $(selector).removeAttr('hidden').show();
+        $(required).prop('required', true);
+    }
+
+    // Party rides: pickup sits under the party address, then optional second pickup and return drop-offs.
+    function updatePartyFields() {
+        var party = isPartyRide();
+        if (party) {
+            setCols($('#address-group'), true);
+            setFieldLabel('address-label', 'Pickup address *');
+            $('#party-pickup-slot').append($('#address-group'), $('#party-pickup-extra'));
+            showPartyBox('#party-pickup-extra, #party-requests-group', 'input[name="party-second-pickup"]');
+        } else {
+            resetPartyBox('#party-pickup-extra, #party-requests-group');
+        }
+        if (party && yesNoChoice('party-second-pickup') === 'Yes') showPartyBox('#party-second-pickup-group', '#party-second-pickup-address');
+        else resetPartyBox('#party-second-pickup-group');
+        var back = party && isRoundTrip();
+        if (back) showPartyBox('#party-return-details', '#party-dropoff, #party-people, input[name="party-more-dropoffs"]');
+        else resetPartyBox('#party-return-details');
+        if (back && yesNoChoice('party-more-dropoffs') === 'Yes') showPartyBox('#party-extra-dropoff-group', '#party-extra-dropoff');
+        else resetPartyBox('#party-extra-dropoff-group');
+    }
+
+    function updateGroupFields() {
+        if (isGroupEvent()) {
+            $('#a-places').after($('#group-stops'));
+            $('#group-stops').removeAttr('hidden').show();
+        } else {
+            $('#group-stops').attr('hidden', 'hidden').hide().find('input').val('');
+        }
+    }
+
+    function clearAirportDetails() {
+        var $box = $('#airport-details');
+        $box.attr('hidden', 'hidden').hide();
+        $box.find('input[type="radio"]').prop('checked', false);
+        $box.find('input').not('[type="radio"]').val('');
+        $box.find('.help-block.text-danger').text('').hide();
+        $box.find('.has-error').removeClass('has-error');
     }
 
     function updateConditionalFields() {
@@ -1104,14 +1415,17 @@
         // Bags and a return flight are airport fields. Local keeps round trip for the fare only.
         if (isAirportTrip()) {
             $('#checking-bags-section').slideDown();
+            $('#airport-details').removeAttr('hidden').show();
             $('#round-trip-section').show();
         } else if (isLocalTrip()) {
+            clearAirportDetails();
             $('#checking-bags-section').hide();
             $('input[name="checking-bags"]').prop('checked', false);
             $('#booking-bag-count').val('');
             $('#checking-bags-error, #bag-count-error').text('').hide();
             $('#round-trip-section').show();
         } else {
+            clearAirportDetails();
             $('#checking-bags-section').hide();
             $('#round-trip-section').hide();
             $('input[name="checking-bags"]').prop('checked', false);
@@ -1128,11 +1442,19 @@
             $('#return-flight-section').slideUp();
             $('#return-timeline-container').slideUp();
             $('#booking-return-date').val('');
-            $('#booking-return-time').val('');
+            clearTypedTime('booking-return-time');
             $('#return-date-error').text('').hide();
             $('#return-time-error').text('').hide();
         }
         placeFlightField();
+        updateAirportRequirements();
+        updateBarFields();
+        updatePartyFields();
+        updateGroupFields();
+        TIME_IDS.forEach(function(id) {
+            var active = id === 'booking-time' || (id === 'booking-return-time' ? isAirportTrip() && isRoundTrip() : isBarRide() && isRoundTrip());
+            $('#' + id + '-text, input[name="' + id + '-period"]').prop('required', active);
+        });
     }
 
     /**
@@ -1252,7 +1574,7 @@
      * Handle Dual Submission for Round-Trip Bookings
      * Creates two separate Google Sheets entries for round-trip bookings
      */
-    async function handleDualSubmission(bookingData) {
+    async function handleDualSubmission(bookingData, bookingId) {
         console.log('=== HANDLE DUAL SUBMISSION ===');
         console.log('Round Trip?', bookingData.roundTrip);
         console.log('Airport Trip?', bookingData.airportTrip);
@@ -1263,7 +1585,7 @@
         const submissions = [];
 
         // Create outbound submission
-        const outboundSubmission = {
+        const outboundSubmission = attachSheetExtras({
             name: bookingData.name,
             phone: bookingData.phone,
             email: bookingData.email,
@@ -1274,17 +1596,17 @@
             passengers: bookingData.passengers,
             specialNotes: bookingData.specialNotes,
             airportTrip: bookingData.airportTrip,
-            flightNumber: '', // No flight number for outbound (dropping off at airport)
+            flightNumber: bookingData.airportFrom ? bookingData.flightNumber : (bookingData.departureFlight || ''),
             checkingBags: bookingData.checkingBags,
             specialRequirements: bookingData.specialRequirements
-        };
+        }, bookingData);
         submissions.push(outboundSubmission);
         console.log('Created outbound submission');
 
         // Create return submission if round trip
         if (bookingData.roundTrip === 'Yes' && bookingData.airportTrip === 'Yes') {
             console.log('Creating return submission...');
-            const returnSubmission = {
+            const returnSubmission = attachSheetExtras({
                 name: bookingData.name,
                 phone: bookingData.phone,
                 email: bookingData.email,
@@ -1292,13 +1614,13 @@
                 pickupTime: bookingData.returnTime,
                 pickupAddress: bookingData.destinationAddress, // Swapped
                 destinationAddress: bookingData.pickupAddress, // Swapped
-                passengers: bookingData.passengers,
+                passengers: bookingData.passengersBack, // Passengers back from the airport
                 specialNotes: bookingData.specialNotes,
                 airportTrip: 'Yes', // Always "Yes" for return trips
-                flightNumber: bookingData.flightNumber, // Return flight number
+                flightNumber: bookingData.airportFrom ? bookingData.departureFlight : bookingData.flightNumber,
                 checkingBags: bookingData.checkingBags,
                 specialRequirements: bookingData.specialRequirements
-            };
+            }, bookingData);
             submissions.push(returnSubmission);
             console.log('Created return submission');
         } else {
@@ -1317,7 +1639,15 @@
             });
         });
 
-        const submissionPromises = submissions.map(submission => submitToGoogleSheets(submission));
+        // A leg that already went (for example the outbound leg before a return-leg error) is never sent again.
+        const submissionPromises = submissions.map(function(submission, idx) {
+            const legId = bookingId + '-' + (idx + 1);
+            if (sentLegIds.has(legId)) return Promise.resolve({ delivered: 'already-sent' });
+            return submitToGoogleSheets(submission).then(function(result) {
+                sentLegIds.add(legId);
+                return result;
+            });
+        });
         const results = await Promise.allSettled(submissionPromises);
         console.log('Submission results:', results);
         const failures = results.filter(function(r) { return r.status === 'rejected'; });
@@ -1339,6 +1669,18 @@
         return parts[1] + '/' + parts[2] + '/' + parts[0]; // MM/DD/YYYY
     }
 
+    function sheetDateTime(dateStr, timeStr) {
+        if (!dateStr || !timeStr) return '';
+        return formatDateForGoogleForms(dateStr) + ' ' + timeStr;
+    }
+
+    function attachSheetExtras(row, bookingData) {
+        EXTRA_SHEET_KEYS.forEach(function(key) {
+            row[key] = bookingData[key];
+        });
+        return row;
+    }
+
     /**
      * Submit booking data to Google Sheets
      * @param {Object} submissionData - Booking data to submit
@@ -1354,11 +1696,11 @@
     }
 
     function notesForCalendar(formData) {
-        var note = formData.specialNotes || '';
+        // Every ride sends a note now: airport rides always carry their labeled details.
+        var note = formData.specialNotes;
         var requirements = specialRequirementsParagraph(formData);
         if (!requirements) return note;
         var line = 'Special requirements: ' + requirements;
-        if (!note) return line;
         if (note.indexOf(line) !== -1 || note.indexOf(requirements) !== -1) return note;
         return note + '\n' + line;
     }
@@ -1374,11 +1716,14 @@
         googleFormData.append(FORM_ENTRY.pickup, submissionData.pickupAddress);
         googleFormData.append(FORM_ENTRY.destination, submissionData.destinationAddress);
         googleFormData.append(FORM_ENTRY.passengers, submissionData.passengers);
-        googleFormData.append(FORM_ENTRY.notes, submissionData.specialNotes || '');
+        googleFormData.append(FORM_ENTRY.notes, submissionData.specialNotes);
         googleFormData.append(FORM_ENTRY.airportTrip, submissionData.airportTrip);
         googleFormData.append(FORM_ENTRY.flight, submissionData.flightNumber || '');
         googleFormData.append(FORM_ENTRY.checkingBags, submissionData.checkingBags);
         googleFormData.append(FORM_ENTRY.specialRequirements, specialRequirementsParagraph(submissionData));
+        EXTRA_SHEET_KEYS.forEach(function(key) {
+            googleFormData.append(FORM_ENTRY[key], submissionData[key]);
+        });
         return googleFormData;
     }
 
@@ -1512,31 +1857,27 @@
             }
         });
 
-        // Initialize Pickup Time Picker
-        $('#booking-time').flatpickr({
-            enableTime: true,
-            noCalendar: true,
-            dateFormat: "H:i:S",  // Store as HH:MM:SS
-            altInput: true,
-            altFormat: "h:i K",  // Display as 12-hour with AM/PM
-            time_24hr: false,
-            minuteIncrement: 5,
-            disableMobile: "never",
-            position: 'below',
-            defaultDate: defaultDateTime
+        // Typed times with an AM or PM choice on every ride (Donald, Nov 16 2026)
+        TIME_IDS.forEach(function(id) {
+            $('#' + id + '-text').on('input change', function() { syncTypedTime(id); });
+            $('#' + id + '-text').on('blur', function() {
+                var text = $.trim($(this).val());
+                var tidy = parseTypedTime(text, 'AM');
+                if (tidy) {
+                    var hours = Number(tidy.slice(0, 2));
+                    $(this).val((hours === 0 ? 12 : hours) + ':' + tidy.slice(3, 5));
+                }
+            });
+            $('input[name="' + id + '-period"]').on('change', function() { syncTypedTime(id); });
         });
 
         // Initialize Return Flight Flatpickr (only when round trip is selected)
         let returnDateInstance = null;
-        let returnTimeInstance = null;
 
         function initializeReturnFlatpickr() {
             // Destroy existing instances if present
             if (returnDateInstance) {
                 returnDateInstance.destroy();
-            }
-            if (returnTimeInstance) {
-                returnTimeInstance.destroy();
             }
 
             // Initialize Return Flight Date Picker
@@ -1568,30 +1909,21 @@
                 }
             });
 
-            // Initialize Return Flight Time Picker
-            returnTimeInstance = $('#booking-return-time').flatpickr({
-                enableTime: true,
-                noCalendar: true,
-                dateFormat: "H:i:S",
-                altInput: true,
-                altFormat: "h:i K",
-                time_24hr: false,
-                minuteIncrement: 5,
-                disableMobile: "never",
-                position: 'below',
-                onChange: function(selectedDates, dateStr, instance) {
-                    // Validate when time changes
-                    const pickupDate = $('#booking-date').val();
-                    const pickupTime = $('#booking-time').val();
-                    const returnDate = $('#booking-return-date').val();
-                    if (pickupDate && pickupTime && returnDate && dateStr) {
-                        const pickupDateTime = pickupDate + ' ' + pickupTime;
-                        const returnDateTime = returnDate + ' ' + dateStr;
-                        validateReturnFlight(pickupDateTime, returnDateTime);
-                    }
-                }
-            });
         }
+
+        // A changed return time re-checks it against the pickup
+        $('#booking-return-time-text, input[name="booking-return-time-period"]').on('input change', function() {
+            $('#return-time-error').text('').hide();
+        });
+        $('#booking-return-time').on('change', function() {
+            const pickupDate = $('#booking-date').val();
+            const pickupTime = $('#booking-time').val();
+            const returnDate = $('#booking-return-date').val();
+            const returnTime = $(this).val();
+            if (pickupDate && pickupTime && returnDate && returnTime) {
+                validateReturnFlight(pickupDate + ' ' + pickupTime, returnDate + ' ' + returnTime);
+            }
+        });
 
         // Initialize return Flatpickr when round trip is checked
         $('input[name="round-trip"]').on('change', function() {
@@ -1618,6 +1950,37 @@
             $(this).closest('.form-group').removeClass('has-error');
         });
 
+        $('input[name="checking-bags"], input[name="carry-on"]').on('change', updateAirportRequirements);
+
+        $('#bar-return-details').on('input change', 'input', function() {
+            $(this).closest('.form-group').removeClass('has-error').find('.help-block.text-danger').text('').hide();
+        });
+        $('#party-pickup-extra, #party-return-details, #party-requests-group').on('input change', 'input, textarea', function() {
+            $(this).closest('.form-group').removeClass('has-error').find('.help-block.text-danger').text('').hide();
+        });
+        $('input[name="party-second-pickup"], input[name="party-more-dropoffs"]').on('change', updatePartyFields);
+        $('#rule-bar-agreement').on('change', function() {
+            $('#ride-rules').removeClass('has-error');
+            $('#ride-rules-error').text('').hide();
+        });
+
+        // "Other items" opens an optional box to describe them
+        $('#booking-other-item').on('change', function() {
+            if (this.checked) {
+                $('#other-item-group').removeAttr('hidden');
+            } else {
+                $('#other-item-group').attr('hidden', 'hidden');
+                $('#booking-other-desc').val('');
+            }
+        });
+
+        // Clear an airport-detail error as soon as the rider answers it
+        $('#airport-details').on('input change', 'input', clearAirportError);
+        $('#passengers-back-group, #flight-group, #departure-flight-group').on('input change', 'input', clearAirportError);
+        function clearAirportError() {
+            $(this).closest('.form-group').removeClass('has-error').find('.help-block.text-danger').text('').hide();
+        }
+
         // Update passenger capacity on passenger input change
         $('#booking-passengers').on('input', function() {
             updatePassengerCapacity();
@@ -1627,7 +1990,7 @@
         $('#booking-date').on('change', function() {
             $('#date-error').text('').hide();
         });
-        $('#booking-time').on('change', function() {
+        $('#booking-time-text, input[name="booking-time-period"]').on('input change', function() {
             $('#time-error').text('').hide();
         });
 
@@ -1688,6 +2051,12 @@
             updateTripLayout();
         });
 
+        $('input[name="airport-direction"]').on('change', function() {
+            $('#airport-direction-error').text('').hide();
+            $('#airport-direction-group').removeClass('has-error');
+            updateConditionalFields();
+        });
+
         $('#local-kind').on('change', function() {
             $('#local-kind-error').text('').hide();
             $(this).closest('.form-group').removeClass('has-error');
@@ -1728,8 +2097,21 @@
         });
 
         // Form submission
-        $form.on('submit', async function(e) {
+        $form.on('submit', function(e) {
+            if (submitInFlight || sentBookingIds.has(currentBookingId)) { e.preventDefault(); return; }
+            submitInFlight = true;
             e.preventDefault();
+            const bookingId = currentBookingId;
+            // The exact price on screen when Request Booking was pressed (null when none is shown)
+            const quoteAtSubmit = globalThis.MidnightQuote.current();
+            const $lockedBtn = $form.find('button[type="submit"]').prop('disabled', true);
+            return sendBooking(bookingId, quoteAtSubmit).finally(function() {
+                submitInFlight = false;
+                if (!sentBookingIds.has(bookingId)) $lockedBtn.prop('disabled', false);
+            });
+        });
+
+        async function sendBooking(bookingId, quoteAtSubmit) {
 
             // Clear previous errors
             $('.help-block.text-danger').text('').hide();
@@ -1740,14 +2122,17 @@
             // Build special requirements from checked options
             const specialRequirements = [];
 
-            if ($('#booking-wheelchair').is(':checked')) {
-                specialRequirements.push('Wheelchair');
-            }
-            if ($('#booking-carseat').is(':checked')) {
-                specialRequirements.push('Car Seat');
+            SPECIAL_ITEMS.forEach(function(item) {
+                if (document.getElementById(item.id).checked) specialRequirements.push(item.label);
+            });
+            if ($('#booking-other-item').is(':checked')) {
+                var otherDesc = $.trim($('#booking-other-desc').val() || '');
+                specialRequirements.push(otherDesc ? 'Other: ' + otherDesc : 'Other items');
             }
 
-            // Get datetime from hidden fields (populated by Flatpickr)
+            // Rebuild the 24-hour values from the typed text and the chosen AM/PM before sending.
+            TIME_IDS.forEach(syncTypedTime);
+            // Get datetime from hidden date/time fields.
             const pickupDate = $('#booking-date').val();
             const pickupTime = $('#booking-time').val();
 
@@ -1772,6 +2157,8 @@
             var hoursEntered = '';
             var hoursBilled = '';
             var durationMinutes = RIDE_DURATION_MINUTES;
+            var groupDeposit = '';
+            var extraStops = '';
             if (trip === 'group') {
                 notes = notes ? 'Group event. ' + notes : 'Group event.';
                 destinationAddress = 'Hourly charter, ' + GROUP_VEHICLE;
@@ -1781,6 +2168,7 @@
                     hoursEntered = String(fare.entered);
                     hoursBilled = String(fare.billed);
                     durationMinutes = Math.round(fare.billed * 60);
+                    groupDeposit = '25% deposit: Cash $' + (fare.depositCashCents / 100).toFixed(2) + ' · Card $' + (fare.depositCardCents / 100).toFixed(2);
                 }
             } else if (trip === 'local' && mode === 'bar' && chosenBar) {
                 destinationAddress = chosenBar.address;
@@ -1792,22 +2180,89 @@
             if (trip === 'local' && isRoundTrip()) {
                 notes = notes ? notes + ' Round trip.' : 'Round trip.';
             }
-            const ack = (trip === 'group' || trip === 'local') ? rulesState() : null;
-            if (ack) notes = notes ? notes + ' ' + rulesLine(ack) : rulesLine(ack);
+            const barRide = trip === 'local' && mode === 'bar';
+            const barAgreed = $('#rule-bar-agreement').is(':checked');
+            const barReturn = {
+                passengers: $.trim($('#bar-return-passengers').val() || ''),
+                time: $('#bar-return-time').val() || '',
+                location: $.trim($('#bar-return-location').val() || '')
+            };
+            const partyRide = trip === 'local' && mode === 'party';
+            const party = {
+                secondPickup: yesNoChoice('party-second-pickup'),
+                secondAddress: $.trim($('#party-second-pickup-address').val() || ''),
+                round: isRoundTrip(),
+                dropoff: $.trim($('#party-dropoff').val() || ''),
+                moreDropoffs: yesNoChoice('party-more-dropoffs'),
+                extraDropoff: $.trim($('#party-extra-dropoff').val() || ''),
+                people: $.trim($('#party-people').val() || ''),
+                requests: $.trim($('#party-requests').val() || '')
+            };
+            const oneBox = trip === 'local' || trip === 'group';
+            // The one bar/party box covers all three calendar answers.
+            const barAnswer = barAgreed ? 'Yes' : 'No';
+            const ack = oneBox ? { mustBe21: barAnswer, noSmoking: barAnswer, damageResponsibility: barAnswer } : null;
+            if (barRide) notes = barNotes(notes, barAgreed, isRoundTrip() ? barReturn : null);
+            if (partyRide) notes = partyNotes(notes, barAgreed, party);
+            if (trip === 'group') {
+                var groupLines = ['Group details:', 'Agreement (' + BAR_AGREEMENT + '): ' + barAnswer];
+                var stopLines = [];
+                [2, 3, 4].forEach(function(n) {
+                    var stop = $.trim($('#group-stop-' + n).val() || '');
+                    if (stop) stopLines.push('Stop ' + n + ': ' + stop);
+                });
+                extraStops = stopLines.join('\n');
+                notes += '\n' + groupLines.concat(stopLines).join('\n');
+            } else if (partyRide && party.moreDropoffs === 'Yes') {
+                extraStops = party.extraDropoff;
+            }
             const asksTripDetails = trip === 'airport';
             const bagCount = readBagCount();
             const bagsChoice = checkingBagsChoice();
+            const carryOnChoice = yesNoChoice('carry-on');
+            const carryOnCount = readBagCount('#booking-carryon-count');
+            const luggageHelp = yesNoChoice('luggage-help');
+            const departureFlight = $.trim($('#booking-departure-flight').val() || '');
+            const arrivalFlight = $.trim($('#booking-flight').val() || '');
+            const passengersBack = $.trim($('#booking-passengers-back').val() || '');
+            const customerNote = notes;
+            if (asksTripDetails) {
+                notes = airportNotes(customerNote, {
+                    departureFlight: departureFlight,
+                    arrivalFlight: arrivalFlight,
+                    passengersTo: $('#booking-passengers').val().trim(),
+                    passengersBack: passengersBack,
+                    bagsChoice: bagsChoice,
+                    bagCount: bagCount.value,
+                    carryOnChoice: carryOnChoice,
+                    carryOnCount: carryOnCount.value,
+                    luggageHelp: luggageHelp
+                });
+            }
+            var returnPickupDateTime = '';
+            if (trip === 'airport' && isRoundTrip()) returnPickupDateTime = sheetDateTime(returnDate, returnTime);
+            else if (barRide && isRoundTrip()) returnPickupDateTime = sheetDateTime(pickupDate, barReturn.time);
+            var passengersComingBack = '';
+            if (trip === 'airport') passengersComingBack = passengersBack;
+            else if (barRide && isRoundTrip()) passengersComingBack = barReturn.passengers;
+            else if (partyRide && isRoundTrip()) passengersComingBack = party.people;
+            var dropoffAddress = '';
+            if (trip === 'airport' && airportFrom()) dropoffAddress = contactAddress;
+            else if (partyRide && isRoundTrip()) dropoffAddress = party.dropoff;
             const formData = {
                 name: $('#booking-name').val().trim(),
                 phone: $('#booking-phone').data('raw-value') || $('#booking-phone').val().replace(/\D/g, ''),
                 email: $('#booking-email').val().trim(),
                 pickupDate: pickupDate,
-                pickupAddress: contactAddress,
-                destinationAddress: destinationAddress,
+                pickupAddress: airportFrom() ? destinationAddress : contactAddress,
+                destinationAddress: airportFrom() ? contactAddress : destinationAddress,
+                airportFrom: airportFrom(),
                 passengers: $('#booking-passengers').val().trim(),
                 specialNotes: notes,
                 airportTrip: trip === 'airport' ? 'Yes' : 'No',
-                flightNumber: asksTripDetails ? $('#booking-flight').val().trim() : '',
+                flightNumber: asksTripDetails ? arrivalFlight : '',
+                departureFlight: asksTripDetails ? departureFlight : '',
+                passengersBack: asksTripDetails ? passengersBack : '',
                 pickupTime: pickupTime,
                 checkingBags: asksTripDetails ? bagsChoice : 'No',
                 bagCount: asksTripDetails && bagCount.filled ? bagCount.value : 0,
@@ -1822,7 +2277,23 @@
                 noSmoking: ack ? ack.noSmoking : '',
                 damageResponsibility: ack ? ack.damageResponsibility : '',
                 hoursEntered: hoursEntered,
-                hoursBilled: hoursBilled
+                hoursBilled: hoursBilled,
+                airportDirection: trip === 'airport' ? airportDirection() : '',
+                departureFlightNumber: asksTripDetails ? departureFlight : '',
+                arrivalFlightNumber: asksTripDetails ? arrivalFlight : '',
+                passengersGoing: trip === 'airport' ? $('#booking-passengers').val().trim() : '',
+                passengersComingBack: passengersComingBack,
+                returnPickupDateTime: returnPickupDateTime,
+                returnPickupLocation: barRide && isRoundTrip() ? barReturn.location : '',
+                dropoffAddress: dropoffAddress,
+                secondPickupAddress: partyRide && party.secondPickup === 'Yes' ? party.secondAddress : '',
+                extraStops: extraStops,
+                checkedBags: asksTripDetails ? bagsAnswer(bagsChoice, bagCount.value) : '',
+                carryOnBags: asksTripDetails ? bagsAnswer(carryOnChoice, carryOnCount.value) : '',
+                luggageHelp: asksTripDetails ? luggageHelp : '',
+                specialItems: trip === 'airport' ? specialRequirements.join(', ') : '',
+                agreement21: oneBox ? barAnswer : '',
+                groupDeposit: groupDeposit
             };
 
             // Validation
@@ -1865,27 +2336,29 @@
 
             // Pickup time validation
             if (!formData.pickupTime) {
-                errors.push('Pickup time is required');
+                var pickupTimeProblem = typedTimeProblem('booking-time', 'Pickup time');
+                errors.push(pickupTimeProblem);
                 $('#booking-time').closest('.form-group').addClass('has-error');
-                $('#time-error').text('Pickup time is required').show();
+                $('#time-error').text(pickupTimeProblem).show();
                 isValid = false;
             }
 
             // Pickup address validation
-            if (!formData.pickupAddress) {
-                var pickupMessage = trip === 'airport' ? 'Home address is required' : (trip === 'local' ? 'Address is required' : 'Pickup address is required');
+            if (!contactAddress) {
+                var pickupMessage = trip === 'airport' ? (airportFrom() ? 'Drop-off address is required' : 'Home address is required') : (trip === 'local' ? 'Address is required' : 'Pickup address is required');
                 errors.push(pickupMessage);
                 $('#booking-pickup').closest('.form-group').addClass('has-error');
                 $('#pickup-error').text(pickupMessage).show();
                 isValid = false;
             }
             var groupAreaOk = true;
-            if (formData.pickupAddress && formData.destinationAddress) {
-                const area = await decideServiceArea(formData.pickupAddress, formData.destinationAddress);
+            // Checked home first, whichever way the airport ride goes, so errors land on the right field.
+            if (contactAddress && destinationAddress) {
+                const area = await decideServiceArea(contactAddress, destinationAddress);
                 if (!area.ok) {
                     var townBlock = chosenBar && chosenBar.blockUnservedTowns && area.code === 'outside';
                     errors.push(townBlock ? LOCAL_DENIAL : area.message);
-                    markServiceAreaFields(formData.pickupAddress, formData.destinationAddress, area);
+                    markServiceAreaFields(contactAddress, destinationAddress, area);
                     groupAreaOk = false;
                     isValid = false;
                 }
@@ -1917,7 +2390,7 @@
                         $('#airfield-address-error').text('Airfield address is required').show();
                         isValid = false;
                     }
-                } else if (!airlineChoice || !formData.destinationAddress) {
+                } else if (!airlineChoice || !destinationAddress) {
                     errors.push('Please choose an airport');
                     $('#airport-choice').closest('.form-group').addClass('has-error');
                     $('#airport-choice-error').text('Please choose an airport').show();
@@ -1991,32 +2464,55 @@
                 }
             }
 
-            if ((trip === 'group' || trip === 'local') && !rulesComplete(rulesState())) {
-                errors.push(RULES_MESSAGE);
+            if (oneBox && !barAgreed) {
+                errors.push(BAR_AGREEMENT_MESSAGE);
                 $('#ride-rules').addClass('has-error');
-                $('#ride-rules-error').text(RULES_MESSAGE).show();
+                $('#ride-rules-error').text(BAR_AGREEMENT_MESSAGE).show();
                 isValid = false;
             }
 
-            // Validate flight number when one was typed. It is optional.
-            if ((formData.airportTrip === 'Yes' || formData.groupEvent === 'Yes') && formData.flightNumber && !validateFlightNumber(formData.flightNumber)) {
-                errors.push('Please enter a valid flight number (e.g., AA1234)');
-                $('#booking-flight').closest('.form-group').addClass('has-error').find('.help-block').text('Please enter a valid flight number (e.g., AA1234)').show();
+            function fieldError(selector, errorId, message) {
+                errors.push(message);
+                $(selector).closest('.form-group').addClass('has-error');
+                $('#' + errorId).text(message).show();
                 isValid = false;
             }
 
             if (trip === 'airport') {
+                if (!$('input[name="airport-direction"]:checked').length) {
+                    fieldError('#airport-direction-to', 'airport-direction-error', 'Please choose To the airport or Pick up from the airport.');
+                }
                 if (!bagsChoice) {
                     errors.push('Please choose Yes or No for checked bags');
                     $('#checking-bags-section .form-group').first().addClass('has-error');
                     $('#checking-bags-error').text('Please choose Yes or No for checked bags').show();
                     isValid = false;
                 }
-                if (!bagCount.filled || !bagCount.valid) {
-                    errors.push('Please enter how many bags');
-                    $('#booking-bag-count').closest('.form-group').addClass('has-error');
-                    $('#bag-count-error').text('Please enter how many bags').show();
-                    isValid = false;
+                if (bagsChoice === 'Yes' && (!bagCount.filled || !bagCount.valid || bagCount.value < 1)) {
+                    fieldError('#booking-bag-count', 'bag-count-error', 'Please enter how many checked bags');
+                }
+                if (!carryOnChoice) {
+                    fieldError('#booking-carryon-yes', 'carryon-error', 'Please choose Yes or No for carry-on bags');
+                }
+                if (carryOnChoice === 'Yes' && (!carryOnCount.filled || !carryOnCount.valid || carryOnCount.value < 1)) {
+                    fieldError('#booking-carryon-count', 'carryon-count-error', 'Please enter how many carry-on bags');
+                }
+                if (!luggageHelp) {
+                    fieldError('#booking-luggage-help-yes', 'luggage-help-error', 'Please choose Yes or No for help with your luggage');
+                }
+                var privateField = $('#airport-choice').val() === 'PRIVATE';
+                var flights = [];
+                if (!airportFrom() || isRoundTrip()) flights.push({ value: departureFlight, selector: '#booking-departure-flight', errorId: 'departure-flight-error', name: 'departure' });
+                if (airportFrom() || isRoundTrip()) flights.push({ value: formData.flightNumber, selector: '#booking-flight', errorId: 'flight-error', name: 'arrival' });
+                flights.forEach(function(f) {
+                    if (!f.value) {
+                        fieldError(f.selector, f.errorId, 'Please enter your ' + f.name + ' flight number');
+                    } else if (!(privateField ? validateTailNumber(f.value) : validateFlightNumber(f.value))) {
+                        fieldError(f.selector, f.errorId, 'Please enter a valid ' + f.name + ' flight number (e.g., AA1234)');
+                    }
+                });
+                if (!customerNote) {
+                    fieldError('#booking-notes', 'notes-error', AIRPORT_NOTES_MESSAGE);
                 }
             }
 
@@ -2051,6 +2547,54 @@
                 $('#booking-passengers').closest('.form-group').addClass('has-error').find('.help-block').text(callMsg).show();
                 isValid = false;
             }
+            if (trip === 'airport' && isRoundTrip()) {
+                const backCount = /^\d+$/.test(passengersBack) ? parseInt(passengersBack, 10) : 0;
+                if (backCount < 1) {
+                    fieldError('#booking-passengers-back', 'passengers-back-error', 'Please enter how many passengers come back from the airport.');
+                } else if (backCount > maxCapacity) {
+                    fieldError('#booking-passengers-back', 'passengers-back-error', overCapacityMessage(maxCapacity));
+                }
+            }
+
+            if (barRide && isRoundTrip()) {
+                var backRiders = /^\d+$/.test(barReturn.passengers) ? parseInt(barReturn.passengers, 10) : 0;
+                if (backRiders < 1) {
+                    fieldError('#bar-return-passengers', 'bar-return-passengers-error', 'Please enter how many passengers ride back.');
+                } else if (backRiders > GROUP_MAX_PASSENGERS) {
+                    fieldError('#bar-return-passengers', 'bar-return-passengers-error', overCapacityMessage(GROUP_MAX_PASSENGERS));
+                }
+                if (!barReturn.time) {
+                    var barTimeProblem = typedTimeProblem('bar-return-time', 'Return pickup time');
+                    fieldError('#bar-return-time', 'bar-return-time-error', barTimeProblem === 'Return pickup time is required' ? 'Please choose a return pickup time.' : barTimeProblem);
+                }
+                if (!barReturn.location) {
+                    fieldError('#bar-return-location', 'bar-return-location-error', 'Please enter where to pick you up for the ride back.');
+                }
+            }
+
+            if (partyRide) {
+                if (!party.secondPickup) {
+                    fieldError('#party-second-pickup-yes', 'party-second-pickup-error', 'Please choose Yes or No for a second pickup location.');
+                } else if (party.secondPickup === 'Yes' && !party.secondAddress) {
+                    fieldError('#party-second-pickup-address', 'party-second-pickup-address-error', 'Please enter the second pickup address.');
+                }
+                if (party.round) {
+                    if (!party.dropoff) {
+                        fieldError('#party-dropoff', 'party-dropoff-error', 'Please enter where to drop you off after the party.');
+                    }
+                    if (!party.moreDropoffs) {
+                        fieldError('#party-more-dropoffs-yes', 'party-more-dropoffs-error', 'Please choose Yes or No for more than one drop-off location.');
+                    } else if (party.moreDropoffs === 'Yes' && !party.extraDropoff) {
+                        fieldError('#party-extra-dropoff', 'party-extra-dropoff-error', 'Please enter the other drop-off location.');
+                    }
+                    var partyPeople = /^\d+$/.test(party.people) ? parseInt(party.people, 10) : 0;
+                    if (partyPeople < 1) {
+                        fieldError('#party-people', 'party-people-error', 'Please enter how many people ride back.');
+                    } else if (partyPeople > GROUP_MAX_PASSENGERS) {
+                        fieldError('#party-people', 'party-people-error', overCapacityMessage(GROUP_MAX_PASSENGERS));
+                    }
+                }
+            }
 
             if (trip === 'airport' || trip === 'local') {
                 if (roundTripChoice() !== 'Yes' && roundTripChoice() !== 'No') {
@@ -2066,17 +2610,18 @@
             if (formData.roundTrip === 'Yes' && formData.airportTrip === 'Yes') {
                 // Return date validation
                 if (!formData.returnDate) {
-                    errors.push('Return flight date is required for round trips');
+                    errors.push('Return pickup date is required for round trips');
                     $('#booking-return-date').closest('.form-group').addClass('has-error');
-                    $('#return-date-error').text('Return flight date is required').show();
+                    $('#return-date-error').text('Return pickup date is required').show();
                     isValid = false;
                 }
 
                 // Return time validation
                 if (!formData.returnTime) {
-                    errors.push('Return flight time is required for round trips');
+                    var returnTimeProblem = typedTimeProblem('booking-return-time', 'Return pickup time');
+                    errors.push(returnTimeProblem === 'Return pickup time is required' ? 'Return pickup time is required for round trips' : returnTimeProblem);
                     $('#booking-return-time').closest('.form-group').addClass('has-error');
-                    $('#return-time-error').text('Return flight time is required').show();
+                    $('#return-time-error').text(returnTimeProblem).show();
                     isValid = false;
                 } else {
                     // Validate return date is after pickup date
@@ -2108,7 +2653,7 @@
             if (formData.roundTrip === 'Yes' && formData.returnDate && formData.returnTime) {
                 const returnDateTimeValidation = await validateDateTime(formData.returnDate, formData.returnTime);
                 if (!returnDateTimeValidation.valid) {
-                    errors.push('Return flight: ' + returnDateTimeValidation.error);
+                    errors.push('Return pickup: ' + returnDateTimeValidation.error);
                     $('#booking-return-date').closest('.form-group').addClass('has-error');
                     $('#return-date-error').text(returnDateTimeValidation.error).show();
                     isValid = false;
@@ -2124,9 +2669,9 @@
                         minutes: pickupMinutes
                     }]);
                     if (hasTimeConflict(formData.returnDate, formData.returnTime, withOutbound)) {
-                        errors.push('Return flight time conflicts with outbound flight. Please choose a different time.');
+                        errors.push('Return pickup time conflicts with the first ride. Please choose a different time.');
                         $('#booking-return-time').closest('.form-group').addClass('has-error');
-                        $('#return-time-error').text('Conflicts with outbound flight').show();
+                        $('#return-time-error').text('Conflicts with the first ride').show();
                         isValid = false;
                     }
                 }
@@ -2184,7 +2729,8 @@
                 console.log('Pending bookings:', pendingBookings.length);
 
                 // Handle dual submission for round-trip bookings
-                const submissions = await handleDualSubmission(formData);
+                const submissions = await handleDualSubmission(formData, bookingId);
+                sentBookingIds.add(bookingId);
 
                 // Best-effort calendar mirror to Apps Script
                 try {
@@ -2217,17 +2763,15 @@
 
                 if (formData.roundTrip === 'Yes' && formData.airportTrip === 'Yes') {
                     successHtml +=
-                        '<p>Your round-trip requests were sent:</p>' +
-                        '<ul class="confirm-legs">' +
-                        '<li><strong>Outbound:</strong> ' + escapeHtml(formatDisplayDate(formData.pickupDate)) + ' at ' + escapeHtml(formatDisplayTime(formData.pickupTime)) + '</li>' +
-                        '<li><strong>Return:</strong> ' + escapeHtml(formatDisplayDate(formData.returnDate)) + ' at ' + escapeHtml(formatDisplayTime(formData.returnTime)) + '</li>' +
-                        '</ul>' +
+                        '<p>Your round-trip requests were sent.</p>' +
                         '<p>We will call you at <strong>' + escapeHtml(formData.phone) + '</strong> to confirm both bookings.</p>';
                 } else {
                     successHtml +=
                         '<p>Your request for <strong>' + escapeHtml(formatDisplayDate(formData.pickupDate)) + '</strong> at <strong>' + escapeHtml(formatDisplayTime(formData.pickupTime)) + '</strong> was sent.</p>' +
                         '<p>We will call you at <strong>' + escapeHtml(formData.phone) + '</strong> to confirm your booking.</p>';
                 }
+
+                successHtml += quotePriceHtml(quoteAtSubmit);
 
                 successHtml +=
                     '<hr>' +
@@ -2242,57 +2786,13 @@
                 console.log('Hiding form...');
                 $form.hide();
 
-                // Reset button
-                $submitBtn.html(originalBtnText).prop('disabled', false);
+                // The sent booking stays locked; only Make Another Booking unlocks the form.
+                $submitBtn.html(originalBtnText);
 
-                placeInView($('#booking-success'), 'center');
+                showAnotherBookingButton();
 
-                // Show option to make another booking after 2 seconds (like contact form)
-                setTimeout(function() {
-                    $('#booking-success').append(
-                        '<p class="text-center" style="margin-top: 20px;">' +
-                        '<button id="new-booking-btn" class="btn btn-outline">Make Another Booking</button>' +
-                        '</p>'
-                    );
-
-                    $('#new-booking-btn').on('click', function() {
-                        $form[0].reset();
-                        $('#booking-success').html('').hide();
-                        $('#timeline-container').hide();
-                        $('#checking-bags-section').hide();
-                        $('#round-trip-section').show();
-                        $('#return-flight-section').hide();
-                        $('#return-timeline-container').hide();
-                        $('#other-requirement-section').hide();
-                        $('#group-event-call').hide();
-                        $('#airfield-place').attr('hidden', 'hidden').hide();
-                        $('#booking-quote').show();
-                        $form.find('button[type="submit"]').prop('disabled', false);
-                        $form.slideDown();
-
-                        // Re-calculate default datetime using simple calculation
-                        const now = new Date();
-                        const newDefaultDateTime = calculateSimpleDefaultTime(now);
-
-                        // Reset Flatpickr date and time pickers to new defaults
-                        const datePickerInstance = $('#booking-date')[0]._flatpickr;
-                        const timePickerInstance = $('#booking-time')[0]._flatpickr;
-
-                        if (datePickerInstance) {
-                            datePickerInstance.setDate(newDefaultDateTime, true);
-                        }
-                        if (timePickerInstance) {
-                            timePickerInstance.setDate(newDefaultDateTime, true);
-                        }
-
-                        // Update timeline
-                        const dateForInput = formatLocalYmd(newDefaultDateTime);
-                        updateTimeline(dateForInput);
-
-                        // Scroll back to form
-                        placeInView($form, 'nearest');
-                    });
-                }, 2000);
+                // Center the confirmation and its Make Another Booking button together on the screen
+                placeInView($('#booking-success'), 'center', $('#new-booking-wrap'));
 
             } catch (error) {
                 console.error('=== SUBMISSION ERROR CAUGHT ===');
@@ -2320,7 +2820,86 @@
 
                 placeInView($('#booking-success'), 'nearest');
             }
-        });
+        }
+
+        /**
+         * The price block on the confirmation: the same label and totals the quote box showed.
+         * The label is already HTML-escaped by the quote box; the amounts are formatted numbers.
+         */
+        function quotePriceHtml(quote) {
+            if (!quote) return '';
+            return '<p class="confirm-price"><strong>Estimated price:</strong> ' + quote.label +
+                (quote.legs ? '<br>' + quote.legs + '<br>Total: ' : '<br>') +
+                (quote.deposit ? 'Trip charge: ' : '') + 'Cash ' + quote.cash + ' · Card ' + quote.card +
+                (quote.deposit ? '<br>' + quote.deposit : '') +
+                '<br><small>Final fare confirmed by phone</small></p>';
+        }
+
+        /**
+         * Make Another Booking: one button and one handler for the life of the page.
+         * It lives next to #booking-success (not inside it) so new messages never duplicate it.
+         */
+        let $anotherWrap = null;
+        function showAnotherBookingButton() {
+            if (!$anotherWrap) {
+                $anotherWrap = $('<p class="text-center" id="new-booking-wrap" style="margin-top: 20px;">' +
+                    '<button type="button" id="new-booking-btn" class="btn btn-outline">Make Another Booking</button>' +
+                    '</p>');
+                $('#booking-success').after($anotherWrap);
+                $anotherWrap.find('#new-booking-btn').on('click', function(ev) {
+                    ev.preventDefault();
+                    resetBookingForm();
+                });
+            }
+            $anotherWrap.show();
+        }
+
+        /**
+         * Clear every field and all code-held state for a brand-new booking. Never sends anything.
+         */
+        function resetBookingForm() {
+            // pendingBookings is kept on purpose: it holds the just-sent time for 10 seconds so the
+            // next booking cannot overbook it before the calendar catches up. It is never re-sent.
+            currentBookingId = newBookingId();
+            // Forget a ?type= / ?bar= link preset so the old trip type or bar is not filled in again
+            window.history.replaceState(null, '', window.location.pathname + window.location.hash);
+            $form[0].reset();
+            $form.find('input[type="checkbox"], input[type="radio"]').prop('checked', false);
+            $form.find('input').not('[type="checkbox"], [type="radio"]').val('');
+            $form.find('textarea').val('');
+            $form.find('select').prop('selectedIndex', 0);
+            $('#booking-phone').removeData('raw-value');
+            $form.find('.help-block.text-danger').text('').hide();
+            $form.find('.has-error').removeClass('has-error');
+            if (returnDateInstance) returnDateInstance.clear();
+            TIME_IDS.forEach(function(id) { clearTypedTime(id); });
+            $('#booking-success').html('').hide();
+            $anotherWrap.hide();
+            $('#trip-type-group').show();
+            $('#timeline-container').hide();
+            $('#checking-bags-section').hide();
+            $('#round-trip-section').show();
+            $('#return-flight-section').hide();
+            $('#return-timeline-container').hide();
+            $('#other-requirement-section').hide();
+            $('#group-event-call').hide();
+            $('#airfield-place').attr('hidden', 'hidden').hide();
+            $('#other-item-group').attr('hidden', 'hidden');
+            $('#booking-quote').show();
+            $form.find('button[type="submit"]').prop('disabled', false);
+            $form.slideDown();
+
+            // Fresh default pickup date and time, the same as a first page load
+            const newDefaultDateTime = calculateSimpleDefaultTime(new Date());
+            const datePickerInstance = $('#booking-date')[0]._flatpickr;
+            if (datePickerInstance) datePickerInstance.setDate(newDefaultDateTime, true);
+
+            // Let both the form layout and the price box see the cleared choices
+            $('#trip-type, #local-kind, #bar-choice, #airport-choice').trigger('change');
+            updatePassengerCapacity();
+            updateTimeline(formatLocalYmd(newDefaultDateTime));
+            placeInView($form, 'nearest');
+        }
 
         // Pre-fetch bookings, then initialize timeline with default date
         const todayForTimeline = formatLocalYmd(defaultDateTime);
@@ -2346,6 +2925,7 @@
             updateTripLayout();
         }
         globalThis.MidnightBooking = {
+            parseTypedTime: parseTypedTime,
             formatDisplayTime: formatDisplayTime,
             placeInView: placeInView
         };
@@ -2358,6 +2938,9 @@
     var far='For trips over 50 miles, please call <a href="tel:+19804229125">(980) 422-9125</a> for your price.';
     var ask='Enter your home address and airport to see your price.';
     var geoCache={}, routeCache={}, timer=null, seq=0;
+    // The price the form is showing right now, or null. The confirmation copies it as-is.
+    var currentQuote=null;
+    globalThis.MidnightQuote={current:function(){return currentQuote?$.extend({},currentQuote):null;}};
     function q(a){var s='',i=0;while(i<a.length){s+=String.fromCharCode(a[i]^13);i++;}return +s;}
     function esc(s){return String(s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
     function money(n){return '$'+n.toFixed(2);}
@@ -2598,7 +3181,15 @@
             return roadBetween(g, pick, stop);
         });
     };
-    function show(html){
+    // Allocate the already-rounded round-trip total between the two legs in cents.
+    // This is not a second fare calculation: the displayed leg amounts add to the exact quoted total.
+    function quotedLegs(cashCents, cardCents){
+        var outCash=Math.ceil(cashCents/2), outCard=Math.ceil(cardCents/2);
+        return 'Outbound: Cash '+money(outCash/100)+' · Card '+money(outCard/100)+
+            '<br>Return: Cash '+money((cashCents-outCash)/100)+' · Card '+money((cardCents-outCard)/100);
+    }
+    function show(html, quote){
+        currentQuote=quote||null;
         var $d=$('#quote-details');
         $d.html(html);
         if(html && String(html).indexOf('quote-total')!==-1 && globalThis.MidnightBooking){
@@ -2616,7 +3207,8 @@
             } else {
                 var fare=rides.groupFare(hours);
                 var note=fare.minimum?'<br>2-hour minimum':'';
-                show('<span class="quote-label">'+esc(rides.GROUP_VEHICLE)+'</span><br>'+fare.billed+' hours'+note+'<br><strong class="quote-total">Cash '+money(fare.cashCents/100)+' · Card '+money(fare.cardCents/100)+'</strong><br><span class="quote-deposit">Deposit '+money(fare.depositCashCents/100)+' cash · '+money(fare.depositCardCents/100)+' card</span>');
+                var deposit='25% deposit: Cash '+money(fare.depositCashCents/100)+' · Card '+money(fare.depositCardCents/100)+'<br>Deposit must be paid up front.';
+                show('<span class="quote-label">'+esc(rides.GROUP_VEHICLE)+'</span><br>'+fare.billed+' hours'+note+'<br><strong class="quote-total">Trip charge: Cash '+money(fare.cashCents/100)+' · Card '+money(fare.cardCents/100)+'</strong><br><span class="quote-deposit">'+deposit+'</span>',{label:esc(rides.GROUP_VEHICLE)+', '+fare.billed+' hours',cash:money(fare.cashCents/100),card:money(fare.cardCents/100),deposit:deposit});
             }
         }
         paintHours();
@@ -2688,7 +3280,8 @@
             var fare=rides.localFare(mi, rt);
             var name=mode==='party'?'the party':stop.name;
             var label=rt?'Round trip, '+esc(name)+' and back':'One way to '+esc(name);
-            show('<span class="quote-label">'+label+'</span><br><strong class="quote-total">Cash '+money(fare.cashCents/100)+' · Card '+money(fare.cardCents/100)+'</strong>'+routeLine(rt));
+            var legs=rt?quotedLegs(fare.cashCents,fare.cardCents):'';
+            show('<span class="quote-label">'+label+'</span><br><strong class="quote-total">Cash '+money(fare.cashCents/100)+' · Card '+money(fare.cardCents/100)+'</strong>'+(legs?'<br><span class="quote-legs">'+legs+'</span>':'')+routeLine(rt),{label:label,cash:money(fare.cashCents/100),card:money(fare.cardCents/100),legs:legs});
         }).catch(function(err){
             if(my!==seq||tripNow()!=='local')return;
             if(err==='out'&&api){hideMap();show(esc(mode==='bar'&&stop&&stop.blockUnservedTowns?rides.LOCAL_DENIAL:api.OUT_OF_AREA_MESSAGE));return;}
@@ -2698,6 +3291,7 @@
         });
     }
     function refresh(){
+        currentQuote=null;
         var my=++seq;
         var kind=tripNow();
         if(kind==='group'){refreshGroup(my);return;}
@@ -2760,8 +3354,10 @@
             // Donald (Nov 10, 2026): a private airfield uses this same fare and the same cap.
             if(mi>50)throw 'far';
             var fare=airportFare(mi,rt);
-            var label=rt?'Round trip, '+esc(labelName)+' and back':'One way to '+esc(labelName);
-            show('<span class="quote-label">'+label+'</span><br><strong class="quote-total">Cash '+money(fare.cash)+' &middot; Card '+money(fare.card)+'</strong>'+routeLine(rt));
+            var from=$('input[name="airport-direction"]:checked').val()==='from';
+            var label=rt?'Round trip, '+(from?'from ':'')+esc(labelName)+' and back':(from?'One way from ':'One way to ')+esc(labelName);
+            var legs=rt?quotedLegs(Math.round(fare.cash*100),Math.round(fare.card*100)):'';
+            show('<span class="quote-label">'+label+'</span><br><strong class="quote-total">Cash '+money(fare.cash)+' &middot; Card '+money(fare.card)+'</strong>'+(legs?'<br><span class="quote-legs">'+legs+'</span>':'')+routeLine(rt),{label:label,cash:money(fare.cash),card:money(fare.card),legs:legs});
         }).catch(function(err) {
             if(my!==seq)return;
             var kindNow=tripNow();
@@ -2835,7 +3431,7 @@
             suggestTimer=setTimeout(function(){fetchSuggest(input, query);},300);
         });
     }
-    function later(){clearTimeout(timer);timer=setTimeout(refresh,900);}
+    function later(){currentQuote=null;clearTimeout(timer);timer=setTimeout(refresh,900);}
     function fillAirportChoices(){
         var api=globalThis.MidnightServiceArea;
         var airline=document.getElementById('airport-choice');
@@ -2882,7 +3478,7 @@
             $('#booking-destination').val(found.typed).trigger('input');
         });
         $('#booking-pickup, #booking-destination, #party-address, #group-hours, #airfield-name, #airfield-address').on('input', later).on('change blur', function(){clearTimeout(timer);refresh();});
-        $('input[name="round-trip"], #trip-type, #local-kind, #bar-choice').on('change', function() {
+        $('input[name="round-trip"], input[name="airport-direction"], #trip-type, #local-kind, #bar-choice').on('change', function() {
             setTimeout(refresh, 50);
         });
         bindSuggest();

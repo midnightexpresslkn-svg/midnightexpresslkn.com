@@ -10,6 +10,7 @@ import {
   resultText,
   showQuote,
   submitForm,
+  typeTime,
 } from "./helpers/render-booking.js";
 
 const scripts = ["js/booking.js", "js/booking.min.js"];
@@ -134,6 +135,22 @@ function shown(element) {
     node = node.parentElement;
   }
   return Boolean(element);
+}
+
+function shownRules(view) {
+  return [...view.document.querySelectorAll("#ride-rules .ride-rule")]
+    .filter((label) => !label.hidden)
+    .map((label) => label.textContent.replace(/\s+/g, " ").trim());
+}
+
+function fillBarReturn(
+  view,
+  { passengers = "2", time = "23:30:00", place = "Two Trees front door" } = {},
+) {
+  const $ = view.window.jQuery;
+  $("#bar-return-passengers").val(passengers).trigger("input");
+  typeTime(view.document, "bar-return-time", time);
+  $("#bar-return-location").val(place).trigger("input");
 }
 
 describe.each(scripts)("local bars and group %s", (script) => {
@@ -307,7 +324,7 @@ describe.each(scripts)("local bars and group %s", (script) => {
     });
   });
 
-  it("asks for the local intake fields and the three notices", async () => {
+  it("asks for the local intake fields and the agreement box", async () => {
     const view = await renderBooking(script);
     chooseTrip(view.document, "local");
     check(
@@ -338,23 +355,45 @@ describe.each(scripts)("local bars and group %s", (script) => {
       loaded: script,
     });
     check(
-      [...view.document.querySelectorAll("#ride-rules .ride-rule")].map(
-        (label) => label.textContent.replace(/\s+/g, " ").trim(),
-      ),
+      shownRules(view),
       [
-        "Must be 21 or older *",
-        "No smoking *",
-        "If you damage anything, you are responsible. *",
+        "Must be 21 years or older, cannot smoke, and you are responsible for any damages. *",
       ],
       {
         label:
-          "local notices are the three required boxes in order, each with the required star",
+          "before bar or party is picked, the one agreement box shows (Donald, Nov 16 2026)",
         source: "js/booking.js",
         loaded: script,
       },
     );
-    check(view.document.querySelector("#rule-age").type, "checkbox", {
-      label: "the age notice is a real checkbox",
+    const kind = view.document.querySelector("#local-kind");
+    kind.value = "bar";
+    view.window.jQuery(kind).trigger("change");
+    check(
+      shownRules(view),
+      [
+        "Must be 21 years or older, cannot smoke, and you are responsible for any damages. *",
+      ],
+      {
+        label: "a bar ride shows one combined required agreement box",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    check(view.document.querySelector("#rule-bar-agreement").required, true, {
+      label: "the bar agreement box is required",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    kind.value = "party";
+    view.window.jQuery(kind).trigger("change");
+    check(shownRules(view).length, 1, {
+      label: "a party ride shows the same one agreement box as a bar ride",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    check(view.document.querySelector("#rule-bar-agreement").type, "checkbox", {
+      label: "the agreement is a real checkbox",
       source: "js/booking.js",
       loaded: script,
     });
@@ -621,37 +660,47 @@ describe.each(scripts)("local bars and group %s", (script) => {
   });
 
   it("blocks a local request until every notice is checked, then sends the answers", async () => {
-    for (const rules of [[], ["age"], ["age", "smoke"]]) {
-      const view = await renderBooking(script, { miles: 4 });
-      await fillValid(view, { trip: "local", rules });
-      await submitForm(view);
-      check(
-        resultText(view.document).includes(
-          "Please check all three boxes: Must be 21 or older, No smoking, and If you damage anything, you are responsible.",
-        ),
-        true,
-        {
-          label: `bar request waits when rules are ${rules.join(",") || "none"}`,
-          actual: resultText(view.document),
-          source: "js/booking.js",
-          loaded: script,
-        },
-      );
-      check(bookingPosts(view.state).length, 0, {
-        label: "an unchecked bar request is not sent",
+    const bar = await renderBooking(script, { miles: 4 });
+    await fillValid(bar, { trip: "local", barAgreement: false });
+    await submitForm(bar);
+    check(
+      resultText(bar.document).includes(
+        "Please check the box: Must be 21 years or older, cannot smoke, and you are responsible for any damages.",
+      ),
+      true,
+      {
+        label: "a bar request waits for the agreement box",
+        actual: resultText(bar.document),
         source: "js/booking.js",
         loaded: script,
-      });
-    }
+      },
+    );
+    check(bookingPosts(bar.state).length, 0, {
+      label: "an unchecked bar request is not sent",
+      source: "js/booking.js",
+      loaded: script,
+    });
     const party = await renderBooking(script, { miles: 4 });
     await fillValid(party, {
       trip: "local",
       localKind: "party",
-      rules: ["smoke"],
+      barAgreement: false,
     });
     await submitForm(party);
+    check(
+      resultText(party.document).includes(
+        "Please check the box: Must be 21 years or older, cannot smoke, and you are responsible for any damages.",
+      ),
+      true,
+      {
+        label: "a party request waits for the one agreement box",
+        actual: resultText(party.document),
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
     check(bookingPosts(party.state).length, 0, {
-      label: "a party request with one box checked is not sent",
+      label: "a party request without the agreement box is not sent",
       source: "js/booking.js",
       loaded: script,
     });
@@ -659,7 +708,7 @@ describe.each(scripts)("local bars and group %s", (script) => {
     await fillValid(sent, { trip: "local", localKind: "party" });
     await submitForm(sent);
     check(resultText(sent.document).includes("Request received"), true, {
-      label: "a party request with all three boxes is received",
+      label: "a party request with the agreement box is received",
       actual: resultText(sent.document),
       source: "js/booking.js",
       loaded: script,
@@ -727,7 +776,7 @@ describe.each(scripts)("local bars and group %s", (script) => {
       source: "js/booking.js",
       loaded: script,
     });
-    check(text.includes("Deposit $62.50 cash · $64.38 card"), true, {
+    check(text.includes("25% deposit: Cash $62.50 · Card $64.38"), true, {
       label: "25 percent deposit on the 2 hour minimum",
       actual: text,
       source: "js/booking.js",
@@ -757,7 +806,7 @@ describe.each(scripts)("local bars and group %s", (script) => {
       source: "js/booking.js",
       loaded: script,
     });
-    check(text.includes("Deposit $93.75 cash · $96.56 card"), true, {
+    check(text.includes("25% deposit: Cash $93.75 · Card $96.56"), true, {
       label: "25 percent of the three hour total",
       actual: text,
       source: "js/booking.js",
@@ -765,33 +814,32 @@ describe.each(scripts)("local bars and group %s", (script) => {
     });
   });
 
-  it("requires the same three notices on a group and caps the van at 6", async () => {
+  it("requires the one agreement box on a group and caps the van at 6", async () => {
     const none = await renderBooking(script);
-    await fillValid(none, { trip: "group", rules: [], hours: "2" });
+    await fillValid(none, { trip: "group", barAgreement: false, hours: "2" });
     await submitForm(none);
     check(bookingPosts(none.state).length, 0, {
-      label: "a group with no boxes checked is not sent",
+      label: "a group without the agreement box is not sent",
       source: "js/booking.js",
       loaded: script,
     });
-    const some = await renderBooking(script);
-    await fillValid(some, {
-      trip: "group",
-      rules: ["age", "damage"],
-      hours: "2",
-    });
-    await submitForm(some);
-    check(resultText(some.document).includes("No smoking"), true, {
-      label: "a group missing one box is told which notices are required",
-      actual: resultText(some.document),
-      source: "js/booking.js",
-      loaded: script,
-    });
+    check(
+      resultText(none.document).includes(
+        "Please check the box: Must be 21 years or older, cannot smoke, and you are responsible for any damages.",
+      ),
+      true,
+      {
+        label: "a group is told to check the one agreement box",
+        actual: resultText(none.document),
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
     const full = await renderBooking(script);
     await fillValid(full, { trip: "group", passengers: "6", hours: "2" });
     await submitForm(full);
     check(resultText(full.document).includes("Request received"), true, {
-      label: "six passengers with every box checked is received",
+      label: "six passengers with the agreement checked is received",
       actual: resultText(full.document),
       source: "js/booking.js",
       loaded: script,
@@ -1445,6 +1493,7 @@ describe.each(scripts)("local bars and group %s", (script) => {
     const round = preset.document.querySelector("#booking-round-trip");
     round.checked = true;
     preset.window.jQuery(round).trigger("change");
+    fillBarReturn(preset);
     await submitForm(preset);
     const payload = JSON.parse(
       bookingPosts(preset.state).find((request) =>
@@ -2219,7 +2268,7 @@ const GROUP_DETAILS =
   "Please tell us about your group event (what it is, how many people, and anything we should know).";
 
 describe.each(scripts)("group description %s", (script) => {
-  it("blocks an empty or blank group description and keeps other rides optional", async () => {
+  it("blocks an empty group or airport note and keeps a bar note optional", async () => {
     const empty = await renderBooking(script, { miles: 4 });
     await fillValid(empty, { trip: "group", notes: "" });
     check(
@@ -2295,24 +2344,24 @@ describe.each(scripts)("group description %s", (script) => {
     });
 
     const airport = await renderBooking(script, { miles: 10 });
-    await fillValid(airport, { trip: "airport", notes: "" });
-    check(airport.document.querySelector("#booking-notes").required, false, {
-      label: "an airport note stays optional",
+    await fillValid(airport, { trip: "airport", notes: " \n " });
+    check(airport.document.querySelector("#booking-notes").required, true, {
+      label: "an airport note is required (Donald, Nov 16 2026)",
       source: "js/booking.js",
       loaded: script,
     });
     check(
       airport.document.querySelector("#notes-label").textContent.trim(),
-      "Special Notes",
+      "Special Notes *",
       {
-        label: "an airport note is not marked required",
+        label: "an airport note is marked required",
         source: "js/booking.js",
         loaded: script,
       },
     );
     await submitForm(airport);
-    check(resultText(airport.document).includes("Request received"), true, {
-      label: "an airport ride can be requested with no description",
+    check(bookingPosts(airport.state).length, 0, {
+      label: "an airport ride with a blank note sends nothing",
       actual: resultText(airport.document),
       source: "js/booking.js",
       loaded: script,
@@ -2348,14 +2397,23 @@ describe.each(scripts)("group description %s", (script) => {
     choosePrivate(field, "Smith Field", "100 Runway Rd, Charlotte NC 28202");
     field.document.querySelector("#booking-notes").value = "";
     await submitForm(field);
-    check(resultText(field.document).includes("Request received"), true, {
-      label: "a private airfield can be requested with no description",
+    check(bookingPosts(field.state).length, 0, {
+      label: "a private airfield ride also needs a note",
       actual: resultText(field.document),
       source: "js/booking.js",
       loaded: script,
     });
-    check(field.document.querySelector("#booking-notes").required, false, {
-      label: "a private airfield note stays optional",
+    check(field.document.querySelector("#booking-notes").required, true, {
+      label: "a private airfield note is required like any airport ride",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    field.document.querySelector("#booking-notes").value = "Meet at the FBO";
+    field.document.querySelector("#booking-flight").value = "N123AB";
+    await submitForm(field);
+    check(resultText(field.document).includes("Request received"), true, {
+      label: "a private airfield accepts a tail number and a note",
+      actual: resultText(field.document),
       source: "js/booking.js",
       loaded: script,
     });

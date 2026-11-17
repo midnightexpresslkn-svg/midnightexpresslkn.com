@@ -1,4 +1,5 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./helpers/booking-mocks.js";
+import { ui, expectPresentButHidden } from "./helpers/ui.js";
 
 const widths = [375, 390];
 
@@ -21,6 +22,8 @@ async function offenders(page) {
       document.body,
       NodeFilter.SHOW_TEXT,
     );
+    // Pixel check over every visible text node on the page. There is no user-facing
+    // locator for "all text"; script, style, hidden, and screen-reader-only text is skipped.
     while (walker.nextNode()) {
       const raw = walker.currentNode.textContent || "";
       if (!raw.trim()) continue;
@@ -67,58 +70,87 @@ test.describe("mobile page fits the screen", () => {
       );
       expect(home.found, JSON.stringify(home)).toEqual([]);
 
-      const brand = page.locator(".navbar-brand");
-      const toggle = page.locator(".navbar-toggle");
+      const nav = page.getByRole("navigation");
+      const brand = nav.getByRole("link", { name: /Midnight Express LKN/ });
+      const toggle = nav.getByRole("button", { name: "Toggle navigation" });
       const brandBox = await brand.boundingBox();
       const toggleBox = await toggle.boundingBox();
       expect(brandBox.x).toBeGreaterThanOrEqual(0);
       expect(brandBox.x + brandBox.width).toBeLessThanOrEqual(width + 1);
       expect(brandBox.x + brandBox.width).toBeLessThanOrEqual(toggleBox.x + 1);
-      const logo = page.locator(".navbar-logo");
+      const logo = brand.getByRole("img", {
+        name: "Midnight Express LKN Logo",
+      });
       const logoBox = await logo.boundingBox();
       expect(logoBox.x).toBeGreaterThanOrEqual(0);
       expect(logoBox.width).toBeGreaterThan(20);
 
-      await page.locator("#trip-type").selectOption("airport");
+      await ui.tripType(page).selectOption("airport");
       const form = await offenders(page);
       expect(form.scrollWidth).toBeLessThanOrEqual(form.clientWidth + 1);
       expect(form.found).toEqual([]);
-      await page.locator("#airport-choice").selectOption("PRIVATE");
+      await ui.airport(page).selectOption("PRIVATE");
       const airfield = await offenders(page);
       expect(airfield.scrollWidth).toBeLessThanOrEqual(
         airfield.clientWidth + 1,
       );
       expect(airfield.found).toEqual([]);
 
-      await page.locator("#trip-type").selectOption("local");
-      await page.locator("#local-kind").selectOption("bar");
-      const kindBox = await page.locator("#local-kind").boundingBox();
-      const barBox = await page.locator("#bar-choice").boundingBox();
+      await ui.tripType(page).selectOption("local");
+      await ui.localKind(page).selectOption("bar");
+      const kindBox = await ui.localKind(page).boundingBox();
+      const barBox = await ui.bar(page).boundingBox();
       expect(barBox.y).toBeGreaterThan(kindBox.y);
-      await expect(page.locator("#ride-map-slot")).toBeHidden();
-      await expect(page.locator("#rule-age")).toBeVisible();
-      await expect(page.locator("#ride-rules")).toContainText("No smoking");
-      await expect(page.locator("#ride-rules")).toContainText(
-        "If you damage anything, you are responsible.",
+      // No route map for bar rides (the map region stays hidden).
+      await expectPresentButHidden(
+        page.getByRole("region", { name: "Route map", includeHidden: true }),
       );
+      await expect(
+        page.getByRole("checkbox", {
+          name: /Must be 21 years or older, cannot smoke/,
+        }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("checkbox", {
+          name: "Must be 21 or older",
+          exact: true,
+          includeHidden: true,
+        }),
+      ).toHaveCount(0);
       const local = await offenders(page);
       expect(local.scrollWidth).toBeLessThanOrEqual(local.clientWidth + 1);
       expect(local.found).toEqual([]);
-      await page.locator("#local-kind").selectOption("party");
-      await expect(page.locator("#party-address")).toBeVisible();
+      await ui.localKind(page).selectOption("party");
+      await expect(ui.partyAddress(page)).toBeVisible();
+      // Party uses the bar form's one agreement box (Donald, Nov 16 2026).
+      await expect(
+        page.getByRole("checkbox", {
+          name: /Must be 21 years or older, cannot smoke/,
+        }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("checkbox", {
+          name: "Must be 21 or older",
+          exact: true,
+          includeHidden: true,
+        }),
+      ).toHaveCount(0);
+      await expect(
+        page.getByRole("group", { name: /Second pickup location/ }),
+      ).toBeVisible();
       const party = await offenders(page);
       expect(party.found).toEqual([]);
 
-      await page.locator("#trip-type").selectOption("group");
-      await expect(page.locator("#group-vehicle")).toBeVisible();
-      await expect(page.locator("#group-hours")).toBeVisible();
-      await page.locator("#group-hours").fill("1");
-      await page.locator("#group-hours").blur();
-      await expect(page.locator("#quote-details")).toContainText(
-        "2-hour minimum",
-      );
-      await expect(page.locator("#quote-details")).toContainText("$250.00");
-      await expect(page.locator("#quote-details")).toContainText("$64.38");
+      await ui.tripType(page).selectOption("group");
+      await expect(
+        page.getByText("2026 Toyota Sienna Platinum minivan, $125 per hour."),
+      ).toBeVisible();
+      await expect(ui.hours(page)).toBeVisible();
+      await ui.hours(page).fill("1");
+      await ui.hours(page).blur();
+      await expect(ui.quote(page)).toContainText("2-hour minimum");
+      await expect(ui.quote(page)).toContainText("$250.00");
+      await expect(ui.quote(page)).toContainText("$64.38");
       const group = await offenders(page);
       expect(group.scrollWidth).toBeLessThanOrEqual(group.clientWidth + 1);
       expect(group.found).toEqual([]);

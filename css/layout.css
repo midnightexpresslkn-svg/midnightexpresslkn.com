@@ -54,6 +54,11 @@ header.hero img.header-logo,
   margin-right: 8px;
 }
 
+/* Carry-on Yes/No sits in a half-width column beside How many?, like checked bags. */
+#carryon-bags-section .round-trip-option {
+  margin-right: 12px;
+}
+
 .trip-kind legend {
   display: block;
   width: 100%;
@@ -102,14 +107,16 @@ header.hero img.header-logo,
     box-sizing: border-box;
   }
 
-  #checking-bags-section {
+  #checking-bags-section,
+  #carryon-bags-section {
     display: flex;
     flex-wrap: nowrap;
     align-items: flex-start;
     gap: 8px;
   }
 
-  #checking-bags-section > [class*="col-"] {
+  #checking-bags-section > [class*="col-"],
+  #carryon-bags-section > [class*="col-"] {
     float: none;
     width: 50%;
     max-width: 50%;
@@ -1285,6 +1292,10 @@ section button.btn {
   min-width: 0;
 }
 
+#ride-rules .ride-rule[hidden] {
+  display: none;
+}
+
 #ride-rules .ride-rule {
   display: flex;
   align-items: flex-start;
@@ -1328,3 +1339,13 @@ section button.btn {
   border-top: 1px solid #ffffff;
 }
 
+
+/* Donald, Nov 16 2026: typed time and large, unpicked AM/PM buttons on every ride. */
+#booking .time-period { border: 0; padding: 0; margin: 0 0 8px; }
+#booking .time-period legend { font-size: 16px; font-weight: bold; border: 0; margin-bottom: 6px; color: #fff; }
+#booking .time-period label { position: relative; width: 46%; margin-right: 3%; cursor: pointer; }
+#booking .time-period input { position: absolute; opacity: 0; }
+#booking .time-period span { display: block; border: 1px solid #fff; border-radius: 4px; text-align: center; padding: 11px 8px; font-weight: bold; }
+#booking .time-period input:checked + span { background: #db3040; color: #000; border-color: #db3040; }
+#booking .time-period input:focus-visible + span { outline: 3px solid #fff; outline-offset: 3px; }
+#booking .time-hint { font-size: 15px; margin: 5px 0 8px; }

@@ -11,6 +11,7 @@ import {
   setWhen,
   showQuote,
   submitForm,
+  typeTime,
 } from "./helpers/render-booking.js";
 
 const scripts = ["js/booking.js", "js/booking.min.js"];
@@ -44,7 +45,7 @@ describe.each(scripts)("booking gaps %s", (script) => {
     const date = view.document.querySelector("#booking-date");
     const time = view.document.querySelector("#booking-time");
     if (date._flatpickr) date._flatpickr.clear();
-    if (time._flatpickr) time._flatpickr.clear();
+    typeTime(view.document, "booking-time", "");
     date.value = "";
     time.value = "";
     view.document.querySelector("#booking-pickup").value = "";
@@ -99,17 +100,21 @@ describe.each(scripts)("booking gaps %s", (script) => {
 
   it("rejects a short phone number and a bad flight number", async () => {
     const view = await renderBooking(script);
-    await fillValid(view, { trip: "airport", flight: "!!" });
+    await fillValid(view, { trip: "airport", flight: "!!", roundTrip: true });
     const phone = view.document.querySelector("#booking-phone");
     phone.value = "12345";
     view.window.jQuery(phone).trigger("input");
     await expectVisible(view, "Please enter a valid 10-digit phone number");
-    check(text(view).includes("Please enter a valid flight number"), true, {
-      label: "bad flight number",
-      actual: text(view),
-      source: "js/booking.js",
-      loaded: script,
-    });
+    check(
+      text(view).includes("Please enter a valid arrival flight number"),
+      true,
+      {
+        label: "bad flight number",
+        actual: text(view),
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
   });
 
   it("asks for a home address on an airport trip and a destination on a group trip", async () => {
@@ -175,15 +180,15 @@ describe.each(scripts)("booking gaps %s", (script) => {
     const returnDate = missing.document.querySelector("#booking-return-date");
     const returnTime = missing.document.querySelector("#booking-return-time");
     if (returnDate._flatpickr) returnDate._flatpickr.clear();
-    if (returnTime._flatpickr) returnTime._flatpickr.clear();
+    typeTime(missing.document, "booking-return-time", "");
     returnDate.value = "";
     returnTime.value = "";
     await expectVisible(
       missing,
-      "Return flight date is required for round trips",
+      "Return pickup date is required for round trips",
     );
     check(
-      text(missing).includes("Return flight time is required for round trips"),
+      text(missing).includes("Return pickup time is required for round trips"),
       true,
       {
         label: "blank return time",
@@ -369,7 +374,7 @@ describe.each(scripts)("booking gaps %s", (script) => {
     const view = await renderBooking(script);
     await fillValid(view, { trip: "airport" });
     view.document.querySelector("#booking-date").value = "2020-01-01";
-    view.document.querySelector("#booking-time").value = "12:00:00";
+    typeTime(view.document, "booking-time", "12:00:00");
     await expectVisible(view, "Pickup time cannot be in the past");
     check(formPosts(view.state).length, 0, {
       label: "a past pickup is not sent",
@@ -385,7 +390,7 @@ describe.each(scripts)("booking gaps %s", (script) => {
     const mm = String(soon.getMinutes()).padStart(2, "0");
     view.document.querySelector("#booking-success").textContent = "";
     view.document.querySelector("#booking-date").value = `${y}-${m}-${d}`;
-    view.document.querySelector("#booking-time").value = `${hh}:${mm}:00`;
+    typeTime(view.document, "booking-time", `${hh}:${mm}:00`);
     await expectVisible(view, "Please book at least 3 hours in advance");
     check(formPosts(view.state).length, 0, {
       label: "a rush pickup is not sent",
@@ -448,7 +453,7 @@ describe.each(scripts)("booking gaps %s", (script) => {
       source: "js/booking.js",
       loaded: script,
     });
-    await expectVisible(fraction, "Please enter how many bags");
+    await expectVisible(fraction, "Please enter how many checked bags");
     check(formPosts(fraction.state).length, 0, {
       label: "a fractional bag count is not sent",
       source: "js/booking.js",
@@ -457,7 +462,7 @@ describe.each(scripts)("booking gaps %s", (script) => {
 
     const tooMany = await renderBooking(script);
     await fillValid(tooMany, { trip: "airport", bags: true, bagCount: "21" });
-    await expectVisible(tooMany, "Please enter how many bags");
+    await expectVisible(tooMany, "Please enter how many checked bags");
     check(formPosts(tooMany.state).length, 0, {
       label: "more than twenty bags is not sent",
       source: "js/booking.js",
@@ -488,13 +493,16 @@ describe.each(scripts)("booking gaps %s", (script) => {
       returnTime: "15:00:00",
     });
     await new Promise((resolve) => setTimeout(resolve, 150));
-    const returnTime = view.document.querySelector("#booking-return-time");
-    check(Boolean(returnTime._flatpickr), true, {
-      label: "checking round trip opens the return time menu",
-      source: "js/booking.js",
-      loaded: script,
-    });
-    returnTime._flatpickr.setDate("08:00:00", true);
+    check(
+      Boolean(view.document.querySelector("#booking-return-time-text")),
+      true,
+      {
+        label: "checking round trip opens the typed return time",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    typeTime(view.document, "booking-return-time", "08:00:00");
     check(
       view.document.querySelector("#return-date-error").textContent,
       "Return date must be after pickup date",
@@ -557,8 +565,8 @@ describe.each(scripts)("booking gaps %s", (script) => {
       source: "js/booking.js",
       loaded: script,
     });
-    check(view.document.querySelector("#booking-time").value, "08:00:00", {
-      label: "after 8 PM the pickup time starts at 8:00 AM",
+    check(view.document.querySelector("#booking-time").value, "", {
+      label: "time stays blank until the rider types it and picks AM or PM",
       source: "js/booking.js",
       loaded: script,
     });
@@ -587,8 +595,8 @@ describe.each(scripts)("booking gaps %s", (script) => {
       source: "js/booking.js",
       loaded: script,
     });
-    check(view.document.querySelector("#booking-time").value, "08:00:00", {
-      label: "the pickup moves to 8:00 AM the next day",
+    check(view.document.querySelector("#booking-time").value, "", {
+      label: "time stays blank until the rider types it and picks AM or PM",
       source: "js/booking.js",
       loaded: script,
     });
@@ -636,10 +644,10 @@ describe.each(scripts)("booking gaps %s", (script) => {
       returnTime: "15:00:00",
     });
     view.document.querySelector("#booking-return-date").value = "2020-01-01";
-    view.document.querySelector("#booking-return-time").value = "12:00:00";
+    typeTime(view.document, "booking-return-time", "12:00:00");
     await expectVisible(
       view,
-      "Return flight: Pickup time cannot be in the past",
+      "Return pickup: Pickup time cannot be in the past",
     );
     check(formPosts(view.state).length, 0, {
       label: "a past return is not sent",
@@ -782,8 +790,8 @@ describe.each(scripts)("booking gaps %s", (script) => {
       source: "js/booking.js",
       loaded: script,
     });
-    check(view.document.querySelector("#booking-time").value, "13:00:00", {
-      label: "the pickup opens at 1:00 PM",
+    check(view.document.querySelector("#booking-time").value, "", {
+      label: "time stays blank until the rider types it and picks AM or PM",
       source: "js/booking.js",
       loaded: script,
     });
@@ -832,9 +840,7 @@ describe.each(scripts)("booking gaps %s", (script) => {
       source: "js/booking.js",
       loaded: script,
     });
-    view.document
-      .querySelector("#booking-return-time")
-      ._flatpickr.setDate("15:00:00", true);
+    typeTime(view.document, "booking-return-time", "15:00:00");
     returnDate._flatpickr.setDate("2026-12-14", true);
     check(
       view.document.querySelector("#return-date-error").textContent,
@@ -936,7 +942,7 @@ describe.each(scripts)("booking gaps %s", (script) => {
       source: "js/booking.js",
       loaded: script,
     });
-    check(text(view).includes("Conflicts with outbound flight"), false, {
+    check(text(view).includes("Conflicts with the first ride"), false, {
       label: "Tuesday's hold is not reported as a same-day return conflict",
       actual: text(view),
       source: "js/booking.js",

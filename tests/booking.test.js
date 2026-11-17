@@ -13,6 +13,7 @@ import {
   resultText,
   showAirfieldQuote,
   showQuote,
+  startAnotherBooking,
   submitForm,
 } from "./helpers/render-booking.js";
 
@@ -53,12 +54,9 @@ function quoteLabel(document) {
   return document.querySelector(".quote-label")?.textContent?.trim() || "";
 }
 
-async function submitAnother(view) {
-  const form = view.document.querySelector("#bookingForm");
-  view.window.jQuery(form).show();
-  const success = view.document.querySelector("#booking-success");
-  success.innerHTML = "";
-  view.window.jQuery(success).hide();
+async function submitAnother(view, overrides) {
+  await startAnotherBooking(view);
+  await fillValid(view, overrides);
   await submitForm(view);
 }
 
@@ -542,11 +540,14 @@ describe("booking", () => {
           source: SOURCE.airport,
           loaded: script,
         });
+        const underTrip =
+          view.document.querySelector("#trip-type-group").nextElementSibling;
         check(
-          view.document.querySelector("#trip-type-group").nextElementSibling.id,
-          "airport-choice-row",
+          [underTrip.id, underTrip.nextElementSibling.id],
+          ["airport-direction-group", "airport-choice-row"],
           {
-            label: "airport menu sits under the trip type",
+            label:
+              "the direction question sits right under the trip type, then the airport menu",
             source: SOURCE.airport,
             loaded: script,
           },
@@ -1280,15 +1281,15 @@ describe("booking", () => {
           loaded: script,
         });
         const alert = resultText(view.document);
-        check(alert.includes("Outbound"), true, {
-          label: "confirmation names the outbound leg",
+        check(alert.includes("Your round-trip requests were sent."), true, {
+          label: "confirmation says both legs were sent",
           actual: alert,
           source: SOURCE.airport,
           loaded: script,
         });
-        check(alert.includes("Return"), true, {
-          label: "confirmation names the return leg",
-          actual: alert,
+        // Donald (Nov 16, 2026): no Outbound/Return date bullets, so the box fits a phone screen.
+        check(view.document.querySelectorAll("#booking-success li").length, 0, {
+          label: "no date/time bullet lines on the confirmation",
           source: SOURCE.airport,
           loaded: script,
         });
@@ -1750,9 +1751,20 @@ describe("booking", () => {
           source: SOURCE.passengers,
           loaded: script,
         });
-        check(text.includes("Please enter how many bags"), true, {
-          label: "an empty bag count shows an error",
+        check(text.includes("Please enter how many checked bags"), false, {
+          label: "How many? is not asked until the rider picks Yes",
           actual: text,
+          source: SOURCE.passengers,
+          loaded: script,
+        });
+        const yes = view.document.querySelector("#booking-checking-bags-yes");
+        yes.checked = true;
+        view.window.jQuery(yes).trigger("change");
+        await submitForm(view);
+        const afterYes = resultText(view.document);
+        check(afterYes.includes("Please enter how many checked bags"), true, {
+          label: "Yes with an empty How many? shows an error",
+          actual: afterYes,
           source: SOURCE.passengers,
           loaded: script,
         });
@@ -1942,7 +1954,7 @@ describe("booking", () => {
           source: SOURCE.group,
           loaded: script,
         });
-        check(shown(view.document.querySelector("#booking-time")), true, {
+        check(shown(view.document.querySelector("#booking-time-text")), true, {
           label: "group form asks for a pickup time",
           source: SOURCE.group,
           loaded: script,
@@ -2002,14 +2014,14 @@ describe("booking", () => {
           view.document
             .querySelector("#booking-notes")
             .getAttribute("placeholder"),
-          "Anything we should know? For example, a wheelchair, a car seat, or extra luggage.",
+          "Anything we should know? For example: drinks, music style.",
           {
-            label: "trip description hint names a wheelchair and a car seat",
+            label: "trip description hint gives drinks and music examples",
             source: SOURCE.group,
             loaded: script,
           },
         );
-        check(shown(view.document.querySelector("#rule-age")), true, {
+        check(shown(view.document.querySelector("#rule-bar-agreement")), true, {
           label: "group form asks the rider to confirm they are 21",
           source: SOURCE.group,
           loaded: script,
@@ -2520,7 +2532,7 @@ describe("booking", () => {
           source: SOURCE.drivers,
           loaded: script,
         });
-        await submitAnother(view);
+        await submitAnother(view, { date: day, time: "10:00:00" });
         check(resultText(view.document).includes("Request received"), true, {
           label: "second ride at the same time is accepted",
           actual: resultText(view.document),
@@ -2534,7 +2546,7 @@ describe("booking", () => {
           source: SOURCE.drivers,
           loaded: script,
         });
-        await submitAnother(view);
+        await submitAnother(view, { date: day, time: "10:00:00" });
         check(resultText(view.document).includes("That time is booked"), true, {
           label: "third ride at the same time is refused",
           expected: "That time is booked",
@@ -2564,7 +2576,12 @@ describe("booking", () => {
           source: SOURCE.group,
           loaded: script,
         });
-        await submitAnother(view);
+        await submitAnother(view, {
+          trip: "group",
+          date: day,
+          time: "10:00:00",
+          hours: "4",
+        });
         check(resultText(view.document).includes("Request received"), true, {
           label: "second group event at the same start is accepted",
           actual: resultText(view.document),
@@ -2572,7 +2589,12 @@ describe("booking", () => {
           loaded: script,
         });
         const sent = bookingPosts(view.state).length;
-        await submitAnother(view);
+        await submitAnother(view, {
+          trip: "group",
+          date: day,
+          time: "10:00:00",
+          hours: "4",
+        });
         check(resultText(view.document).includes("That time is booked"), true, {
           label: "third group event is refused",
           expected: "That time is booked",
@@ -2758,7 +2780,7 @@ describe("booking", () => {
         await submitForm(view);
         check(
           resultText(view.document).includes(
-            "Return flight time conflicts with outbound flight",
+            "Return pickup time conflicts with the first ride",
           ),
           true,
           {
