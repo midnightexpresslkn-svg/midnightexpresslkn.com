@@ -1,5 +1,11 @@
 import { hostnameOf } from "../helpers/hostname.js";
-import { test, expect, typeTimeAt, pick } from "./helpers/booking-mocks.js";
+import {
+  test,
+  expect,
+  typeTimeAt,
+  pick,
+  chooseOneWay,
+} from "./helpers/booking-mocks.js";
 import { ui, expectPresentButHidden } from "./helpers/ui.js";
 
 // Bags plus the other airport answers Donald made required on Nov 16, 2026.
@@ -24,7 +30,13 @@ async function answerBags(page, { note = "Departure curb, please." } = {}) {
 }
 
 // Airport, bar, and party rides ask Round trip; group events do not, so callers say which.
+// An airport No asks Are you sure? first, so a one-way airport rider answers No twice (Nov 19 2026).
+// Some specs answer Round trip twice; once No is kept, a repeat answer changes nothing.
 async function answerRoundTrip(page, value = "No") {
+  const airport = (await ui.tripType(page).inputValue()) === "airport";
+  const no = ui.roundTrip(page).getByRole("radio", { name: "No", exact: true });
+  if (value === "No" && airport && !(await no.isChecked()))
+    return chooseOneWay(page);
   await ui
     .roundTrip(page)
     .getByRole("radio", { name: value, exact: true })

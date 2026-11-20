@@ -625,8 +625,13 @@ export async function fillValid(view, overrides = {}) {
       );
     } else if (overrides.roundTrip !== null) {
       const no = doc.querySelector("#booking-round-trip-no");
-      no.checked = true;
-      window.jQuery(no).trigger("change");
+      // An airport ride clears the first No and asks Are you sure?, so a one-way rider
+      // answers No again (Donald, Nov 19 2026). Bar and party rides keep the first No.
+      const answers = trip === "airport" ? 2 : 1;
+      for (let i = 0; i < answers; i += 1) {
+        no.checked = true;
+        window.jQuery(no).trigger("change");
+      }
     }
   }
   if (partyRide) {

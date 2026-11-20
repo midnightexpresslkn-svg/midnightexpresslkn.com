@@ -54,6 +54,23 @@ header.hero img.header-logo,
   margin-right: 8px;
 }
 
+/* Are you sure? after the first No on an airport round trip (Donald, Nov 19 2026). */
+#bookingForm .round-trip-confirm {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-left: 4px solid #f0ad4e;
+  border-radius: 4px;
+  background: rgba(240, 173, 78, 0.14);
+  text-align: left;
+  font-weight: bold;
+  line-height: 1.4;
+  max-width: 640px;
+}
+
+#bookingForm .round-trip-confirm[hidden] {
+  display: none;
+}
+
 /* Carry-on Yes/No sits in a half-width column beside How many?, like checked bags. */
 #carryon-bags-section .round-trip-option {
   margin-right: 12px;
