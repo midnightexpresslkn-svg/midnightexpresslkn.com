@@ -3,6 +3,7 @@
 import { afterEach, describe, it } from "vitest";
 import { queryAllByRole } from "@testing-library/dom";
 import { check } from "./helpers/failure.js";
+import { hostnameOf } from "./helpers/hostname.js";
 import {
   chooseTrip,
   drainTimers,
@@ -108,7 +109,7 @@ describe.each(scripts)("airport one-way confirm %s", (script) => {
     check(posts.length, 1, meta("a one-way airport ride sends one entry"));
     const calendar = JSON.parse(
       view.state.requests.find(
-        (r) => r.method === "POST" && r.url.includes("script.google.com"),
+        (r) => r.method === "POST" && hostnameOf(r.url) === "script.google.com",
       ).body,
     );
     check(calendar.roundTrip, "No", meta("the booking is sent as one way"));
