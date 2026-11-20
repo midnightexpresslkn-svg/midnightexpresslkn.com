@@ -1133,6 +1133,10 @@
     // Donald (Nov 16, 2026): the airport form asks for a required note with these examples.
     var AIRPORT_NOTES_PLACEHOLDER = 'For example: extra stops, or where to pick you up (arrival or departure curb).';
     var AIRPORT_NOTES_MESSAGE = 'Please add a note for your driver (for example extra stops, or arrival or departure curb).';
+    // Donald (Nov 19, 2026): the first No on an airport round trip is cleared and asks this once.
+    // A second No is kept, so a one-way airport ride can still be booked.
+    var ONE_WAY_CONFIRM = 'Are you sure? We track inbound flights and adjust pickup times accordingly, and we always have a driver waiting on you.';
+    var oneWayAsked = false;
     var SPECIAL_ITEMS = [
         { id: 'booking-wheelchair', label: 'Wheelchair' },
         { id: 'booking-carseat', label: 'Car Seat' },
@@ -1409,7 +1413,26 @@
         $box.find('.has-error').removeClass('has-error');
     }
 
+    function hideOneWayConfirm() {
+        $('#round-trip-confirm').text('').attr('hidden', 'hidden');
+    }
+
+    /**
+     * The first No on an airport round trip is unchecked and the Are you sure? message shows, so the
+     * rider answers Yes or No again. Any later answer is kept and hides the message.
+     */
+    function confirmOneWay() {
+        if (isAirportTrip() && roundTripChoice() === 'No' && !oneWayAsked) {
+            oneWayAsked = true;
+            $('#booking-round-trip-no').prop('checked', false);
+            $('#round-trip-confirm').text(ONE_WAY_CONFIRM).removeAttr('hidden');
+            return;
+        }
+        hideOneWayConfirm();
+    }
+
     function updateConditionalFields() {
+        if (!isAirportTrip()) hideOneWayConfirm();
         const roundTrip = isRoundTrip();
 
         // Bags and a return flight are airport fields. Local keeps round trip for the fare only.
@@ -1929,6 +1952,7 @@
         $('input[name="round-trip"]').on('change', function() {
             $('#round-trip-error').text('').hide();
             $('#round-trip-section .form-group').removeClass('has-error');
+            confirmOneWay();
             if (isRoundTrip()) {
                 setTimeout(function() {
                     initializeReturnFlatpickr();
@@ -2861,6 +2885,8 @@
             // pendingBookings is kept on purpose: it holds the just-sent time for 10 seconds so the
             // next booking cannot overbook it before the calendar catches up. It is never re-sent.
             currentBookingId = newBookingId();
+            // A new booking asks the one-way Are you sure? again (the trip-type change below hides the message)
+            oneWayAsked = false;
             // Forget a ?type= / ?bar= link preset so the old trip type or bar is not filled in again
             window.history.replaceState(null, '', window.location.pathname + window.location.hash);
             $form[0].reset();

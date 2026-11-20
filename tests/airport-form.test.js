@@ -154,6 +154,8 @@ describe.each(scripts)("airport form %s", (script) => {
       loaded: script,
     });
     type(view, "#booking-flight", "AA2684");
+    // The first No asks Are you sure?; the second No is the one-way answer (Donald, Nov 19 2026).
+    tick(view, "#booking-round-trip-no");
     tick(view, "#booking-round-trip-no");
     check(
       [group.style.display !== "none", arrival.required, arrival.value],

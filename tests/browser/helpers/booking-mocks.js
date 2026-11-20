@@ -89,6 +89,29 @@ export async function bookingMocks(page, { miles = 10 } = {}) {
   return state;
 }
 
+/** The Are you sure? shown after the first No on an airport round trip (Donald, Nov 19 2026). */
+export const oneWayConfirm = (page) =>
+  page.getByRole("alert").filter({
+    hasText:
+      "Are you sure? We track inbound flights and adjust pickup times accordingly, and we always have a driver waiting on you.",
+  });
+
+/**
+ * Answers an airport Round trip with No the way a one-way rider must: the first No is cleared and
+ * Are you sure? shows, then the second No is kept.
+ */
+export async function chooseOneWay(page) {
+  const no = page
+    .getByRole("group", { name: /Round trip/ })
+    .getByRole("radio", { name: "No", exact: true });
+  await no.click();
+  await expect(oneWayConfirm(page)).toBeVisible();
+  await expect(no).not.toBeChecked();
+  await no.check();
+  await expect(no).toBeChecked();
+  await expect(oneWayConfirm(page)).toBeHidden();
+}
+
 export async function fillAirport(
   page,
   {
@@ -136,10 +159,15 @@ export async function fillAirport(
   await page
     .getByRole("textbox", { name: /Special Notes/ })
     .fill("Departure curb, please.");
-  await page
-    .getByRole("group", { name: /Round trip/ })
-    .getByRole("radio", { name: round ? "Yes" : "No", exact: true })
-    .check();
+  if (round) {
+    await page
+      .getByRole("group", { name: /Round trip/ })
+      .getByRole("radio", { name: "Yes", exact: true })
+      .check();
+  } else if (round !== null) {
+    // round: null leaves Round trip unanswered for specs that answer it themselves.
+    await chooseOneWay(page);
+  }
   await pick(
     page.getByRole("textbox", { name: "Select date" }).first(),
     "2026-12-15",
