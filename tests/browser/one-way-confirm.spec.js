@@ -22,31 +22,38 @@ const no = (page) =>
 const request = (page) =>
   page.getByRole("button", { name: "Request Booking", exact: true });
 
-/** The message sits right under the Round trip question and inside the screen width. */
+/**
+ * The message sits right under the Round trip question and inside the screen width. Both boxes
+ * are measured in one frame and the check retries, so scrolling or a slide animation elsewhere
+ * on the form cannot catch them mid-move.
+ */
 async function besideQuestion(page) {
-  const question = await roundTrip(page).boundingBox();
-  const message = await oneWayConfirm(page).boundingBox();
-  const width = page.viewportSize().width;
-  expect(
-    message.y,
-    "message starts below the Yes/No answers",
-  ).toBeGreaterThanOrEqual(question.y + question.height - 1);
-  expect(
-    message.y - (question.y + question.height),
-    "message is right under the question",
-  ).toBeLessThan(40);
-  expect(
-    message.x,
-    "message lines up with the question",
-  ).toBeGreaterThanOrEqual(question.x - 1);
-  expect(
-    message.x + message.width,
-    "message fits on the screen",
-  ).toBeLessThanOrEqual(width);
-  const fits = await oneWayConfirm(page).evaluate(
-    (el) => el.scrollWidth <= el.clientWidth,
-  );
-  expect(fits, "message text wraps instead of overflowing").toBe(true);
+  const question = roundTrip(page);
+  await expect
+    .poll(async () =>
+      oneWayConfirm(page).evaluate(
+        (el, fieldset) => {
+          const q = fieldset.getBoundingClientRect();
+          const m = el.getBoundingClientRect();
+          const gap = m.top - q.bottom;
+          return {
+            belowAnswers: gap >= -1,
+            rightUnder: gap < 40,
+            linedUp: m.left >= q.left - 1,
+            onScreen: m.right <= document.documentElement.clientWidth,
+            wraps: el.scrollWidth <= el.clientWidth,
+          };
+        },
+        await question.elementHandle(),
+      ),
+    )
+    .toEqual({
+      belowAnswers: true,
+      rightUnder: true,
+      linedUp: true,
+      onScreen: true,
+      wraps: true,
+    });
 }
 
 for (const size of [
