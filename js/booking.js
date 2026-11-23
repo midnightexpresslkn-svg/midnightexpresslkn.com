@@ -322,8 +322,10 @@
      * Booking window rules (Donald):
      * - Each ride occupies exactly 2 hours starting at pickup (pickup → pickup+120).
      * - Two windows overlap iff |P - E| < 120 minutes (strict).
-     * - DRIVER_COUNT drivers can work at once; a proposed pickup is unavailable
-     *   only when it would overlap DRIVER_COUNT or more existing rides (needs another driver).
+     * - DRIVER_COUNT drivers can work at once.
+     * - Donald (Nov 23, 2026): the website never refuses a time because of other rides. A double
+     *   or a triple booking is sent as a normal request; the calendar script marks a triple and
+     *   Donald's booking call opens with "Warning, triple booking." The rider never sees it.
      */
     const RIDE_DURATION_MINUTES = 120;
     const DRIVER_COUNT = 2;
@@ -332,16 +334,7 @@
      * Cached bookings data
      */
     let cachedBookings = [];
-    let lastFetchTime = null;
     let bookingsFetchOk = false;
-    const CACHE_DURATION_MS = 60000; // 1 minute
-
-    /**
-     * Track pending bookings (not yet in database)
-     * This helps prevent race conditions where multiple bookings are submitted
-     * before the database is updated
-     */
-    let pendingBookings = [];
 
     /**
      * One booking ID per filled-in form. A booking ID, and each of its legs,
@@ -365,12 +358,8 @@
      * Fetch bookings from Google Apps Script endpoint
      * @returns {Promise<Array>} - Array of booking objects
      */
+    // Fetched once when the page loads (the busy list no longer blocks a pickup; Donald, Nov 23, 2026).
     async function fetchBookings() {
-        // Return cached data if still fresh
-        if (lastFetchTime && (Date.now() - lastFetchTime < CACHE_DURATION_MS)) {
-            return Promise.resolve(cachedBookings);
-        }
-
         return new Promise(function(resolve, reject) {
             $.ajax({
                 url: BOOKINGS_API_URL,
@@ -380,7 +369,6 @@
                 success: function(bookings) {
                     console.log('Fetched bookings:', bookings);
                     cachedBookings = Array.isArray(bookings) ? bookings : [];
-                    lastFetchTime = Date.now();
                     bookingsFetchOk = true;
                     resolve(cachedBookings);
                 },
@@ -388,7 +376,7 @@
                     console.error('Error fetching bookings:', status, error);
                     console.warn('Availability fetch failed; not claiming all times available');
                     bookingsFetchOk = false;
-                    resolve(cachedBookings.length > 0 ? cachedBookings : []);
+                    resolve(cachedBookings);
                 }
             });
         });
@@ -418,33 +406,6 @@
         };
     }
 
-    /**
-     * Get all bookings for a specific date (including pending bookings)
-     * @param {string} dateStr - Date in YYYY-MM-DD format
-     * @param {boolean} includePending - Whether to include pending bookings
-     * @returns {Promise<Array>} - Array of bookings for that date
-     */
-    async function getBookingsForDate(dateStr) {
-        const allBookings = await fetchBookings();
-
-        const dbBookings = allBookings
-            .map(function(booking) {
-                const parsed = parseBookingDateTime(booking.datetime);
-                return {
-                    date: parsed.date,
-                    hours: parsed.hours,
-                    minutes: parsed.minutes
-                };
-            })
-            .filter(function(booking) {
-                return booking.date === dateStr;
-            });
-
-        var pending = pendingBookings.filter(function(booking) {
-            return booking.date === dateStr;
-        });
-        return dbBookings.concat(pending);
-    }
 
     /**
      * Ride occupation window: [pickup, pickup + RIDE_DURATION_MINUTES) in minutes since midnight.
@@ -462,36 +423,15 @@
     /**
      * How many existing rides' windows overlap a proposed pickup.
      */
-    function countOverlappingRides(proposedMinutes, existingBookings, proposedDuration) {
-        var durP = proposedDuration || RIDE_DURATION_MINUTES;
+    function countOverlappingRides(proposedMinutes, existingBookings) {
         var count = 0;
         for (var i = 0; i < existingBookings.length; i++) {
             var booking = existingBookings[i];
-            var existingMinutes = booking.startMinutes != null
-                ? booking.startMinutes
-                : booking.hours * 60 + booking.minutes;
-            var durE = booking.durationMinutes || RIDE_DURATION_MINUTES;
-            var overlaps = (durP === RIDE_DURATION_MINUTES && durE === RIDE_DURATION_MINUTES)
-                ? ridesOverlap(proposedMinutes, existingMinutes)
-                : (proposedMinutes < existingMinutes + durE && existingMinutes < proposedMinutes + durP);
-            if (overlaps) count++;
+            if (ridesOverlap(proposedMinutes, booking.hours * 60 + booking.minutes)) count++;
         }
         return count;
     }
 
-    /**
-     * Proposed pickup conflicts when it would need more than DRIVER_COUNT drivers
-     * (overlaps DRIVER_COUNT or more existing rides).
-     * @param {string} dateStr - Date in YYYY-MM-DD format (unused; bookings already filtered)
-     * @param {string} timeStr - Time in HH:MM format
-     * @param {Array} existingBookings - Array of bookings for the date
-     * @returns {boolean} - True if there's a conflict
-     */
-    function hasTimeConflict(dateStr, timeStr, existingBookings, durationMinutes) {
-        const [hours, minutes] = timeStr.split(':').map(Number);
-        const proposedTimeMinutes = hours * 60 + minutes;
-        return countOverlappingRides(proposedTimeMinutes, existingBookings, durationMinutes || RIDE_DURATION_MINUTES) >= DRIVER_COUNT;
-    }
 
     function formatDisplayTime(timeStr) {
         var parts = String(timeStr == null ? '' : timeStr).split(':');
@@ -559,7 +499,7 @@
      */
     /**
      * Build 24-hour timeline of pickup times a customer cannot choose.
-     * Red ranges use the same check as hasTimeConflict / countOverlappingRides:
+     * Red ranges use countOverlappingRides (index.html has no timeline box, so riders do not see it):
      * a minute P is unavailable when [P, P+RIDE_DURATION) would overlap
      * DRIVER_COUNT or more existing rides.
      * @param {Array} bookings - Array of bookings for the selected date
@@ -858,13 +798,13 @@
     }
 
     /**
-     * Synchronous validation using pre-loaded bookings
+     * Pickup time checks: not in the past, at least 3 hours ahead. Other rides never block a
+     * time (Donald, Nov 23, 2026); the calendar script warns Donald about a triple booking.
      * @param {string} dateStr - Date in YYYY-MM-DD format
      * @param {string} timeStr - Time in HH:MM format
-     * @param {Array} bookings - Pre-loaded bookings for this date
      * @returns {object} - {valid: boolean, error: string}
      */
-    function validateDateTimeSync(dateStr, timeStr, bookings, durationMinutes) {
+    function validateDateTimeSync(dateStr, timeStr) {
         // Check if in the past
         const selectedDateTime = new Date(dateStr + 'T' + timeStr);
         const now = new Date();
@@ -885,14 +825,6 @@
             };
         }
 
-        // Check booking conflicts
-        if (hasTimeConflict(dateStr, timeStr, bookings, durationMinutes)) {
-            return {
-                valid: false,
-                error: 'That time is booked. Please pick another time.'
-            };
-        }
-
         return {
             valid: true,
             error: ''
@@ -900,51 +832,13 @@
     }
 
     /**
-     * Validate date/time against bookings (async version for form submission)
-     * Includes pending bookings to prevent race conditions
+     * Validate date/time for form submission (async so the submit flow stays the same).
      * @param {string} dateStr - Date in YYYY-MM-DD format
      * @param {string} timeStr - Time in HH:MM format
      * @returns {Promise<object>} - {valid: boolean, error: string}
      */
-    function minutesFromDate(dateStr, booking) {
-        var a = dateStr.split('-').map(Number);
-        var b = String(booking.date).split('-').map(Number);
-        var day0 = Date.UTC(a[0], a[1] - 1, a[2]);
-        var day1 = Date.UTC(b[0], b[1] - 1, b[2]);
-        var delta = Math.round((day1 - day0) / 86400000);
-        return delta * 1440 + booking.hours * 60 + booking.minutes;
-    }
-
-    async function validateDateTime(dateStr, timeStr, durationMinutes) {
-        var dur = durationMinutes || RIDE_DURATION_MINUTES;
-        var all = await fetchBookings();
-        var parsed = all.map(function(raw) {
-            var p = parseBookingDateTime(raw.datetime);
-            var mins = Number(raw.durationMinutes);
-            return {
-                date: p.date,
-                hours: p.hours,
-                minutes: p.minutes,
-                durationMinutes: mins > 0 ? mins : RIDE_DURATION_MINUTES
-            };
-        });
-        var pending = pendingBookings.map(function(b) {
-            return {
-                date: b.date,
-                hours: b.hours,
-                minutes: b.minutes,
-                durationMinutes: b.durationMinutes || RIDE_DURATION_MINUTES
-            };
-        });
-        var combined = parsed.concat(pending).map(function(b) {
-            return {
-                startMinutes: minutesFromDate(dateStr, b),
-                durationMinutes: b.durationMinutes,
-                hours: b.hours,
-                minutes: b.minutes
-            };
-        });
-        return validateDateTimeSync(dateStr, timeStr, combined, dur);
+    async function validateDateTime(dateStr, timeStr) {
+        return validateDateTimeSync(dateStr, timeStr);
     }
 
 
@@ -1196,7 +1090,9 @@
             $('#a-name-phone').append($('#name-group'), $('#phone-group'));
             $('#a-email-people').append($('#email-group'), $('#passengers-group'));
             $('#a-when').append($('#date-group'), $('#time-group'));
-            $('#a-places').append($('#ride-map-slot'), $('#address-group'), $('#dest-group'));
+            $('#a-places').append($('#address-group'), $('#dest-group'));
+            // Donald (Nov 22, 2026): the map sits with the price, right above Request Booking.
+            $('#booking-quote').after($('#ride-map-slot'));
             setFieldLabel('date-label', 'Pickup Date *');
             setFieldLabel('time-label', 'Pickup Time *');
             setFieldLabel('passengers-label', 'Number of Passengers *');
@@ -2660,11 +2556,7 @@
 
             // Re-validate date/time against latest bookings
             if (formData.pickupDate && formData.pickupTime) {
-                const dateTimeValidation = await validateDateTime(
-                    formData.pickupDate,
-                    formData.pickupTime,
-                    trip === 'group' ? formData.durationMinutes : RIDE_DURATION_MINUTES
-                );
+                const dateTimeValidation = await validateDateTime(formData.pickupDate, formData.pickupTime);
                 if (!dateTimeValidation.valid) {
                     errors.push(dateTimeValidation.error);
                     $('#booking-date').closest('.form-group').addClass('has-error');
@@ -2681,23 +2573,6 @@
                     $('#booking-return-date').closest('.form-group').addClass('has-error');
                     $('#return-date-error').text(returnDateTimeValidation.error).show();
                     isValid = false;
-                }
-
-                // Same day: treat the outbound pickup as already booked when checking the return
-                // (return is unavailable only if outbound + existing would need a 3rd driver).
-                if (formData.pickupDate === formData.returnDate) {
-                    const [pickupHours, pickupMinutes] = formData.pickupTime.split(':').map(Number);
-                    const existingForReturn = await getBookingsForDate(formData.returnDate);
-                    const withOutbound = existingForReturn.concat([{
-                        hours: pickupHours,
-                        minutes: pickupMinutes
-                    }]);
-                    if (hasTimeConflict(formData.returnDate, formData.returnTime, withOutbound)) {
-                        errors.push('Return pickup time conflicts with the first ride. Please choose a different time.');
-                        $('#booking-return-time').closest('.form-group').addClass('has-error');
-                        $('#return-time-error').text('Conflicts with the first ride').show();
-                        isValid = false;
-                    }
                 }
             }
 
@@ -2722,26 +2597,6 @@
                 return;
             }
 
-            // Add pending bookings to prevent race conditions
-            // Extract hours and minutes for conflict detection
-            const [outboundHours, outboundMinutes] = formData.pickupTime.split(':').map(Number);
-            pendingBookings.push({
-                date: formData.pickupDate,
-                hours: outboundHours,
-                minutes: outboundMinutes,
-                durationMinutes: formData.durationMinutes
-            });
-
-            // If round trip, also add return booking to pending
-            if (formData.roundTrip === 'Yes' && formData.returnDate && formData.returnTime) {
-                const [returnHours, returnMinutes] = formData.returnTime.split(':').map(Number);
-                pendingBookings.push({
-                    date: formData.returnDate,
-                    hours: returnHours,
-                    minutes: returnMinutes
-                });
-            }
-
             // Show submitting state
             const $submitBtn = $form.find('button[type="submit"]');
             const originalBtnText = $submitBtn.html();
@@ -2750,7 +2605,6 @@
             try {
                 console.log('=== STARTING FORM SUBMISSION ===');
                 console.log('Form Data:', formData);
-                console.log('Pending bookings:', pendingBookings.length);
 
                 // Handle dual submission for round-trip bookings
                 const submissions = await handleDualSubmission(formData, bookingId);
@@ -2763,18 +2617,8 @@
                     console.warn('Calendar mirror error ignored:', calendarErr);
                 }
 
-                // Invalidate cache after successful submission so future validations fetch fresh data
+                // Forget the busy list after a submission
                 cachedBookings = [];
-                lastFetchTime = null;
-                console.log('Cache invalidated after successful submission');
-
-                // Clear pending bookings after a delay to allow database to catch up
-                // Keep them for 10 seconds to prevent immediate conflicts
-                setTimeout(function() {
-                    const numBookings = formData.roundTrip === 'Yes' && formData.airportTrip === 'Yes' ? 2 : 1;
-                    pendingBookings.splice(0, numBookings);
-                    console.log('Cleared pending bookings. Remaining:', pendingBookings.length);
-                }, 10000); // 10 seconds
 
                 console.log('=== SUBMISSION COMPLETE ===');
                 console.log('Showing success message...');
@@ -2815,7 +2659,11 @@
 
                 showAnotherBookingButton();
 
-                // Center the confirmation and its Make Another Booking button together on the screen
+                // Donald (Nov 22, 2026): the route map stays on the confirmation screen, under the message.
+                const $routeMap = $('#ride-map-slot');
+                if (!$routeMap.prop('hidden')) $('#booking-success').after($routeMap);
+
+                // Center the confirmation, its map, and the Make Another Booking button together on the screen
                 placeInView($('#booking-success'), 'center', $('#new-booking-wrap'));
 
             } catch (error) {
@@ -2823,11 +2671,6 @@
                 console.error('Error:', error);
                 console.error('Error message:', error.message);
                 console.error('Error stack:', error.stack);
-
-                // Clear pending bookings on error since submission failed
-                const numBookings = formData.roundTrip === 'Yes' && formData.airportTrip === 'Yes' ? 2 : 1;
-                pendingBookings.splice(0, numBookings);
-                console.log('Cleared pending bookings due to error');
 
                 const errorHtml =
                     '<div class="alert alert-danger">' +
@@ -2882,8 +2725,6 @@
          * Clear every field and all code-held state for a brand-new booking. Never sends anything.
          */
         function resetBookingForm() {
-            // pendingBookings is kept on purpose: it holds the just-sent time for 10 seconds so the
-            // next booking cannot overbook it before the calendar catches up. It is never re-sent.
             currentBookingId = newBookingId();
             // A new booking asks the one-way Are you sure? again (the trip-type change below hides the message)
             oneWayAsked = false;
@@ -2901,6 +2742,8 @@
             TIME_IDS.forEach(function(id) { clearTypedTime(id); });
             $('#booking-success').html('').hide();
             $anotherWrap.hide();
+            // The map goes back above Request Booking, hidden until the new trip has a route.
+            $('#booking-quote').after($('#ride-map-slot').prop('hidden', true));
             $('#trip-type-group').show();
             $('#timeline-container').hide();
             $('#checking-bags-section').hide();
@@ -3219,7 +3062,15 @@
         var $d=$('#quote-details');
         $d.html(html);
         if(html && String(html).indexOf('quote-total')!==-1 && globalThis.MidnightBooking){
-            globalThis.MidnightBooking.placeInView(document.getElementById('booking-quote'),'nearest');
+            // Donald (Nov 22, 2026): the price and the map show together on one screen.
+            // On a short phone the whole price box plus the map can be taller than the screen,
+            // so start at the price line itself and keep the map under it.
+            var box=document.getElementById('booking-quote');
+            var slot=document.getElementById('ride-map-slot');
+            var mapShown=!slot.hidden;
+            var start=box;
+            if(mapShown&&slot.getBoundingClientRect().bottom-box.getBoundingClientRect().top>window.innerHeight*0.8)start=$d.find('.quote-total')[0];
+            globalThis.MidnightBooking.placeInView(start,'nearest',mapShown?slot:null);
         }
     }
     function tripNow(){return $('#trip-type').val()||'';}

@@ -44,7 +44,7 @@ export const SOURCE = {
   conflict: () =>
     sourceLine(
       "js/booking.js",
-      "function hasTimeConflict(dateStr, timeStr, existingBookings)",
+      "function validateDateTimeSync(dateStr, timeStr)",
     ),
   overlap: () =>
     sourceLine(

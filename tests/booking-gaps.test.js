@@ -712,7 +712,7 @@ describe.each(scripts)("booking gaps %s", (script) => {
     });
   });
 
-  it("holds the second driver for ten seconds so a third request cannot take that time", async () => {
+  it("sends the next request for the same time right away (no hold): Donald, Nov 23, 2026", async () => {
     const view = await renderBooking(script, {
       bookings: [{ datetime: atLocal("2026-12-15", 10, 0) }],
     });
@@ -723,8 +723,7 @@ describe.each(scripts)("booking gaps %s", (script) => {
     });
     await submitForm(view);
     check(text(view).includes("Request received"), true, {
-      label:
-        "the second driver can still take a time that already has one ride",
+      label: "the second ride at 10:00 is sent",
       actual: text(view),
       source: "js/booking.js",
       loaded: script,
@@ -744,24 +743,16 @@ describe.each(scripts)("booking gaps %s", (script) => {
       time: "10:00:00",
     });
     view.document.querySelector("#booking-success").textContent = "";
-    await expectVisible(view, "That time is booked");
-    check(formPosts(view.state).length, 1, {
-      label:
-        "a third request is stopped while the second driver is still pending",
-      source: "js/booking.js",
-      loaded: script,
-    });
-    await new Promise((resolve) => setTimeout(resolve, 11000));
-    view.document.querySelector("#booking-success").textContent = "";
-    await submitForm(view);
-    check(text(view).includes("Request received"), true, {
-      label: "the third request can be sent after the ten-second hold ends",
+    await expectVisible(view, "Request received");
+    check(text(view).includes("That time is booked"), false, {
+      label: "the third ride at 10:00 is not refused",
       actual: text(view),
       source: "js/booking.js",
       loaded: script,
     });
     check(formPosts(view.state).length, 2, {
-      label: "the later request is the second form row",
+      label:
+        "the third ride is the second form row from this page, sent at once",
       source: "js/booking.js",
       loaded: script,
     });
@@ -950,7 +941,7 @@ describe.each(scripts)("booking gaps %s", (script) => {
     });
   });
 
-  it("keeps the last busy list when a later refresh fails", async () => {
+  it("a failed busy-list refresh never stops a request, even with two rides at that time", async () => {
     const view = await renderBooking(script, {
       bookings: [
         { datetime: atLocal("2026-12-15", 10, 0) },
@@ -977,13 +968,13 @@ describe.each(scripts)("booking gaps %s", (script) => {
     const realNow = Date.now;
     Date.now = () => realNow() + 61000;
     try {
-      await expectVisible(view, "That time is booked");
+      await expectVisible(view, "Request received");
     } finally {
       Date.now = realNow;
       jq.ajax = original;
     }
-    check(formPosts(view.state).length, 0, {
-      label: "a failed refresh does not free a time both drivers already have",
+    check(formPosts(view.state).length, 1, {
+      label: "the triple-booked request is sent; the calendar warns Donald",
       source: "js/booking.js",
       loaded: script,
     });

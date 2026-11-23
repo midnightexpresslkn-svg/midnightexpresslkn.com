@@ -9,9 +9,11 @@ import {
   renderBooking,
   resultText,
   showQuote,
+  startAnotherBooking,
   submitForm,
   typeTime,
 } from "./helpers/render-booking.js";
+import { waitFor } from "@testing-library/dom";
 
 const scripts = ["js/booking.js", "js/booking.min.js"];
 
@@ -1022,6 +1024,170 @@ describe.each(scripts)("local bars and group %s", (script) => {
     });
   });
 
+  it("keeps the route map on the confirmation screen, then puts it back above Request Booking (Donald, Nov 22, 2026)", async () => {
+    const view = await renderBooking(script, {
+      miles: 10,
+      googleMiles: 30,
+      googleMinutes: 40,
+      mapsKey: "test-browser-key",
+      googleMaps: googleSdk(),
+    });
+    await fillValid(view, { date: "2026-12-15", time: "10:00:00" });
+    const doc = view.document;
+    const slot = doc.querySelector("#ride-map-slot");
+    await waitFor(
+      () => {
+        if (slot.hidden) throw new Error("waiting for the route map");
+      },
+      { timeout: 4000 },
+    );
+    await submitForm(view);
+    check(resultText(doc).includes("Request received"), true, {
+      label: "the ride is sent",
+      actual: resultText(doc),
+      source: "js/booking.js",
+      loaded: script,
+    });
+    check(
+      doc.querySelector("#booking-success").nextElementSibling === slot,
+      true,
+      {
+        label: "the map sits right under the confirmation message",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    check(
+      slot.nextElementSibling === doc.querySelector("#new-booking-wrap"),
+      true,
+      {
+        label: "Make Another Booking stays under the map",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    check(slot.hidden, false, {
+      label: "the map is still shown after Request Booking",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    check(
+      doc.querySelector("#ride-map-summary").textContent,
+      "30.0 miles · 40 min",
+      {
+        label: "the confirmation map keeps the miles and minutes",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    check(doc.querySelectorAll("#ride-map-slot").length, 1, {
+      label: "there is one map, not a copy",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    await startAnotherBooking(view);
+    check(
+      doc.querySelector("#booking-quote").nextElementSibling === slot,
+      true,
+      {
+        label: "Make Another Booking puts the map back under the price",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    check(slot.hidden, true, {
+      label: "the fresh form hides the map until a new route",
+      source: "js/booking.js",
+      loaded: script,
+    });
+  });
+
+  it("keeps the confirmation without a map when no route was drawn", async () => {
+    const view = await renderBooking(script);
+    await fillValid(view, { date: "2026-12-15", time: "10:00:00" });
+    await submitForm(view);
+    const doc = view.document;
+    check(doc.querySelector("#ride-map-slot").hidden, true, {
+      label: "no map key, no map",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    check(
+      doc
+        .querySelector("#bookingForm")
+        .contains(doc.querySelector("#ride-map-slot")),
+      true,
+      {
+        label: "a hidden map stays in the form",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+  });
+
+  it("brings the price and the map on screen together, starting at the price line on a short phone (Donald, Nov 22, 2026)", async () => {
+    for (const [mapBottom, expected, label] of [
+      [300, "booking-quote", "price box and map fit: start at the price box"],
+      [900, "quote-total", "too tall for the screen: start at the price line"],
+    ]) {
+      const view = await renderBooking(script, {
+        miles: 10,
+        googleMiles: 30,
+        googleMinutes: 40,
+        mapsKey: "test-browser-key",
+        googleMaps: googleSdk(),
+      });
+      const calls = [];
+      const real = view.window.MidnightBooking.placeInView;
+      view.window.MidnightBooking.placeInView = (el, align, endEl) => {
+        calls.push({ el, align, endEl });
+        return real(el, align, endEl);
+      };
+      const proto = view.window.HTMLElement.prototype;
+      const previousRect = proto.getBoundingClientRect;
+      proto.getBoundingClientRect = function () {
+        const bottom = this.id === "ride-map-slot" ? mapBottom : 100;
+        return {
+          top: 0,
+          bottom,
+          left: 0,
+          right: 100,
+          width: 100,
+          height: bottom,
+          x: 0,
+          y: 0,
+        };
+      };
+      try {
+        await showQuote(view, {
+          pickup: "123 Main Street, Denver NC 28037",
+          destination: "CLT",
+        });
+        await waitFor(
+          () => {
+            if (!calls.some((c) => c.endEl))
+              throw new Error("waiting for the price with the map");
+          },
+          { timeout: 4000 },
+        );
+      } finally {
+        proto.getBoundingClientRect = previousRect;
+      }
+      const last = calls.filter((c) => c.endEl).pop();
+      check(last.el.id || last.el.className, expected, {
+        label,
+        actual: last.el.outerHTML,
+        source: "js/booking.js",
+        loaded: script,
+      });
+      check(last.endEl.id, "ride-map-slot", {
+        label: "the scroll runs to the bottom of the map",
+        source: "js/booking.js",
+        loaded: script,
+      });
+    }
+  });
+
   it("prices airport and bar rides from the Google road distance and shows the map", async () => {
     const airport = await renderBooking(script, {
       miles: 10,
@@ -1051,19 +1217,34 @@ describe.each(scripts)("local bars and group %s", (script) => {
       },
     );
     check(airport.document.querySelector("#ride-map-slot").hidden, false, {
-      label: "the map is shown above the address",
+      label: "the map is shown with the price",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    // Donald (Nov 22, 2026): the map sits right under the price, just above Request Booking.
+    const slot = airport.document.querySelector("#ride-map-slot");
+    check(
+      airport.document.querySelector("#booking-quote").nextElementSibling ===
+        slot,
+      true,
+      {
+        label: "the map comes right after the price box",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    check(airport.document.querySelector("#a-places").contains(slot), false, {
+      label: "the map is no longer above the address fields",
       source: "js/booking.js",
       loaded: script,
     });
     check(
-      airport.document
-        .querySelector("#ride-map-slot")
-        .compareDocumentPosition(
-          airport.document.querySelector("#address-group"),
-        ) === Node.DOCUMENT_POSITION_FOLLOWING,
+      slot.compareDocumentPosition(
+        airport.document.querySelector('#bookingForm button[type="submit"]'),
+      ) === Node.DOCUMENT_POSITION_FOLLOWING,
       true,
       {
-        label: "the map is before the address field",
+        label: "the map is above the Request Booking button",
         source: "js/booking.js",
         loaded: script,
       },
