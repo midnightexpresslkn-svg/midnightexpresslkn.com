@@ -202,6 +202,24 @@ try {
 checks.coverage = coverage;
 
 console.log("\n== browser tests ==");
+// The iPhone map-placement projects run in WebKit (playwright.config.js). The workflow installs Chromium only,
+// so CI adds WebKit here; on a machine that already has it this is a no-op.
+if (process.env.CI) {
+  const webkit = run(
+    "npx",
+    ["playwright", "install", "--with-deps", "webkit"],
+    {
+      stdio: "inherit",
+    },
+  );
+  if (webkit.status !== 0)
+    addFailure(
+      "browser tests",
+      "Could not install WebKit for the iPhone projects",
+      null,
+      null,
+    );
+}
 const browser = run("npx", ["playwright", "test"], { stdio: "inherit" });
 let browserSummary = {
   status: browser.status === 0 ? "pass" : "fail",
