@@ -2435,110 +2435,116 @@ describe("booking", () => {
       });
     });
 
+    // Donald (Nov 23, 2026): "the second one goes through and gets booked, and a third one would come
+    // through with a warning." The website never refuses a time because of other rides and never shows the
+    // rider an overlap message; the calendar script marks a triple and warns Donald on his booking call.
     describe("availability", () => {
       const day = "2026-12-15";
-
-      it("keeps a time open when only one driver is busy", async () => {
-        const view = await renderBooking(script, {
-          bookings: [{ datetime: atLocal(day, 10, 0) }],
-        });
-        await fillValid(view, { date: day, time: "10:00:00" });
-        await submitForm(view);
-        check(resultText(view.document).includes("not available"), false, {
-          label: "one busy driver does not block the pickup",
-          expected: "time accepted",
-          actual: resultText(view.document),
-          source: SOURCE.drivers,
-          loaded: script,
-        });
-        check(resultText(view.document).includes("Request received"), true, {
-          label: "one busy driver still accepts the request",
+      const overlapWords =
+        /That time is booked|not available|conflicts with the first ride|Conflicts with the first ride|tight|triple/i;
+      const sentNormally = (view, label) => {
+        const text = resultText(view.document);
+        check(text.includes("Request received"), true, {
+          label: label + ": the rider sees the normal Request received",
+          actual: text,
           source: SOURCE.conflict,
           loaded: script,
         });
-      });
-
-      it("blocks a time only when both drivers are busy", async () => {
-        const view = await renderBooking(script, {
-          bookings: [
-            { datetime: atLocal(day, 10, 0) },
-            { datetime: atLocal(day, 10, 0) },
-          ],
-        });
-        await fillValid(view, { date: day, time: "10:00:00" });
-        await submitForm(view);
-        check(resultText(view.document).includes("That time is booked"), true, {
-          label: "both drivers busy blocks the pickup",
-          expected: "That time is booked",
-          actual: resultText(view.document),
+        check(overlapWords.test(text), false, {
+          label: label + ": the rider never sees an overlap message",
+          actual: text,
           source: SOURCE.conflict,
           loaded: script,
         });
-        check(bookingPosts(view.state).length, 0, {
-          label: "blocked time sends no booking",
+        check(bookingPosts(view.state).length > 0, true, {
+          label: label + ": the request is sent",
+          actual: bookingPosts(view.state).length,
           source: SOURCE.conflict,
           loaded: script,
         });
+      };
+      const busy = (...times) => ({
+        bookings: times.map(([d, h, m, durationMinutes]) =>
+          durationMinutes
+            ? { datetime: atLocal(d, h, m), durationMinutes }
+            : { datetime: atLocal(d, h, m) },
+        ),
       });
 
-      it("frees the pickup exactly two hours later", async () => {
-        const view = await renderBooking(script, {
-          bookings: [
-            { datetime: atLocal(day, 10, 0) },
-            { datetime: atLocal(day, 10, 0) },
-          ],
-        });
-        await fillValid(view, { date: day, time: "12:00:00" });
-        await submitForm(view);
-        check(resultText(view.document).includes("not available"), false, {
-          label: "a ride blocks two hours, not the minute at two hours",
-          expected: "time accepted",
-          actual: resultText(view.document),
-          source: SOURCE.overlap,
-          loaded: script,
-        });
-      });
-
-      it("blocks a pickup one minute inside the two-hour window when both drivers are busy", async () => {
-        const view = await renderBooking(script, {
-          bookings: [
-            { datetime: atLocal(day, 10, 0) },
-            { datetime: atLocal(day, 10, 30) },
-          ],
-        });
-        await fillValid(view, { date: day, time: "11:00:00" });
-        await submitForm(view);
-        check(resultText(view.document).includes("That time is booked"), true, {
-          label: "11:00 overlaps both the 10:00 and 10:30 rides",
-          source: SOURCE.overlap,
-          loaded: script,
-        });
-      });
-
-      it("accepts two rides at the same time and refuses the third", async () => {
+      it("sends a request when no other ride is booked (0 overlaps)", async () => {
         const view = await renderBooking(script);
         await fillValid(view, { date: day, time: "10:00:00" });
         await submitForm(view);
-        check(resultText(view.document).includes("Request received"), true, {
-          label: "first ride at 10:00 is accepted",
-          actual: resultText(view.document),
-          source: SOURCE.drivers,
-          loaded: script,
-        });
+        sentNormally(view, "0 overlaps");
+      });
+
+      it("sends a double booking like any request (1 overlap)", async () => {
+        const view = await renderBooking(script, busy([day, 10, 0]));
+        await fillValid(view, { date: day, time: "10:00:00" });
+        await submitForm(view);
+        sentNormally(view, "1 overlap");
+      });
+
+      it("sends a triple booking too (2 overlaps): no refusal, no message to the rider", async () => {
+        const view = await renderBooking(
+          script,
+          busy([day, 10, 0], [day, 10, 0]),
+        );
+        await fillValid(view, { date: day, time: "10:00:00" });
+        await submitForm(view);
+        sentNormally(view, "2 overlaps");
+      });
+
+      it("sends a fourth overlapping ride too (3 overlaps)", async () => {
+        const view = await renderBooking(
+          script,
+          busy([day, 9, 0], [day, 9, 30], [day, 10, 0]),
+        );
+        await fillValid(view, { date: day, time: "10:00:00" });
+        await submitForm(view);
+        sentNormally(view, "3 overlaps");
+      });
+
+      it("Shalini's Monday: 4:30 and 6:15 rides, then 8:00 overlaps 6:15 by 15 minutes, and is sent", async () => {
+        const view = await renderBooking(
+          script,
+          busy([day, 4, 30], [day, 6, 15]),
+        );
+        await fillValid(view, { date: day, time: "08:00:00" });
+        await submitForm(view);
+        sentNormally(view, "15-minute overlap");
+      });
+
+      it("sends a third 8:00 ride after Sandy 6:15 and Shalini 8:00 are on the calendar", async () => {
+        const view = await renderBooking(
+          script,
+          busy([day, 6, 15], [day, 8, 0]),
+        );
+        await fillValid(view, { date: day, time: "08:00:00" });
+        await submitForm(view);
+        sentNormally(view, "triple at 8:00");
+      });
+
+      it("15-minute edges: 8:14 and 8:15 after two 6:15 rides are both sent", async () => {
+        for (const time of ["08:14:00", "08:15:00"]) {
+          const view = await renderBooking(
+            script,
+            busy([day, 6, 15], [day, 6, 15]),
+          );
+          await fillValid(view, { date: day, time });
+          await submitForm(view);
+          sentNormally(view, "pickup " + time);
+        }
+      });
+
+      it("sends three rides in a row at the same time from one page", async () => {
+        const view = await renderBooking(script);
+        await fillValid(view, { date: day, time: "10:00:00" });
+        await submitForm(view);
+        sentNormally(view, "first ride");
         const afterFirst = bookingPosts(view.state).length;
-        check(afterFirst > 0, true, {
-          label: "first ride is sent",
-          actual: afterFirst,
-          source: SOURCE.drivers,
-          loaded: script,
-        });
         await submitAnother(view, { date: day, time: "10:00:00" });
-        check(resultText(view.document).includes("Request received"), true, {
-          label: "second ride at the same time is accepted",
-          actual: resultText(view.document),
-          source: SOURCE.drivers,
-          loaded: script,
-        });
+        sentNormally(view, "second ride");
         const afterSecond = bookingPosts(view.state).length;
         check(afterSecond > afterFirst, true, {
           label: "second ride is sent",
@@ -2547,208 +2553,67 @@ describe("booking", () => {
           loaded: script,
         });
         await submitAnother(view, { date: day, time: "10:00:00" });
-        check(resultText(view.document).includes("That time is booked"), true, {
-          label: "third ride at the same time is refused",
-          expected: "That time is booked",
-          actual: resultText(view.document),
-          source: SOURCE.conflict,
-          loaded: script,
-        });
-        check(bookingPosts(view.state).length, afterSecond, {
-          label: "third ride sends nothing",
-          source: SOURCE.conflict,
+        sentNormally(view, "third ride");
+        check(bookingPosts(view.state).length > afterSecond, true, {
+          label: "third ride is sent",
+          actual: bookingPosts(view.state).length,
+          source: SOURCE.drivers,
           loaded: script,
         });
       });
 
-      it("accepts two group events at the same start and refuses the third", async () => {
+      it("sends a third group event at the same start", async () => {
         const view = await renderBooking(script);
-        await fillValid(view, {
+        const group = {
           trip: "group",
           date: day,
           time: "10:00:00",
           hours: "4",
-        });
+        };
+        await fillValid(view, group);
         await submitForm(view);
-        check(resultText(view.document).includes("Request received"), true, {
-          label: "first group event is accepted",
-          actual: resultText(view.document),
+        sentNormally(view, "first group event");
+        await submitAnother(view, group);
+        sentNormally(view, "second group event");
+        const sent = bookingPosts(view.state).length;
+        await submitAnother(view, group);
+        sentNormally(view, "third group event");
+        check(bookingPosts(view.state).length > sent, true, {
+          label: "third group event is sent",
+          actual: bookingPosts(view.state).length,
           source: SOURCE.group,
           loaded: script,
         });
-        await submitAnother(view, {
-          trip: "group",
-          date: day,
-          time: "10:00:00",
-          hours: "4",
-        });
-        check(resultText(view.document).includes("Request received"), true, {
-          label: "second group event at the same start is accepted",
-          actual: resultText(view.document),
-          source: SOURCE.drivers,
-          loaded: script,
-        });
-        const sent = bookingPosts(view.state).length;
-        await submitAnother(view, {
-          trip: "group",
-          date: day,
-          time: "10:00:00",
-          hours: "4",
-        });
-        check(resultText(view.document).includes("That time is booked"), true, {
-          label: "third group event is refused",
-          expected: "That time is booked",
-          actual: resultText(view.document),
-          source: SOURCE.conflict,
-          loaded: script,
-        });
-        check(bookingPosts(view.state).length, sent, {
-          label: "third group event sends nothing",
-          source: SOURCE.conflict,
-          loaded: script,
-        });
       });
 
-      it("refuses a pickup one minute before the two-hour mark when both drivers are busy", async () => {
-        const view = await renderBooking(script, {
-          bookings: [
-            { datetime: atLocal(day, 10, 0) },
-            { datetime: atLocal(day, 10, 0) },
+      it("sends rides across midnight and inside long groups", async () => {
+        const cases = [
+          [
+            busy(["2026-12-14", 23, 30], ["2026-12-14", 23, 30]),
+            "00:30:00",
+            "two rides still out from 11:30 PM",
           ],
-        });
-        await fillValid(view, { date: day, time: "11:59:00" });
-        await submitForm(view);
-        check(resultText(view.document).includes("That time is booked"), true, {
-          label: "11:59 still overlaps two 10:00 rides",
-          expected: "That time is booked",
-          actual: resultText(view.document),
-          source: SOURCE.overlap,
-          loaded: script,
-        });
-        check(bookingPosts(view.state).length, 0, {
-          label: "11:59 sends nothing",
-          source: SOURCE.overlap,
-          loaded: script,
-        });
-      });
-
-      it("refuses 12:30 AM when both drivers are still out from 11:30 PM", async () => {
-        const view = await renderBooking(script, {
-          bookings: [
-            { datetime: atLocal("2026-12-14", 23, 30) },
-            { datetime: atLocal("2026-12-14", 23, 30) },
+          [
+            busy(["2026-12-14", 22, 0], ["2026-12-14", 22, 0]),
+            "00:00:00",
+            "two evening rides ended on the dot",
           ],
-        });
-        await fillValid(view, { date: day, time: "00:30:00" });
-        await submitForm(view);
-        check(resultText(view.document).includes("That time is booked"), true, {
-          label: "a ride can stay busy across midnight",
-          expected: "That time is booked",
-          actual: resultText(view.document),
-          source: SOURCE.overlap,
-          loaded: script,
-        });
-        check(bookingPosts(view.state).length, 0, {
-          label: "cross-midnight overlap sends nothing",
-          source: SOURCE.overlap,
-          loaded: script,
-        });
-      });
-
-      it("accepts 12:30 AM when only one driver is still out from the night before", async () => {
-        const view = await renderBooking(script, {
-          bookings: [{ datetime: atLocal("2026-12-14", 23, 30) }],
-        });
-        await fillValid(view, { date: day, time: "00:30:00" });
-        await submitForm(view);
-        check(resultText(view.document).includes("Request received"), true, {
-          label: "one overnight ride still leaves a driver",
-          actual: resultText(view.document),
-          source: SOURCE.drivers,
-          loaded: script,
-        });
-      });
-
-      it("accepts midnight when both evening rides ended on the dot", async () => {
-        const view = await renderBooking(script, {
-          bookings: [
-            { datetime: atLocal("2026-12-14", 22, 0) },
-            { datetime: atLocal("2026-12-14", 22, 0) },
+          [
+            busy([day, 10, 0, 240], [day, 10, 0, 240]),
+            "12:00:00",
+            "two 4-hour groups",
           ],
-        });
-        await fillValid(view, { date: day, time: "00:00:00" });
-        await submitForm(view);
-        check(
-          resultText(view.document).includes("That time is booked"),
-          false,
-          {
-            label: "back-to-back across midnight is open",
-            actual: resultText(view.document),
-            source: SOURCE.overlap,
-            loaded: script,
-          },
-        );
-        check(resultText(view.document).includes("Request received"), true, {
-          label: "midnight pickup is accepted",
-          source: SOURCE.overlap,
-          loaded: script,
-        });
+        ];
+        for (const [setup, time, label] of cases) {
+          const view = await renderBooking(script, setup);
+          await fillValid(view, { date: day, time });
+          await submitForm(view);
+          sentNormally(view, label);
+        }
       });
 
-      it("keeps a 4-hour group busy past the normal two-hour mark", async () => {
-        const blocked = await renderBooking(script, {
-          bookings: [
-            { datetime: atLocal(day, 10, 0), durationMinutes: 240 },
-            { datetime: atLocal(day, 10, 0), durationMinutes: 240 },
-          ],
-        });
-        await fillValid(blocked, { date: day, time: "12:00:00" });
-        await submitForm(blocked);
-        check(
-          resultText(blocked.document).includes("That time is booked"),
-          true,
-          {
-            label:
-              "noon still overlaps two 4-hour groups that started at 10:00",
-            expected: "That time is booked",
-            actual: resultText(blocked.document),
-            source: SOURCE.overlap,
-            loaded: script,
-          },
-        );
-        const open = await renderBooking(script, {
-          bookings: [
-            { datetime: atLocal(day, 10, 0), durationMinutes: 240 },
-            { datetime: atLocal(day, 10, 0), durationMinutes: 240 },
-          ],
-        });
-        await fillValid(open, { date: day, time: "14:00:00" });
-        await submitForm(open);
-        check(resultText(open.document).includes("Request received"), true, {
-          label: "2:00 PM is free once the 4-hour groups have ended",
-          actual: resultText(open.document),
-          source: SOURCE.overlap,
-          loaded: script,
-        });
-        const oneGroup = await renderBooking(script, {
-          bookings: [{ datetime: atLocal(day, 10, 0), durationMinutes: 240 }],
-        });
-        await fillValid(oneGroup, { date: day, time: "12:00:00" });
-        await submitForm(oneGroup);
-        check(
-          resultText(oneGroup.document).includes("Request received"),
-          true,
-          {
-            label: "one 4-hour group leaves the second driver free",
-            actual: resultText(oneGroup.document),
-            source: SOURCE.drivers,
-            loaded: script,
-          },
-        );
-      });
-
-      it("accepts a same-day return that needs the second driver", async () => {
-        const view = await renderBooking(script);
+      it("sends a same-day return that overlaps its own outbound and another ride", async () => {
+        const view = await renderBooking(script, busy([day, 10, 0]));
         await fillValid(view, {
           date: day,
           time: "10:00:00",
@@ -2758,40 +2623,31 @@ describe("booking", () => {
           flight: "AA1234",
         });
         await submitForm(view);
-        check(resultText(view.document).includes("Request received"), true, {
-          label: "a round trip may use both drivers",
-          actual: resultText(view.document),
-          source: SOURCE.drivers,
-          loaded: script,
-        });
+        sentNormally(view, "same-day return");
       });
 
-      it("refuses a same-day return that would need a third driver", async () => {
-        const view = await renderBooking(script, {
-          bookings: [{ datetime: atLocal(day, 10, 0) }],
-        });
-        await fillValid(view, {
-          date: day,
-          time: "10:00:00",
-          roundTrip: true,
-          returnDate: day,
-          returnTime: "10:30:00",
-        });
+      it("still refuses a time in the past or under 3 hours away", async () => {
+        const view = await renderBooking(
+          script,
+          busy([day, 10, 0], [day, 10, 0]),
+        );
+        await fillValid(view, { date: "2020-01-01", time: "10:00:00" });
         await submitForm(view);
         check(
           resultText(view.document).includes(
-            "Return pickup time conflicts with the first ride",
+            "Pickup time cannot be in the past",
           ),
           true,
           {
-            label: "return plus outbound plus one ride is three drivers",
+            label: "past pickup is still refused",
             actual: resultText(view.document),
             source: SOURCE.conflict,
             loaded: script,
           },
         );
-        check(bookingPosts(view.state).length, 0, {
-          label: "overbooked round trip sends nothing",
+        check(overlapWords.test(resultText(view.document)), false, {
+          label: "the past-time refusal says nothing about other rides",
+          actual: resultText(view.document),
           source: SOURCE.conflict,
           loaded: script,
         });

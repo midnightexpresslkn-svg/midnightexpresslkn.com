@@ -119,6 +119,7 @@ export async function fillAirport(
     from = false,
     name = "Isolated QA Rider",
     pickup = "123 Main Street, Denver NC 28037",
+    phoneDate = false,
   } = {},
 ) {
   await page
@@ -168,10 +169,20 @@ export async function fillAirport(
     // round: null leaves Round trip unanswered for specs that answer it themselves.
     await chooseOneWay(page);
   }
-  await pick(
-    page.getByRole("textbox", { name: "Select date" }).first(),
-    "2026-12-15",
-  );
+  if (phoneDate) {
+    // A phone gets its own date box (flatpickr's native mobile input), not the calendar.
+    const day = page
+      .getByPlaceholder("Select date")
+      .filter({ visible: true })
+      .first();
+    await day.fill("2026-12-15");
+    await expect(day).toHaveValue("2026-12-15");
+  } else {
+    await pick(
+      page.getByRole("textbox", { name: "Select date" }).first(),
+      "2026-12-15",
+    );
+  }
   await typeTimeAt(page, "Pickup Time", "10:00", "AM");
   if (round) {
     await pick(

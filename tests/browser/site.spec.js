@@ -302,28 +302,58 @@ test.describe("booking page", () => {
     expect(posts.length).toBeGreaterThan(0);
   });
 
-  test("refuses a third ride when both drivers are already busy", async ({
-    page,
-  }) => {
-    const at = new Date(2026, 11, 15, 10, 0, 0, 0).toISOString();
-    const posts = await installMocks(page, {
-      bookings: [{ datetime: at }, { datetime: at }],
+  // Donald (Nov 23, 2026): a triple booking goes through as a normal request; only Donald's call warns him.
+  for (const [label, busy, time] of [
+    [
+      "sends a third ride when both drivers are already busy",
+      [
+        [10, 0],
+        [10, 0],
+      ],
+      "10:00",
+    ],
+    [
+      "sends Shalini's 8:00 that overlaps a 6:15 ride by 15 minutes",
+      [
+        [4, 30],
+        [6, 15],
+      ],
+      "8:00",
+    ],
+    [
+      "sends a third 8:00 after 6:15 and 8:00 rides",
+      [
+        [6, 15],
+        [8, 0],
+      ],
+      "8:00",
+    ],
+  ]) {
+    test(label + " (no overlap message)", async ({ page }) => {
+      const posts = await installMocks(page, {
+        bookings: busy.map(([h, m]) => ({
+          datetime: new Date(2026, 11, 15, h, m, 0, 0).toISOString(),
+        })),
+      });
+      await page.goto("/");
+      await ui.tripType(page).selectOption("airport");
+      await ui.name(page).fill("TEST, DO NOT BOOK");
+      await ui.phone(page).fill("9804229125");
+      await ui.passengers(page).fill("2");
+      await ui.airport(page).selectOption("CLT");
+      await ui.pickup(page).fill("123 Main Street, Denver NC 28037");
+      await pick(ui.date(page), "2026-12-15");
+      await typeTimeAt(page, "Pickup Time", time, "AM");
+      await answerBags(page);
+      await answerRoundTrip(page);
+      await ui.submit(page).click();
+      await expect(ui.result(page)).toContainText("Request received");
+      await expect(ui.result(page)).not.toContainText(
+        /booked|not available|conflict|tight|triple/i,
+      );
+      expect(posts.length).toBeGreaterThan(0);
     });
-    await page.goto("/");
-    await ui.tripType(page).selectOption("airport");
-    await ui.name(page).fill("TEST, DO NOT BOOK");
-    await ui.phone(page).fill("9804229125");
-    await ui.passengers(page).fill("2");
-    await ui.airport(page).selectOption("CLT");
-    await ui.pickup(page).fill("123 Main Street, Denver NC 28037");
-    await pick(ui.date(page), "2026-12-15");
-    await typeTimeAt(page, "Pickup Time", "10:00", "AM");
-    await answerBags(page);
-    await answerRoundTrip(page);
-    await ui.submit(page).click();
-    await expect(ui.result(page)).toContainText("That time is booked");
-    expect(posts).toEqual([]);
-  });
+  }
 
   test("home page opens the group form with group selected", async ({
     page,

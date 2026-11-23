@@ -1,4 +1,4 @@
-import { defineConfig } from "@playwright/test";
+import { defineConfig, devices } from "@playwright/test";
 
 const reporters = [
   ["list"],
@@ -27,4 +27,30 @@ export default defineConfig({
     timeout: 20000,
   },
   reporter: reporters,
+  // Every spec runs on desktop Chromium as before. The map-placement spec (Donald, Nov 22, 2026)
+  // also runs on iPhone (WebKit), a small iPhone, and Android (Chromium).
+  projects: [
+    {
+      name: "desktop",
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 1280, height: 720 },
+      },
+    },
+    {
+      name: "iphone-13",
+      testMatch: /map-placement\.spec\.js$/,
+      use: { ...devices["iPhone 13"] },
+    },
+    {
+      name: "iphone-se",
+      testMatch: /map-placement\.spec\.js$/,
+      use: { ...devices["iPhone SE"] },
+    },
+    {
+      name: "android-pixel-7",
+      testMatch: /map-placement\.spec\.js$/,
+      use: { ...devices["Pixel 7"] },
+    },
+  ],
 });
