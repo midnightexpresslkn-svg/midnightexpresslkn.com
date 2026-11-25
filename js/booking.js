@@ -798,6 +798,50 @@
     }
 
     /**
+     * Donald, Nov 25, 2026: the Dec 5, 2026 parade. No ride (pickup, or the ride back) from 7:00 AM up to, not including,
+     * 4:00 PM Eastern that day. April's own phone block (7 AM to 3 PM) is a separate system and is NOT changed. The
+     * calendar script enforces this same window for a direct POST. Dates are YYYY-MM-DD and times HH:MM, the Eastern clock the rider picked.
+     */
+    const PARADE_BLOCK = { date: '2026-12-05', startMin: 7 * 60, endMin: 16 * 60 };
+    const PARADE_MESSAGE = "We're sorry, we are in the Denver Christmas parade today. We're sorry, we couldn't help you. You can book after 4 PM.";
+
+    /**
+     * The pop-up the rider must dismiss (Donald's exact words, Nov 25, 2026). Plain markup built here, so the page file is unchanged.
+     */
+    function showParadePopup() {
+        $('#parade-popup').remove();
+        const $ok = $('<button type="button" id="parade-popup-ok">OK</button>').css({
+            background: '#b01030', color: '#fff', border: 0, borderRadius: '4px', padding: '10px 36px', fontSize: '20px', cursor: 'pointer'
+        });
+        const $box = $('<div role="alertdialog" aria-modal="true" aria-labelledby="parade-popup-text" id="parade-popup-box"></div>').css({
+            background: '#fff', color: '#222', maxWidth: '420px', width: '90%', padding: '28px 24px', borderRadius: '8px',
+            textAlign: 'center', fontSize: '20px', lineHeight: '1.4', boxShadow: '0 8px 32px rgba(0,0,0,.5)'
+        });
+        $box.append($('<p id="parade-popup-text"></p>').css({ margin: '0 0 22px' }).text(PARADE_MESSAGE)).append($ok);
+        const $overlay = $('<div id="parade-popup"></div>').css({
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,.65)', zIndex: 100000,
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+        }).append($box);
+        function close() {
+            $(document).off('keydown.paradePopup');
+            $overlay.remove();
+        }
+        $ok.on('click', close);
+        $(document).on('keydown.paradePopup', function(event) {
+            if (event.key === 'Escape') close();
+        });
+        $('body').append($overlay);
+        $ok.trigger('focus');
+    }
+
+    function paradeBlocked(dateStr, timeStr) {
+        if (dateStr !== PARADE_BLOCK.date) return false;
+        const parts = String(timeStr).split(':');
+        const minute = Number(parts[0]) * 60 + Number(parts[1]);
+        return minute >= PARADE_BLOCK.startMin && minute < PARADE_BLOCK.endMin;
+    }
+
+    /**
      * Pickup time checks: not in the past, at least 3 hours ahead. Other rides never block a
      * time (Donald, Nov 23, 2026); the calendar script warns Donald about a triple booking.
      * @param {string} dateStr - Date in YYYY-MM-DD format
@@ -813,6 +857,14 @@
             return {
                 valid: false,
                 error: 'Pickup time cannot be in the past'
+            };
+        }
+
+        // The Dec 5, 2026 parade window
+        if (paradeBlocked(dateStr, timeStr)) {
+            return {
+                valid: false,
+                error: PARADE_MESSAGE
             };
         }
 
@@ -2490,6 +2542,9 @@
                 if (!barReturn.location) {
                     fieldError('#bar-return-location', 'bar-return-location-error', 'Please enter where to pick you up for the ride back.');
                 }
+                if (barReturn.time && paradeBlocked(formData.pickupDate, barReturn.time)) {
+                    fieldError('#bar-return-time', 'bar-return-time-error', PARADE_MESSAGE);
+                }
             }
 
             if (partyRide) {
@@ -2594,6 +2649,7 @@
 
                 $('#booking-success').html(errorHtml).show();
                 placeInView($('#booking-success'), 'nearest');
+                if (errors.some(function(message) { return message.indexOf(PARADE_MESSAGE) !== -1; })) showParadePopup();
                 return;
             }
 
