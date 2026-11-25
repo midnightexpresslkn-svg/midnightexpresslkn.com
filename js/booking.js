@@ -2699,7 +2699,7 @@
 
                 successHtml +=
                     '<hr>' +
-                    '<p><strong>Important:</strong> Your booking' + (formData.roundTrip === 'Yes' && formData.airportTrip === 'Yes' ? 's are' : ' is') + ' not confirmed until you receive a call from us. If you don\'t hear from us within 2 hours, please call (980) 422-9125.</p>' +
+                    '<p><strong>Important:</strong> Your booking' + (formData.roundTrip === 'Yes' && formData.airportTrip === 'Yes' ? 's are' : ' is') + ' not confirmed until you receive a call from us. If you don\'t hear from us within 30 minutes, please call (980) 422-9125.</p>' +
                     '</div>';
 
                 console.log('Setting success HTML and showing...');

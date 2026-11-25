@@ -33,7 +33,9 @@ test.describe("price on the confirmation at phone width", () => {
     );
     await expect(price).toContainText("Cash $65.00 · Card $66.95");
     await expect(
-      page.getByText(/not confirmed until you receive a call from us/),
+      page.getByText(
+        "If you don't hear from us within 30 minutes, please call (980) 422-9125.",
+      ),
     ).toBeVisible();
     await page.mouse.move(0, 0); // no hover styling in the screenshot
     await expect(confirmation(page)).toBeInViewport({ ratio: 1 });
