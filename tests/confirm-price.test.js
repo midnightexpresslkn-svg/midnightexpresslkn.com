@@ -57,7 +57,7 @@ describe.each(scripts)("confirmation price %s", (script) => {
     });
     check(
       resultText(view.document).includes(
-        "not confirmed until you receive a call",
+        "If you don't hear from us within 30 minutes, please call (980) 422-9125.",
       ),
       true,
       { label: "call text kept", ...opts },
