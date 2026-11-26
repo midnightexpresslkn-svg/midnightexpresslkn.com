@@ -1342,20 +1342,29 @@ describe("booking", () => {
         ["28687", "Statesville"],
       ];
 
+      // Donald, Nov 25, 2026: an airport ride from these towns gets the call-us text (Mooresville is still pending his answers).
+      const CALL_US =
+        "We're sorry, you're a little out of our service area, but if you give us a call, we could probably help you.";
+      const refusalFor = (town) =>
+        town === "Mooresville" ? "Sorry, we don't service that area." : CALL_US;
       it.each(towns)("refuses a pickup in %s", async (town) => {
         const view = await renderBooking(script);
         await fillValid(view, { pickup: `100 Main St, ${town} NC` });
         await submitForm(view);
-        check(resultText(view.document), "Sorry, we don't service that area.", {
+        check(resultText(view.document), refusalFor(town), {
           label: `refuse ${town}`,
           source: SOURCE.serviceArea,
           loaded: script,
         });
-        check(/call|980|422-9125/i.test(resultText(view.document)), false, {
-          label: `${town} refusal does not ask for a call`,
-          source: SOURCE.serviceArea,
-          loaded: script,
-        });
+        check(
+          /call|980|422-9125/i.test(resultText(view.document)),
+          town !== "Mooresville",
+          {
+            label: `${town} refusal asks for a call only for the call-us towns`,
+            source: SOURCE.serviceArea,
+            loaded: script,
+          },
+        );
         check(bookingPosts(view.state).length, 0, {
           label: `${town} sends no booking`,
           source: SOURCE.excluded,
@@ -1367,7 +1376,7 @@ describe("booking", () => {
         const view = await renderBooking(script);
         await fillValid(view, { pickup: `100 Main St ${zip}` });
         await submitForm(view);
-        check(resultText(view.document), "Sorry, we don't service that area.", {
+        check(resultText(view.document), refusalFor(town), {
           label: `refuse ZIP ${zip}`,
           source: SOURCE.serviceArea,
           loaded: script,

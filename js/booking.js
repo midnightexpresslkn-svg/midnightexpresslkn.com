@@ -92,6 +92,10 @@
     var OUT_OF_AREA_MESSAGE = "Sorry, we don't service that area.";
     var UNCLEAR_AREA_MESSAGE = "Please include the town and state, for example Denver, NC.";
     var LOCAL_DENIAL = "out of our service area.";
+    // Donald, Nov 25, 2026: an airport or (non-Two-Trees) bar ride from one of these towns gets this pop-up text instead of the
+    // flat refusal. Mooresville is NOT in this list yet: its Perth Rd / Hwy 150 limit is waiting on Donald's answers.
+    var CALL_US_MESSAGE = "We're sorry, you're a little out of our service area, but if you give us a call, we could probably help you.";
+    var CALL_US_TOWNS = ["cornelius", "davidson", "huntersville", "troutman", "statesville"];
     // Donald, Nov 10, 2026. One config value each.
     var GROUP_HOURLY_CENTS = 12500;
     var GROUP_MIN_HOURS = 2;
@@ -99,7 +103,7 @@
     var GROUP_MAX_PASSENGERS = 6;
     var GROUP_VEHICLE = "2026 Toyota Sienna Platinum";
     var BARS = [
-        { id: "two-trees", name: "Two Trees Bar and Grill", address: "5242 Slanting Bridge Rd, Denver, NC 28037", lat: 35.552237, lon: -80.994465, maxMiles: 10, groupMaxMiles: 15, blockUnservedTowns: true },
+        { id: "two-trees", name: "Two Trees Bar and Grill", address: "5242 Slanting Bridge Rd, Denver, NC 28037", lat: 35.552237, lon: -80.994465, groupMaxMiles: 20, blockUnservedTowns: true },
         { id: "bourbon-bobber", name: "Bourbon & Bobbers", address: "3746 Mount Pleasant Road, Sherrills Ford, NC 28673", lat: 35.589826, lon: -81.019457 },
         { id: "joeys-sherrills-ford", name: "Joey's (Hwy 150)", address: "7600 East NC Hwy 150, Sherrills Ford, NC 28673", lat: 35.578943, lon: -80.998957 },
         { id: "joeys-denver", name: "Joey's (Natalie Commons)", address: "7913 Natalie Commons Dr, Denver, NC 28037", lat: 35.482131, lon: -80.996916 },
@@ -132,8 +136,54 @@
         return null;
     }
 
-    function overVenueMiles(bar, miles) {
-        return typeof bar.maxMiles === 'number' && miles > bar.maxMiles;
+    // True when this ride is an airport or a listed bar other than Two Trees (Two Trees keeps "out of our service area.")
+    // and the pickup end sits in one of the call-us towns. geo is the geocoder's {city, state, zip} when the typed text names no town.
+    function callUsFor(trip, mode, bar, pickup, geo) {
+        var applies = trip === 'airport' || (trip === 'local' && mode === 'bar' && !!bar && !bar.blockUnservedTowns);
+        if (!applies) return false;
+        var end = globalThis.MidnightServiceArea.classifyEnd(pickup, geo);
+        return end.status === 'outside' && CALL_US_TOWNS.indexOf(String(end.town).toLowerCase()) !== -1;
+    }
+
+    // Donald, Nov 25, 2026. Every bar and party ride: the rider's pickup (and a party's address) must be within 15 road miles of
+    // Two Trees, the center of the circle. Mooresville is cut flat at 8.34 road miles from Two Trees, the road distance to the
+    // Harris Teeter at 118 Argus Ln (the Perth Rd / NC 150 light). Mooresville inside that is served for bars and parties.
+    var LOCAL_MAX_MILES = 15;
+    var MOORESVILLE_MAX_MILES = 8.34;
+
+    function isMooresvilleEnd(text, geo) {
+        var end = globalThis.MidnightServiceArea.classifyEnd(text, geo);
+        return end.status === 'outside' && String(end.town).toLowerCase() === 'mooresville';
+    }
+
+    // The shared service-area check, except that a Mooresville end is not refused here (its distance is measured instead).
+    function evaluateLocal(data) {
+        var api = globalThis.MidnightServiceArea;
+        var decision = api.evaluateTrip(data);
+        if (decision.code !== 'outside') return decision;
+        var ends = [];
+        if (!data.pickupIsAirfield) ends.push(api.classifyEnd(data.pickup, data.pickupGeo));
+        if (!data.destinationIsAirfield) ends.push(api.classifyEnd(data.destination, data.destinationGeo));
+        var rest = ends.filter(function(end) {
+            return !(end.status === 'outside' && String(end.town).toLowerCase() === 'mooresville');
+        });
+        if (rest.some(function(end) { return end.status === 'outside'; })) return decision;
+        if (rest.some(function(end) { return end.status !== 'served' && end.status !== 'airport'; })) {
+            return { ok: false, code: 'unclear', message: UNCLEAR_AREA_MESSAGE };
+        }
+        return { ok: true, code: 'ok', message: '' };
+    }
+
+    // '' = inside; 'moores' = a Mooresville end past the flat side; 'far' = past 15 road miles.
+    function localReachWhy(miles, mooresville) {
+        if (mooresville && miles > MOORESVILLE_MAX_MILES) return 'moores';
+        return miles > LOCAL_MAX_MILES ? 'far' : '';
+    }
+
+    // The words for a refusal on distance: a Mooresville end past the flat side keeps the wording that bar or party had before
+    // ("out of our service area." for Two Trees, the flat refusal for the others); past 15 miles is always "out of our service area."
+    function localDenialText(bar, why) {
+        return why === 'moores' && !(bar && bar.blockUnservedTowns) ? OUT_OF_AREA_MESSAGE : LOCAL_DENIAL;
     }
 
     // Every quoted cash price is rounded to the nearest $5; an exact $2.50 rounds up.
@@ -190,13 +240,20 @@
     globalThis.MidnightRides = {
         BARS: BARS,
         LOCAL_DENIAL: LOCAL_DENIAL,
+        CALL_US_MESSAGE: CALL_US_MESSAGE,
+        callUsFor: callUsFor,
         GROUP_VEHICLE: GROUP_VEHICLE,
         GROUP_MIN_HOURS: GROUP_MIN_HOURS,
         GROUP_MAX_PASSENGERS: GROUP_MAX_PASSENGERS,
         GROUP_DEPOSIT_RATE: GROUP_DEPOSIT_RATE,
         GROUP_HOURLY_CENTS: GROUP_HOURLY_CENTS,
         listedBar: listedBar,
-        overVenueMiles: overVenueMiles,
+        LOCAL_MAX_MILES: LOCAL_MAX_MILES,
+        MOORESVILLE_MAX_MILES: MOORESVILLE_MAX_MILES,
+        isMooresvilleEnd: isMooresvilleEnd,
+        evaluateLocal: evaluateLocal,
+        localReachWhy: localReachWhy,
+        localDenialText: localDenialText,
         nearestFiveCents: nearestFiveCents,
         cardCentsFor: cardCentsFor,
         localFare: localFare,
@@ -273,14 +330,15 @@
         if (!destinationIsAirfield && api.classifyAddress(destination).status === 'unclear') {
             destinationGeo = await censusPlace(destination);
         }
-        var decision = api.evaluateTrip({
+        var input = {
             pickup: pickup,
             destination: destination,
             pickupGeo: pickupGeo,
             destinationGeo: destinationGeo,
             pickupIsAirfield: pickupIsAirfield,
             destinationIsAirfield: destinationIsAirfield
-        });
+        };
+        var decision = tripKind() === 'local' ? evaluateLocal(input) : api.evaluateTrip(input);
         if (groupVenue && decision.code === 'outside') {
             decision = { ok: true, code: 'ok', message: '', pickupGeo: pickupGeo, destinationGeo: destinationGeo };
         }
@@ -808,31 +866,34 @@
     /**
      * The pop-up the rider must dismiss (Donald's exact words, Nov 25, 2026). Plain markup built here, so the page file is unchanged.
      */
-    function showParadePopup() {
-        $('#parade-popup').remove();
-        const $ok = $('<button type="button" id="parade-popup-ok">OK</button>').css({
+    function showNoticePopup(text, name) {
+        $('#' + name + '-popup').remove();
+        const $ok = $('<button type="button" id="' + name + '-popup-ok">OK</button>').css({
             background: '#b01030', color: '#fff', border: 0, borderRadius: '4px', padding: '10px 36px', fontSize: '20px', cursor: 'pointer'
         });
-        const $box = $('<div role="alertdialog" aria-modal="true" aria-labelledby="parade-popup-text" id="parade-popup-box"></div>').css({
+        const $box = $('<div role="alertdialog" aria-modal="true" aria-labelledby="' + name + '-popup-text" id="' + name + '-popup-box"></div>').css({
             background: '#fff', color: '#222', maxWidth: '420px', width: '90%', padding: '28px 24px', borderRadius: '8px',
             textAlign: 'center', fontSize: '20px', lineHeight: '1.4', boxShadow: '0 8px 32px rgba(0,0,0,.5)'
         });
-        $box.append($('<p id="parade-popup-text"></p>').css({ margin: '0 0 22px' }).text(PARADE_MESSAGE)).append($ok);
-        const $overlay = $('<div id="parade-popup"></div>').css({
+        $box.append($('<p id="' + name + '-popup-text"></p>').css({ margin: '0 0 22px' }).text(text)).append($ok);
+        const $overlay = $('<div id="' + name + '-popup"></div>').css({
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,.65)', zIndex: 100000,
             display: 'flex', alignItems: 'center', justifyContent: 'center'
         }).append($box);
+        const keys = 'keydown.' + name + 'Popup';
         function close() {
-            $(document).off('keydown.paradePopup');
+            $(document).off(keys);
             $overlay.remove();
         }
         $ok.on('click', close);
-        $(document).on('keydown.paradePopup', function(event) {
+        $(document).on(keys, function(event) {
             if (event.key === 'Escape') close();
         });
         $('body').append($overlay);
         $ok.trigger('focus');
     }
+    function showParadePopup() { showNoticePopup(PARADE_MESSAGE, 'parade'); }
+    function showCallUsPopup() { showNoticePopup(CALL_US_MESSAGE, 'callus'); }
 
     function paradeBlocked(dateStr, timeStr) {
         if (dateStr !== PARADE_BLOCK.date) return false;
@@ -2329,8 +2390,9 @@
                 const area = await decideServiceArea(contactAddress, destinationAddress);
                 if (!area.ok) {
                     var townBlock = chosenBar && chosenBar.blockUnservedTowns && area.code === 'outside';
-                    errors.push(townBlock ? LOCAL_DENIAL : area.message);
-                    markServiceAreaFields(contactAddress, destinationAddress, area);
+                    var callUs = area.code === 'outside' && callUsFor(trip, mode, chosenBar, contactAddress, area.pickupGeo);
+                    errors.push(callUs ? CALL_US_MESSAGE : (townBlock ? LOCAL_DENIAL : area.message));
+                    markServiceAreaFields(contactAddress, destinationAddress, callUs ? Object.assign({}, area, { message: CALL_US_MESSAGE }) : area);
                     groupAreaOk = false;
                     isValid = false;
                 }
@@ -2396,12 +2458,19 @@
                     $('#party-address-error').text('Party address is required').show();
                     isValid = false;
                 }
-                if (chosenBar && typeof chosenBar.maxMiles === 'number' && formData.pickupAddress) {
-                    var venueMiles = await globalThis.MidnightRides.roadMiles(chosenBar);
-                    if (overVenueMiles(chosenBar, venueMiles)) {
-                        errors.push(LOCAL_DENIAL);
-                        $('#bar-choice').closest('.form-group').addClass('has-error');
-                        $('#bar-choice-error').text(LOCAL_DENIAL).show();
+                if (groupAreaOk && contactAddress && (chosenBar || (mode === 'party' && partyAddress))) {
+                    var reach;
+                    try {
+                        reach = await globalThis.MidnightRides.localReach(contactAddress, mode === 'party' ? partyAddress : '');
+                    } catch (reachErr) {
+                        void reachErr;
+                        reach = { why: 'unclear', party: false };
+                    }
+                    if (reach) {
+                        var reachText = reach.why === 'unclear' ? UNCLEAR_AREA_MESSAGE : localDenialText(chosenBar, reach.why);
+                        errors.push(reachText);
+                        $(reach.party ? '#party-address' : '#booking-pickup').closest('.form-group').addClass('has-error');
+                        $(reach.party ? '#party-address-error' : '#pickup-error').text(reachText).show();
                         isValid = false;
                     }
                 }
@@ -2634,6 +2703,7 @@
             if (errors.length > 0) {
                 const areaAlone = errors.length === 1 && (
                     errors[0] === OUT_OF_AREA_MESSAGE ||
+                    errors[0] === CALL_US_MESSAGE ||
                     errors[0] === UNCLEAR_AREA_MESSAGE
                 );
                 let errorHtml;
@@ -2650,6 +2720,7 @@
                 $('#booking-success').html(errorHtml).show();
                 placeInView($('#booking-success'), 'nearest');
                 if (errors.some(function(message) { return message.indexOf(PARADE_MESSAGE) !== -1; })) showParadePopup();
+                if (errors.indexOf(CALL_US_MESSAGE) !== -1) showCallUsPopup();
                 return;
             }
 
@@ -3106,6 +3177,33 @@
             return roadBetween(g, pick, stop);
         });
     };
+    // Road miles from an address to Two Trees without touching the map or the price box (Google first, OSRM as the backup).
+    function quietMiles(g, text, stop){
+        var point={id:stop.id,lat:stop.lat,lon:stop.lon};
+        if(!globalThis.MidnightRides.mapKey()) return osrmMiles(g,point);
+        return googleRoute(text, stop.lat+','+stop.lon).then(function(road){
+            return road?road.miles:osrmMiles(g,point);
+        }).catch(function(){return osrmMiles(g,point);});
+    }
+    // Donald, Nov 25, 2026: every bar and party ride is measured from the rider's pickup (and a party's address) to Two Trees.
+    // Resolves to null when inside, else {why:'far'|'moores', party:boolean}. knownMiles is the pickup-to-Two-Trees distance when the caller already has it.
+    globalThis.MidnightRides.localReach = function(pickText, partyText, knownMiles) {
+        var rides=globalThis.MidnightRides;
+        var trees=rides.listedBar('two-trees');
+        function endReach(text, known, isParty){
+            return geocode(text).then(function(g){
+                var moores=rides.isMooresvilleEnd(text,{city:g.city||'',state:g.state||'',zip:g.zip||''});
+                var miles=typeof known==='number'?Promise.resolve(known):quietMiles(g,text,trees);
+                return miles.then(function(mi){
+                    var why=rides.localReachWhy(mi,moores);
+                    return why?{why:why,party:isParty}:null;
+                });
+            });
+        }
+        return endReach(pickText,knownMiles,false).then(function(hit){
+            return hit||!partyText?hit:endReach(partyText,null,true);
+        });
+    };
     // Allocate the already-rounded round-trip total between the two legs in cents.
     // This is not a second fare calculation: the displayed leg amounts add to the exact quoted total.
     function quotedLegs(cashCents, cardCents){
@@ -3191,12 +3289,14 @@
         if(pick.length<6||!/\d/.test(pick)){hideMap();show('Enter your address to see your price.');return;}
         var api=globalThis.MidnightServiceArea;
         var destText=mode==='bar'?stop.address:party;
-        var prelim=api?api.evaluateTrip({pickup:pick,destination:destText,destinationIsAirfield:mode==='bar'}):{code:'unclear'};
-        if(prelim.code==='outside'){hideMap();show(esc(mode==='bar'&&stop&&stop.blockUnservedTowns?rides.LOCAL_DENIAL:api.OUT_OF_AREA_MESSAGE));return;}
+        var prelim=api?rides.evaluateLocal({pickup:pick,destination:destText,destinationIsAirfield:mode==='bar'}):{code:'unclear'};
+        if(prelim.code==='outside'){hideMap();show(esc(rides.callUsFor('local',mode,stop,pick,null)?rides.CALL_US_MESSAGE:(mode==='bar'&&stop&&stop.blockUnservedTowns?rides.LOCAL_DENIAL:api.OUT_OF_AREA_MESSAGE)));return;}
         show('Figuring your price&hellip;');
+        var pickGeo=null;
         geocode(pick).then(function(g){
             if(my!==seq||tripNow()!=='local')return;
-            var decision=api.evaluateTrip({
+            pickGeo={city:g.city||'',state:g.state||'',zip:g.zip||''};
+            var decision=rides.evaluateLocal({
                 pickup:pick,
                 destination:destText,
                 destinationIsAirfield:mode==='bar',
@@ -3205,11 +3305,17 @@
             if(decision.code==='outside')throw 'out';
             if(!decision.ok)throw 'unclear';
             if(!inArea(g))throw 'area';
-            if(mode==='party') return roadBetween(g, pick, {id:'party', address:party, lat:null, lon:null});
-            return roadBetween(g, pick, stop);
+            var fareMiles=mode==='party'?roadBetween(g, pick, {id:'party', address:party, lat:null, lon:null}):roadBetween(g, pick, stop);
+            return fareMiles.then(function(mi){
+                // The distance from Two Trees is what decides: for the Two Trees bar it is this same route.
+                return rides.localReach(pick, mode==='party'?party:'', mode==='bar'&&stop.id==='two-trees'?mi:null).then(function(hit){
+                    return hit||mi;
+                });
+            });
         }).then(function(mi){
-            if(my!==seq||tripNow()!=='local'||typeof mi!=='number')return;
-            if(mode==='bar'&&rides.overVenueMiles(stop, mi)){hideMap();show(esc(rides.LOCAL_DENIAL));return;}
+            if(my!==seq||tripNow()!=='local'||mi==null)return;
+            // A reach hit (outside the 15 mile radius or past the Mooresville flat side) is shown only if this quote is still the current one.
+            if(typeof mi==='object'){hideMap();show(esc(rides.localDenialText(stop,mi.why)));return;}
             var fare=rides.localFare(mi, rt);
             var name=mode==='party'?'the party':stop.name;
             var label=rt?'Round trip, '+esc(name)+' and back':'One way to '+esc(name);
@@ -3217,7 +3323,7 @@
             show('<span class="quote-label">'+label+'</span><br><strong class="quote-total">Cash '+money(fare.cashCents/100)+' · Card '+money(fare.cardCents/100)+'</strong>'+(legs?'<br><span class="quote-legs">'+legs+'</span>':'')+routeLine(rt),{label:label,cash:money(fare.cashCents/100),card:money(fare.cardCents/100),legs:legs});
         }).catch(function(err){
             if(my!==seq||tripNow()!=='local')return;
-            if(err==='out'&&api){hideMap();show(esc(mode==='bar'&&stop&&stop.blockUnservedTowns?rides.LOCAL_DENIAL:api.OUT_OF_AREA_MESSAGE));return;}
+            if(err==='out'&&api){hideMap();show(esc(rides.callUsFor('local',mode,stop,pick,pickGeo)?rides.CALL_US_MESSAGE:(mode==='bar'&&stop&&stop.blockUnservedTowns?rides.LOCAL_DENIAL:api.OUT_OF_AREA_MESSAGE)));return;}
             if(err==='unclear'&&api){hideMap();show(esc(api.UNCLEAR_MESSAGE));return;}
             hideMap();
             show(fb);
@@ -3254,12 +3360,14 @@
                 destinationIsAirfield:airfieldForQuote
             });
         }
-        if(prelim.code==='outside'){show(esc(api.OUT_OF_AREA_MESSAGE));return;}
+        if(prelim.code==='outside'){show(esc(globalThis.MidnightRides.callUsFor('airport','',null,pick,null)?globalThis.MidnightRides.CALL_US_MESSAGE:api.OUT_OF_AREA_MESSAGE));return;}
         if(!privateRide&&!airport){show(fb);return;}
         var labelName=privateRide?airfieldName:airport.name;
         show('Figuring your price&hellip;');
+        var pickGeo=null;
         geocode(pick).then(function(g){
             if(my!==seq)return;
+            pickGeo={city:g.city||'',state:g.state||'',zip:g.zip||''};
             var decision=api.evaluateTrip({
                 pickup:pick,
                 destination:dest,
@@ -3296,7 +3404,7 @@
             var kindNow=tripNow();
             if(kindNow==='group'){refreshGroup(my);return;}
             if(kindNow==='local'){refreshLocal(my);return;}
-            if(err==='out'&&api){show(esc(api.OUT_OF_AREA_MESSAGE));return;}
+            if(err==='out'&&api){show(esc(globalThis.MidnightRides.callUsFor('airport','',null,pick,pickGeo)?globalThis.MidnightRides.CALL_US_MESSAGE:api.OUT_OF_AREA_MESSAGE));return;}
             if(err==='unclear'&&api){show(esc(api.UNCLEAR_MESSAGE));return;}
             if(err==='far'){show(far);return;}
             show(fb);
