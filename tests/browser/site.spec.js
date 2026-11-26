@@ -236,7 +236,8 @@ test.describe("booking page", () => {
   test("refuses a Charlotte pickup and does not create a request", async ({
     page,
   }) => {
-    const posts = await installMocks(page, { miles: 16 });
+    // Group limit is 20 road miles (Donald, Nov 25, 2026); a Charlotte pickup 21 miles out is refused.
+    const posts = await installMocks(page, { miles: 21 });
     await page.goto("/");
     await ui.tripType(page).selectOption("group");
     await ui.name(page).fill("TEST, DO NOT BOOK");
@@ -823,10 +824,10 @@ test.describe("new rides on a 375px phone", () => {
     expect(posts).toEqual([]);
   });
 
-  test("Two Trees past 10 miles is out of our service area", async ({
+  test("Two Trees past 15 miles is out of our service area", async ({
     page,
   }) => {
-    const posts = await installMocks(page, { miles: 12 });
+    const posts = await installMocks(page, { miles: 15.1 });
     await page.goto("/");
     await ui.tripType(page).selectOption("local");
     await ui.localKind(page).selectOption("bar");
@@ -1049,15 +1050,73 @@ test.describe("Two Trees towns and group radius at 375px", () => {
     expect(posts).toEqual([]);
   });
 
-  test("Two Trees from Mooresville under 10 miles is blocked", async ({
+  test("Two Trees from Mooresville inside 8.34 road miles is quoted", async ({
+    page,
+  }) => {
+    const posts = await installMocks(page, { miles: 8.34 });
+    await page.goto("/");
+    await ui.tripType(page).selectOption("local");
+    await ui.localKind(page).selectOption("bar");
+    await ui.bar(page).selectOption("two-trees");
+    await ui.pickup(page).fill("123 Main St, Mooresville NC 28115");
+    await expect(ui.quote(page)).toContainText("Cash $25.00");
+    expect(posts).toEqual([]);
+  });
+
+  test("Two Trees from Mooresville past 8.34 road miles is out of our service area", async ({
+    page,
+  }) => {
+    const posts = await installMocks(page, { miles: 8.4 });
+    await page.goto("/");
+    await ui.tripType(page).selectOption("local");
+    await ui.localKind(page).selectOption("bar");
+    await ui.bar(page).selectOption("two-trees");
+    await ui.pickup(page).fill("123 Main St, Mooresville NC 28115");
+    await expect(ui.quote(page)).toHaveText("out of our service area.");
+    expect(posts).toEqual([]);
+  });
+
+  test("another bar from Mooresville inside 8.34 miles is quoted", async ({
     page,
   }) => {
     const posts = await installMocks(page, { miles: 8 });
     await page.goto("/");
     await ui.tripType(page).selectOption("local");
     await ui.localKind(page).selectOption("bar");
-    await ui.bar(page).selectOption("two-trees");
+    await ui.bar(page).selectOption("bourbon-bobber");
     await ui.pickup(page).fill("123 Main St, Mooresville NC 28115");
+    await expect(ui.quote(page)).toContainText("Cash $25.00");
+    expect(posts).toEqual([]);
+  });
+
+  test("another bar from Mooresville past 8.34 miles is refused", async ({
+    page,
+  }) => {
+    const posts = await installMocks(page, { miles: 8.4 });
+    await page.goto("/");
+    await ui.tripType(page).selectOption("local");
+    await ui.localKind(page).selectOption("bar");
+    await ui.bar(page).selectOption("bourbon-bobber");
+    await ui.pickup(page).fill("123 Main St, Mooresville NC 28115");
+    await expect(ui.quote(page)).toHaveText(
+      "Sorry, we don't service that area.",
+    );
+    expect(posts).toEqual([]);
+  });
+
+  test("any bar is refused past 15 road miles and a party is refused past 15 miles", async ({
+    page,
+  }) => {
+    const posts = await installMocks(page, { miles: 15.1 });
+    await page.goto("/");
+    await ui.tripType(page).selectOption("local");
+    await ui.localKind(page).selectOption("bar");
+    await ui.bar(page).selectOption("bourbon-bobber");
+    await ui.pickup(page).fill("123 Main Street, Denver NC 28037");
+    await expect(ui.quote(page)).toHaveText("out of our service area.");
+    await ui.localKind(page).selectOption("party");
+    await page.locator("#party-address").fill("200 Oak St, Sherrills Ford NC");
+    await page.locator("#party-address").blur();
     await expect(ui.quote(page)).toHaveText("out of our service area.");
     expect(posts).toEqual([]);
   });
@@ -1073,8 +1132,8 @@ test.describe("Two Trees towns and group radius at 375px", () => {
     expect(posts).toEqual([]);
   });
 
-  test("a group 14.9 miles across the lake is quoted", async ({ page }) => {
-    const posts = await installMocks(page, { miles: 14.9 });
+  test("a group 19.9 miles across the lake is quoted", async ({ page }) => {
+    const posts = await installMocks(page, { miles: 19.9 });
     await page.goto("/");
     await ui.tripType(page).selectOption("group");
     await ui.hours(page).fill("2");
@@ -1085,8 +1144,8 @@ test.describe("Two Trees towns and group radius at 375px", () => {
     expect(posts).toEqual([]);
   });
 
-  test("a group 15.1 miles away is blocked", async ({ page }) => {
-    const posts = await installMocks(page, { miles: 15.1 });
+  test("a group 20.1 miles away is blocked", async ({ page }) => {
+    const posts = await installMocks(page, { miles: 20.1 });
     await page.goto("/");
     await ui.tripType(page).selectOption("group");
     await ui.hours(page).fill("2");

@@ -8,6 +8,26 @@ Not served, even when the address omits the state: Charlotte, Mooresville, David
 
 Charlotte Douglas (CLT), Concord Regional, and private airfields (a place written as an airpark, airfield, airstrip, or private airport, not a street such as Airpark Drive) are airport ends. That end may be outside the towns. The other end still has to be a served town. On a trip with no airport, both ends have to be served towns.
 
+## The call-us pop-up (Nov 25, 2026)
+
+An **airport** ride, or a ride to a listed bar **other than Two Trees**, whose pickup is in Cornelius, Davidson, Huntersville, Troutman, or Statesville shows this pop-up (with an OK button) when the rider presses Request Booking, and the same words in the price box and under the address: "We're sorry, you're a little out of our service area, but if you give us a call, we could probably help you." Nothing is sent. The text has no phone number. The town is read from the typed address, from its ZIP, or from the geocoder's city when the typed address does not name one.
+
+Unchanged: Mooresville and Charlotte on an **airport** ride still get "Sorry, we don't service that area." (no pop-up, no Mooresville allowance); Two Trees still gets "out of our service area."; parties still get "Sorry, we don't service that area."
+
+## Bars and parties: the 15 mile radius and the Mooresville flat side (Nov 25, 2026)
+
+Every bar ride and every party is measured in **road miles from Two Trees** (Two Trees is the center of the circle).
+
+- The rider's pickup must be within **15 road miles** of Two Trees. For a party, the party address must be too. This applies to every listed bar (Two Trees used to have a 10 mile limit; the other bars had none).
+- **Mooresville is cut flat at 8.34 road miles** from Two Trees, the road distance to the Harris Teeter at 118 Argus Ln (the Perth Rd / NC 150 light). A Mooresville pickup (or party address) inside 8.34 miles is served for bars and parties. Past 8.34 it is refused even if it is under 15 miles. The test is the road distance only; it does not draw a direction line.
+- Wording: past 15 miles, or Mooresville past the flat side for Two Trees, says "out of our service area."; Mooresville past the flat side for any other bar or a party says "Sorry, we don't service that area."
+- The distance comes from Google Routes when the map key is set, else OSRM. If it cannot be measured at submit, the rider is asked for the town and state. Nothing is sent when a ride is refused.
+- Airport rides from Mooresville are unchanged. Group events are unchanged (below).
+
+## Group events
+
+A group event pickup may be up to **20 road miles** from Two Trees (it was 15), across the lake included. Farther gets "out of our service area."
+
 ## How an address is decided
 
 The checker lives in `js/service-area.js`. The booking form calls it before it posts to Google Forms and before it posts to the calendar Apps Script.
