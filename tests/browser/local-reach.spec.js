@@ -185,20 +185,50 @@ test.describe("15 mile radius, and Mooresville is out completely", () => {
     expect(state.forms).toHaveLength(0);
   });
 
-  test("a listed Mooresville bar is refused at quote time from a served pickup", async ({
+  test("Blue Parrot, Toucan's, and Vitale Lakeside are off the bookable bar list", async ({
     page,
   }) => {
-    const state = await bookingMocks(page, { miles: 6 });
-    await barQuote(page, {
-      bar: "blue-parrot",
-      pickup: "123 Main Street, Denver NC 28037",
-    });
-    await expect(page.locator("#quote-details")).toHaveText(SORRY);
-    await shot(page, "mooresville-listed-bar-refused");
-    await dayAndTime(page);
-    await request(page).click();
-    await expect(page.locator("#booking-success")).toContainText(SORRY);
-    expect(state.forms).toHaveLength(0);
+    await bookingMocks(page, { miles: 6 });
+    await page.goto("/#booking");
+    await page
+      .getByRole("combobox", { name: "Trip type" })
+      .selectOption("local");
+    const gone = ["Blue Parrot", "Toucan's", "Vitale Lakeside"];
+    const list = page.locator("#local-bar-list");
+    await expect(list).toBeVisible();
+    const labels = await list.locator("li").allTextContents();
+    for (const name of gone) {
+      expect(labels, name + " must not be on the visible list").not.toContain(
+        name,
+      );
+    }
+    expect(labels).toEqual([
+      "Two Trees Bar and Grill",
+      "Bourbon & Bobbers",
+      "Joey's (Hwy 150)",
+      "Joey's (Natalie Commons)",
+      "16 Prime Steak and Seafood",
+      "Lake Norman Brewery",
+      "Latitudes",
+      "Lobster Dogs",
+      "Safari Miles",
+      "Royal Bliss",
+      "Sports Page Food and Spirits",
+    ]);
+    await page.locator("#local-kind").selectOption("bar");
+    const options = await page.locator("#bar-choice option").allTextContents();
+    for (const name of gone) {
+      expect(options, name + " must not be in the dropdown").not.toContain(
+        name,
+      );
+    }
+    const block = page.locator("#local-intro").locator("xpath=..");
+    await block.scrollIntoViewIfNeeded();
+    if (shots) {
+      await block.screenshot({
+        path: `${shots}/mooresville-bars-off-the-list.png`,
+      });
+    }
   });
 
   test("a Mooresville private airfield is refused when the home is in Denver", async ({

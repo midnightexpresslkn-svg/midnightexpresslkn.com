@@ -456,7 +456,7 @@ export async function fillGroup(
   const places = [
     "Two Trees Bar and Grill",
     "Lake Norman Brewery",
-    "Vitale Lakeside",
+    "Safari Miles",
   ];
   for (let n = 2; n < 2 + stops; n++) {
     await page

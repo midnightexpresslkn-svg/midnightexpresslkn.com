@@ -130,6 +130,20 @@ describe.each(scripts)(
         false,
         lbl("other outside"),
       );
+      const api = view.window.MidnightServiceArea;
+      delete view.window.MidnightServiceArea;
+      check(
+        rides.isMooresvilleEnd("1 A St, Mooresville NC", {}),
+        false,
+        lbl("no service-area API"),
+      );
+      view.window.MidnightServiceArea = {};
+      check(
+        rides.isMooresvilleEnd("1 A St, Mooresville NC", {}),
+        false,
+        lbl("API without classifyAddress"),
+      );
+      view.window.MidnightServiceArea = api;
     });
 
     it("the shared checker refuses a Mooresville end, as a pickup or as a party address, and keeps every other answer", async () => {
@@ -647,33 +661,20 @@ describe.each(scripts)(
       );
     });
 
-    it("refuses every Mooresville listed bar at quote and submit, from a served pickup, and a Mooresville private airfield too", async () => {
-      for (const id of ["blue-parrot", "toucans", "vitale-lakeside"]) {
-        const view = await renderBooking(script, { miles: 6 });
-        check(
-          await quote(view, { bar: id, pickup: DENVER }),
-          SORRY,
-          lbl(id + " quote from Denver is the flat refusal"),
-        );
-        const sentView = await renderBooking(script, { miles: 6 });
-        await fillValid(sentView, {
-          trip: "local",
-          bar: id,
-          pickup: DENVER,
-          notes: "",
-        });
-        await submitForm(sentView);
-        check(
-          resultText(sentView.document).includes(SORRY),
-          true,
-          lbl(id + " submit is refused"),
-        );
-        check(
-          bookingPosts(sentView.state).length,
-          0,
-          lbl(id + " sends nothing"),
-        );
-      }
+    it("keeps Mooresville bars off the list, and still refuses a Mooresville private airfield", async () => {
+      const listed = await renderBooking(script, { miles: 6 });
+      const ids = ["blue-parrot", "toucans", "vitale-lakeside"];
+      check(
+        ids.filter((id) => listed.window.MidnightRides.listedBar(id)),
+        [],
+        lbl("Blue Parrot, Toucan's, and Vitale Lakeside are not listed"),
+      );
+      const names = listed.window.MidnightRides.BARS.map((bar) => bar.name);
+      check(
+        names.some((name) => /blue parrot|toucan|vitale/i.test(name)),
+        false,
+        lbl("the bookable names do not include the three Mooresville bars"),
+      );
       const field = await renderBooking(script, { miles: 12 });
       chooseTrip(field.document, "airport");
       field.document.querySelector("#airport-choice").value = "PRIVATE";

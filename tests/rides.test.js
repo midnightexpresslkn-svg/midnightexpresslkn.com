@@ -37,9 +37,6 @@ const BAR_NAMES = [
   "Safari Miles",
   "Royal Bliss",
   "Sports Page Food and Spirits",
-  "Blue Parrot",
-  "Toucan's",
-  "Vitale Lakeside",
 ];
 const BAR_TOWNS = [
   "Denver",
@@ -234,7 +231,7 @@ describe.each(scripts)("local bars and group %s", (script) => {
     );
   });
 
-  it("lists the 14 bars in Donald's order under the Bar or Party menu", async () => {
+  it("lists the 11 bars in Donald's order under the Bar or Party menu", async () => {
     const view = await renderBooking(script);
     chooseTrip(view.document, "local");
     const kind = view.document.querySelector("#local-kind");
@@ -265,7 +262,7 @@ describe.each(scripts)("local bars and group %s", (script) => {
       view.document.querySelector("#local-intro").nextElementSibling.id,
       "local-bar-list",
       {
-        label: "the 14 bars follow the intro line",
+        label: "the 11 bars follow the intro line",
         source: "js/booking.js",
         loaded: script,
       },
@@ -618,15 +615,29 @@ describe.each(scripts)("local bars and group %s", (script) => {
     });
   });
 
-  it("prices Vitale Lakeside and Sports Page, and maps the stale Sports Bar and Grill id to Two Trees", async () => {
+  it("prices Sports Page, maps the stale Sports Bar and Grill id to Two Trees, and keeps Mooresville bars off the list", async () => {
     const view = await renderBooking(script, { miles: 8 });
-    const text = await priceBar(view, 8, { bar: "vitale-lakeside" });
-    check(text, "Sorry, we don't service that area.", {
-      label: "Vitale Lakeside (a Mooresville bar) is refused at quote time",
-      actual: text,
-      source: "js/booking.js",
-      loaded: script,
-    });
+    const gone = ["blue-parrot", "toucans", "vitale-lakeside"];
+    check(
+      gone.filter((id) => view.window.MidnightRides.listedBar(id)),
+      [],
+      {
+        label: "Blue Parrot, Toucan's, and Vitale Lakeside are not bookable",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    check(
+      view.window.MidnightRides.BARS.some((bar) =>
+        /mooresville/i.test(bar.address || ""),
+      ),
+      false,
+      {
+        label: "no listed bar has a Mooresville address",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
     const page = await priceBar(view, 8, { bar: "sports-page" });
     check(page.includes("One way to Sports Page Food and Spirits"), true, {
       label: "Sports Page Food and Spirits is priced from its stored address",
@@ -661,16 +672,7 @@ describe.each(scripts)("local bars and group %s", (script) => {
     });
   });
 
-  it("prices a listed Mooresville bar and a geocoded Royal Bliss address", async () => {
-    const parrot = await renderBooking(script, { miles: 6 });
-    const parrotText = await priceBar(parrot, 6, { bar: "blue-parrot" });
-    check(parrotText, "Sorry, we don't service that area.", {
-      label:
-        "Blue Parrot (a Mooresville bar) is refused at quote time, even from a served pickup",
-      actual: parrotText,
-      source: "js/booking.js",
-      loaded: script,
-    });
+  it("prices a geocoded Royal Bliss address", async () => {
     const bliss = await renderBooking(script, { miles: 4 });
     const blissText = await priceBar(bliss, 4, { bar: "royal-bliss" });
     check(blissText.includes("Cash $15.00 · Card $15.45"), true, {
@@ -1657,30 +1659,39 @@ describe.each(scripts)("local bars and group %s", (script) => {
   it("preselects a listed bar from the address and still accepts a ride with no notes", async () => {
     const named = await renderBooking(script, {
       miles: 4,
-      url: "/?venue=Vitale%20Lakeside",
+      url: "/?venue=Sports%20Page%20Food%20and%20Spirits",
     });
     chooseTrip(named.document, "local");
     const kind = named.document.querySelector("#local-kind");
     kind.value = "bar";
     named.window.jQuery(kind).trigger("change");
-    check(
-      named.document.querySelector("#bar-choice").value,
-      "vitale-lakeside",
-      {
-        label: "a venue name in the URL selects that bar",
-        source: "js/booking.js",
-        loaded: script,
-      },
-    );
+    check(named.document.querySelector("#bar-choice").value, "sports-page", {
+      label: "a venue name in the URL selects that bar",
+      source: "js/booking.js",
+      loaded: script,
+    });
     check(
       named.document.querySelector("#booking-destination").value,
-      "1459 River Highway, Mooresville, NC 28117",
+      "7490 Waterside Crossing Blvd, Denver, NC 28037",
       {
         label: "a listed bar fills its stored street address",
         source: "js/booking.js",
         loaded: script,
       },
     );
+    const gone = await renderBooking(script, {
+      miles: 4,
+      url: "/?venue=Vitale%20Lakeside",
+    });
+    chooseTrip(gone.document, "local");
+    const goneKind = gone.document.querySelector("#local-kind");
+    goneKind.value = "bar";
+    gone.window.jQuery(goneKind).trigger("change");
+    check(gone.document.querySelector("#bar-choice").value, "", {
+      label: "a removed Mooresville venue in the URL selects nothing",
+      source: "js/booking.js",
+      loaded: script,
+    });
     const preset = await renderBooking(script, {
       miles: 4,
       url: "/?type=local&bar=two-trees",
@@ -1734,24 +1745,6 @@ describe.each(scripts)("local bars and group %s", (script) => {
     check(partyPayload.specialNotes.includes("Party ride. gate"), true, {
       label: "a party note is kept",
       actual: partyPayload.specialNotes,
-      source: "js/booking.js",
-      loaded: script,
-    });
-    const bare = await renderBooking(script, { miles: 4 });
-    await fillValid(bare, { trip: "local", bar: "vitale-lakeside" });
-    await submitForm(bare);
-    check(
-      resultText(bare.document).includes("Sorry, we don't service that area."),
-      true,
-      {
-        label: "a Mooresville listed bar is refused on submit, nothing is sent",
-        actual: resultText(bare.document),
-        source: "js/booking.js",
-        loaded: script,
-      },
-    );
-    check(bookingPosts(bare.state).length, 0, {
-      label: "a Mooresville listed bar sends no booking",
       source: "js/booking.js",
       loaded: script,
     });

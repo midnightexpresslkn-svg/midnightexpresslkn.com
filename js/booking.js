@@ -113,10 +113,7 @@
         { id: "lobster-dog", name: "Lobster Dogs", address: "1219 NC-16 Business, Denver, NC 28037", lat: 35.476092, lon: -80.99367 },
         { id: "safari-miles", name: "Safari Miles", address: "390 NC-16 Business, Denver, NC 28037", lat: 35.45131, lon: -80.993633 },
         { id: "royal-bliss", name: "Royal Bliss", address: "7532 Royal Bliss Court, Denver, NC 28037", lat: null, lon: null },
-        { id: "sports-page", name: "Sports Page Food and Spirits", address: "7490 Waterside Crossing Blvd, Denver, NC 28037", lat: 35.442658, lon: -80.996558 },
-        { id: "blue-parrot", name: "Blue Parrot", address: "169 Pinnacle Lane, Mooresville, NC 28117", lat: 35.608132, lon: -80.936035 },
-        { id: "toucans", name: "Toucan's", address: "167 Pinnacle Lane, Mooresville, NC 28117", lat: 35.608097, lon: -80.935983 },
-        { id: "vitale-lakeside", name: "Vitale Lakeside", address: "1459 River Highway, Mooresville, NC 28117", lat: 35.604983, lon: -80.930081 }
+        { id: "sports-page", name: "Sports Page Food and Spirits", address: "7490 Waterside Crossing Blvd, Denver, NC 28037", lat: 35.442658, lon: -80.996558 }
     ];
 
     // Stale "Sports Bar and Grill" links and ids still resolve to Two Trees Bar and Grill.
@@ -151,8 +148,8 @@
     var LOCAL_MAX_MILES = 15;
 
     // Town or ZIP only (not classifyEnd): a private airfield in Mooresville still names the town, and classifyEnd would
-    // treat the airfield as an airport end and skip it. Donald, Nov 25, 2026 10:25 PM: Mooresville is out completely, listed
-    // bars and private airfields included.
+    // treat the airfield as an airport end and skip it. Donald, Nov 25, 2026: Mooresville is out completely, typed
+    // addresses and private airfields included. The three Mooresville bars are off the bookable list.
     function isMooresvilleEnd(text, geo) {
         var api = globalThis.MidnightServiceArea;
         if (!api || typeof api.classifyAddress !== 'function') return false;
@@ -325,8 +322,8 @@
             decision = { ok: true, code: 'ok', message: '', pickupGeo: pickupGeo, destinationGeo: destinationGeo };
         }
         // Listed bars and private airfields skip the town check (they are treated as a fixed stop). Mooresville is the
-        // exception: refuse it here so a Blue Parrot / Toucan's / Vitale Lakeside ride, or a Mooresville airfield, is
-        // not booked (Donald, Nov 25, 2026 10:25 PM).
+        // exception: refuse a Mooresville pickup, party address, or private airfield here (Donald, Nov 25, 2026: Mooresville
+        // is out completely; the three Mooresville bars were taken off the list).
         if (isMooresvilleEnd(pickup, pickupGeo) || isMooresvilleEnd(destination, destinationGeo)) {
             decision = { ok: false, code: 'outside', message: OUT_OF_AREA_MESSAGE, pickupGeo: pickupGeo, destinationGeo: destinationGeo };
         }
@@ -3280,7 +3277,6 @@
         if(mode==='bar'){
             stop=rides.listedBar($('#bar-choice').val());
             if(!stop){hideMap();show('Choose a bar or restaurant to see your price.');return;}
-            if(rides.isMooresvilleEnd(stop.address,null)){hideMap();show(esc("Sorry, we don't service that area."));return;}
         }
         var party=$.trim($('#party-address').val()||'');
         if(mode==='party'&&party.length<6){hideMap();show('Enter your address and the party address to see your price.');return;}

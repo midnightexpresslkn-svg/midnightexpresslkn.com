@@ -757,9 +757,6 @@ test.describe("new rides on a 375px phone", () => {
       "Safari Miles",
       "Royal Bliss",
       "Sports Page Food and Spirits",
-      "Blue Parrot",
-      "Toucan's",
-      "Vitale Lakeside",
     ];
     const towns = [
       "Denver",
