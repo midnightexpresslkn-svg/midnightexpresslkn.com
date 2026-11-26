@@ -93,7 +93,7 @@
     var UNCLEAR_AREA_MESSAGE = "Please include the town and state, for example Denver, NC.";
     var LOCAL_DENIAL = "out of our service area.";
     // Donald, Nov 25, 2026: an airport or (non-Two-Trees) bar ride from one of these towns gets this pop-up text instead of the
-    // flat refusal. Mooresville is NOT in this list yet: its Perth Rd / Hwy 150 limit is waiting on Donald's answers.
+    // flat refusal. Mooresville is NOT in this list: Donald (Nov 25, 2026, 9:50 PM): "Just take Mooresville out completely."
     var CALL_US_MESSAGE = "We're sorry, you're a little out of our service area, but if you give us a call, we could probably help you.";
     var CALL_US_TOWNS = ["cornelius", "davidson", "huntersville", "troutman", "statesville"];
     // Donald, Nov 10, 2026. One config value each.
@@ -146,44 +146,18 @@
     }
 
     // Donald, Nov 25, 2026. Every bar and party ride: the rider's pickup (and a party's address) must be within 15 road miles of
-    // Two Trees, the center of the circle. Mooresville is cut flat at 8.34 road miles from Two Trees, the road distance to the
-    // Harris Teeter at 118 Argus Ln (the Perth Rd / NC 150 light). Mooresville inside that is served for bars and parties.
+    // Two Trees, the center of the circle. Donald (9:50 PM): "Just take Mooresville out completely." Mooresville is not served for any
+    // ride (airport, bar, party, or group), as a pickup or as a destination or party address, so it is refused like any unserved town.
     var LOCAL_MAX_MILES = 15;
-    var MOORESVILLE_MAX_MILES = 8.34;
 
     function isMooresvilleEnd(text, geo) {
         var end = globalThis.MidnightServiceArea.classifyEnd(text, geo);
         return end.status === 'outside' && String(end.town).toLowerCase() === 'mooresville';
     }
 
-    // The shared service-area check, except that a Mooresville end is not refused here (its distance is measured instead).
-    function evaluateLocal(data) {
-        var api = globalThis.MidnightServiceArea;
-        var decision = api.evaluateTrip(data);
-        if (decision.code !== 'outside') return decision;
-        var ends = [];
-        if (!data.pickupIsAirfield) ends.push(api.classifyEnd(data.pickup, data.pickupGeo));
-        if (!data.destinationIsAirfield) ends.push(api.classifyEnd(data.destination, data.destinationGeo));
-        var rest = ends.filter(function(end) {
-            return !(end.status === 'outside' && String(end.town).toLowerCase() === 'mooresville');
-        });
-        if (rest.some(function(end) { return end.status === 'outside'; })) return decision;
-        if (rest.some(function(end) { return end.status !== 'served' && end.status !== 'airport'; })) {
-            return { ok: false, code: 'unclear', message: UNCLEAR_AREA_MESSAGE };
-        }
-        return { ok: true, code: 'ok', message: '' };
-    }
-
-    // '' = inside; 'moores' = a Mooresville end past the flat side; 'far' = past 15 road miles.
-    function localReachWhy(miles, mooresville) {
-        if (mooresville && miles > MOORESVILLE_MAX_MILES) return 'moores';
+    // '' = inside; 'far' = past 15 road miles.
+    function localReachWhy(miles) {
         return miles > LOCAL_MAX_MILES ? 'far' : '';
-    }
-
-    // The words for a refusal on distance: a Mooresville end past the flat side keeps the wording that bar or party had before
-    // ("out of our service area." for Two Trees, the flat refusal for the others); past 15 miles is always "out of our service area."
-    function localDenialText(bar, why) {
-        return why === 'moores' && !(bar && bar.blockUnservedTowns) ? OUT_OF_AREA_MESSAGE : LOCAL_DENIAL;
     }
 
     // Every quoted cash price is rounded to the nearest $5; an exact $2.50 rounds up.
@@ -249,11 +223,8 @@
         GROUP_HOURLY_CENTS: GROUP_HOURLY_CENTS,
         listedBar: listedBar,
         LOCAL_MAX_MILES: LOCAL_MAX_MILES,
-        MOORESVILLE_MAX_MILES: MOORESVILLE_MAX_MILES,
         isMooresvilleEnd: isMooresvilleEnd,
-        evaluateLocal: evaluateLocal,
         localReachWhy: localReachWhy,
-        localDenialText: localDenialText,
         nearestFiveCents: nearestFiveCents,
         cardCentsFor: cardCentsFor,
         localFare: localFare,
@@ -338,8 +309,9 @@
             pickupIsAirfield: pickupIsAirfield,
             destinationIsAirfield: destinationIsAirfield
         };
-        var decision = tripKind() === 'local' ? evaluateLocal(input) : api.evaluateTrip(input);
-        if (groupVenue && decision.code === 'outside') {
+        var decision = api.evaluateTrip(input);
+        // A group pickup has no town check (Nov 10), except Mooresville, which is out completely (Nov 25, 9:50 PM).
+        if (groupVenue && decision.code === 'outside' && !isMooresvilleEnd(pickup, pickupGeo)) {
             decision = { ok: true, code: 'ok', message: '', pickupGeo: pickupGeo, destinationGeo: destinationGeo };
         }
         decision.pickupGeo = pickupGeo;
@@ -371,6 +343,11 @@
         if (destEnd.status === 'outside' || destEnd.status === 'unclear') {
             $('#booking-destination').closest('.form-group').addClass('has-error');
             $('#destination-error').text(message).show();
+            // A party's address is its own box: show the refusal under it too (Mooresville party addresses included).
+            if (tripKind() === 'local' && $('#local-kind').val() === 'party') {
+                $('#party-address').closest('.form-group').addClass('has-error');
+                $('#party-address-error').text(message).show();
+            }
         }
     }
 
@@ -2467,7 +2444,7 @@
                         reach = { why: 'unclear', party: false };
                     }
                     if (reach) {
-                        var reachText = reach.why === 'unclear' ? UNCLEAR_AREA_MESSAGE : localDenialText(chosenBar, reach.why);
+                        var reachText = reach.why === 'unclear' ? UNCLEAR_AREA_MESSAGE : LOCAL_DENIAL;
                         errors.push(reachText);
                         $(reach.party ? '#party-address' : '#booking-pickup').closest('.form-group').addClass('has-error');
                         $(reach.party ? '#party-address-error' : '#pickup-error').text(reachText).show();
@@ -3186,16 +3163,15 @@
         }).catch(function(){return osrmMiles(g,point);});
     }
     // Donald, Nov 25, 2026: every bar and party ride is measured from the rider's pickup (and a party's address) to Two Trees.
-    // Resolves to null when inside, else {why:'far'|'moores', party:boolean}. knownMiles is the pickup-to-Two-Trees distance when the caller already has it.
+    // Resolves to null when inside, else {why:'far', party:boolean}. knownMiles is the pickup-to-Two-Trees distance when the caller already has it.
     globalThis.MidnightRides.localReach = function(pickText, partyText, knownMiles) {
         var rides=globalThis.MidnightRides;
         var trees=rides.listedBar('two-trees');
         function endReach(text, known, isParty){
             return geocode(text).then(function(g){
-                var moores=rides.isMooresvilleEnd(text,{city:g.city||'',state:g.state||'',zip:g.zip||''});
                 var miles=typeof known==='number'?Promise.resolve(known):quietMiles(g,text,trees);
                 return miles.then(function(mi){
-                    var why=rides.localReachWhy(mi,moores);
+                    var why=rides.localReachWhy(mi);
                     return why?{why:why,party:isParty}:null;
                 });
             });
@@ -3246,9 +3222,13 @@
         var pick=$.trim($('#booking-pickup').val()||'');
         if(pick.length<6||!/\d/.test(pick)){hideMap();return;}
         var trees=rides.listedBar('two-trees');
+        var areaApi=globalThis.MidnightServiceArea;
+        // Donald, Nov 25, 2026 (9:50 PM): Mooresville is out completely, a group pickup there included.
+        if(areaApi&&rides.isMooresvilleEnd(pick,null)){hideMap();show(esc(areaApi.OUT_OF_AREA_MESSAGE));return;}
         show('Figuring your price&hellip;');
         geocode(pick).then(function(g){
             if(my!==seq||tripNow()!=='group')return;
+            if(areaApi&&rides.isMooresvilleEnd(pick,{city:g.city||'',state:g.state||'',zip:g.zip||''})){hideMap();show(esc(areaApi.OUT_OF_AREA_MESSAGE));return;}
             return roadBetween(g, pick, trees).then(function(mi){
                 if(mi>trees.groupMaxMiles){hideMap();show(esc(rides.LOCAL_DENIAL));return;}
                 paintHours();
@@ -3289,14 +3269,14 @@
         if(pick.length<6||!/\d/.test(pick)){hideMap();show('Enter your address to see your price.');return;}
         var api=globalThis.MidnightServiceArea;
         var destText=mode==='bar'?stop.address:party;
-        var prelim=api?rides.evaluateLocal({pickup:pick,destination:destText,destinationIsAirfield:mode==='bar'}):{code:'unclear'};
+        var prelim=api?api.evaluateTrip({pickup:pick,destination:destText,destinationIsAirfield:mode==='bar'}):{code:'unclear'};
         if(prelim.code==='outside'){hideMap();show(esc(rides.callUsFor('local',mode,stop,pick,null)?rides.CALL_US_MESSAGE:(mode==='bar'&&stop&&stop.blockUnservedTowns?rides.LOCAL_DENIAL:api.OUT_OF_AREA_MESSAGE)));return;}
         show('Figuring your price&hellip;');
         var pickGeo=null;
         geocode(pick).then(function(g){
             if(my!==seq||tripNow()!=='local')return;
             pickGeo={city:g.city||'',state:g.state||'',zip:g.zip||''};
-            var decision=rides.evaluateLocal({
+            var decision=api.evaluateTrip({
                 pickup:pick,
                 destination:destText,
                 destinationIsAirfield:mode==='bar',
@@ -3314,8 +3294,8 @@
             });
         }).then(function(mi){
             if(my!==seq||tripNow()!=='local'||mi==null)return;
-            // A reach hit (outside the 15 mile radius or past the Mooresville flat side) is shown only if this quote is still the current one.
-            if(typeof mi==='object'){hideMap();show(esc(rides.localDenialText(stop,mi.why)));return;}
+            // A reach hit (outside the 15 mile radius) is shown only if this quote is still the current one.
+            if(typeof mi==='object'){hideMap();show(esc(rides.LOCAL_DENIAL));return;}
             var fare=rides.localFare(mi, rt);
             var name=mode==='party'?'the party':stop.name;
             var label=rt?'Round trip, '+esc(name)+' and back':'One way to '+esc(name);

@@ -1050,58 +1050,36 @@ test.describe("Two Trees towns and group radius at 375px", () => {
     expect(posts).toEqual([]);
   });
 
-  test("Two Trees from Mooresville inside 8.34 road miles is quoted", async ({
+  test("Two Trees from Mooresville is out of our service area at any distance", async ({
     page,
   }) => {
-    const posts = await installMocks(page, { miles: 8.34 });
-    await page.goto("/");
-    await ui.tripType(page).selectOption("local");
-    await ui.localKind(page).selectOption("bar");
-    await ui.bar(page).selectOption("two-trees");
-    await ui.pickup(page).fill("123 Main St, Mooresville NC 28115");
-    await expect(ui.quote(page)).toContainText("Cash $25.00");
-    expect(posts).toEqual([]);
+    for (const miles of [3, 8.34, 8.4]) {
+      const posts = await installMocks(page, { miles });
+      await page.goto("/");
+      await ui.tripType(page).selectOption("local");
+      await ui.localKind(page).selectOption("bar");
+      await ui.bar(page).selectOption("two-trees");
+      await ui.pickup(page).fill("123 Main St, Mooresville NC 28115");
+      await expect(ui.quote(page)).toHaveText("out of our service area.");
+      expect(posts).toEqual([]);
+    }
   });
 
-  test("Two Trees from Mooresville past 8.34 road miles is out of our service area", async ({
+  test("another bar from Mooresville is refused at any distance", async ({
     page,
   }) => {
-    const posts = await installMocks(page, { miles: 8.4 });
-    await page.goto("/");
-    await ui.tripType(page).selectOption("local");
-    await ui.localKind(page).selectOption("bar");
-    await ui.bar(page).selectOption("two-trees");
-    await ui.pickup(page).fill("123 Main St, Mooresville NC 28115");
-    await expect(ui.quote(page)).toHaveText("out of our service area.");
-    expect(posts).toEqual([]);
-  });
-
-  test("another bar from Mooresville inside 8.34 miles is quoted", async ({
-    page,
-  }) => {
-    const posts = await installMocks(page, { miles: 8 });
-    await page.goto("/");
-    await ui.tripType(page).selectOption("local");
-    await ui.localKind(page).selectOption("bar");
-    await ui.bar(page).selectOption("bourbon-bobber");
-    await ui.pickup(page).fill("123 Main St, Mooresville NC 28115");
-    await expect(ui.quote(page)).toContainText("Cash $25.00");
-    expect(posts).toEqual([]);
-  });
-
-  test("another bar from Mooresville past 8.34 miles is refused", async ({
-    page,
-  }) => {
-    const posts = await installMocks(page, { miles: 8.4 });
-    await page.goto("/");
-    await ui.tripType(page).selectOption("local");
-    await ui.localKind(page).selectOption("bar");
-    await ui.bar(page).selectOption("bourbon-bobber");
-    await ui.pickup(page).fill("123 Main St, Mooresville NC 28115");
-    await expect(ui.quote(page)).toHaveText(
-      "Sorry, we don't service that area.",
-    );
-    expect(posts).toEqual([]);
+    for (const miles of [3, 8, 8.4]) {
+      const posts = await installMocks(page, { miles });
+      await page.goto("/");
+      await ui.tripType(page).selectOption("local");
+      await ui.localKind(page).selectOption("bar");
+      await ui.bar(page).selectOption("bourbon-bobber");
+      await ui.pickup(page).fill("123 Main St, Mooresville NC 28115");
+      await expect(ui.quote(page)).toHaveText(
+        "Sorry, we don't service that area.",
+      );
+      expect(posts).toEqual([]);
+    }
   });
 
   test("any bar is refused past 15 road miles and a party is refused past 15 miles", async ({
@@ -1132,12 +1110,12 @@ test.describe("Two Trees towns and group radius at 375px", () => {
     expect(posts).toEqual([]);
   });
 
-  test("a group 19.9 miles across the lake is quoted", async ({ page }) => {
+  test("a group 19.9 miles away is quoted", async ({ page }) => {
     const posts = await installMocks(page, { miles: 19.9 });
     await page.goto("/");
     await ui.tripType(page).selectOption("group");
     await ui.hours(page).fill("2");
-    await ui.pickup(page).fill("100 N Main St, Mooresville NC 28115");
+    await ui.pickup(page).fill("100 N Main St, Denver NC 28037");
     await ui.pickup(page).blur();
     await expect(ui.quote(page)).toContainText("Cash $250.00");
     await expect(ui.quote(page)).not.toContainText("out of our service area.");
@@ -1149,9 +1127,24 @@ test.describe("Two Trees towns and group radius at 375px", () => {
     await page.goto("/");
     await ui.tripType(page).selectOption("group");
     await ui.hours(page).fill("2");
-    await ui.pickup(page).fill("100 N Main St, Mooresville NC 28115");
+    await ui.pickup(page).fill("100 N Main St, Denver NC 28037");
     await ui.pickup(page).blur();
     await expect(ui.quote(page)).toHaveText("out of our service area.");
+    expect(posts).toEqual([]);
+  });
+
+  test("a Mooresville group pickup is refused at any distance", async ({
+    page,
+  }) => {
+    const posts = await installMocks(page, { miles: 5 });
+    await page.goto("/");
+    await ui.tripType(page).selectOption("group");
+    await ui.hours(page).fill("2");
+    await ui.pickup(page).fill("100 N Main St, Mooresville NC 28115");
+    await ui.pickup(page).blur();
+    await expect(ui.quote(page)).toHaveText(
+      "Sorry, we don't service that area.",
+    );
     expect(posts).toEqual([]);
   });
 });

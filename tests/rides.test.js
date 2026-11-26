@@ -520,8 +520,9 @@ describe.each(scripts)("local bars and group %s", (script) => {
       source: "js/booking.js",
       loaded: script,
     });
-    check(open.window.MidnightRides.MOORESVILLE_MAX_MILES, 8.34, {
-      label: "the Mooresville flat side is 8.34 road miles",
+    check(open.window.MidnightRides.MOORESVILLE_MAX_MILES, undefined, {
+      label:
+        "there is no Mooresville flat side any more (Mooresville is out completely)",
       source: "js/booking.js",
       loaded: script,
     });
@@ -2621,7 +2622,7 @@ describe.each(scripts)("group description %s", (script) => {
 });
 
 describe.each(scripts)("Two Trees towns and group radius %s", (script) => {
-  it("prices Two Trees inside 15 miles from a served town or inside the Mooresville flat side, and blocks excluded towns", async () => {
+  it("prices Two Trees inside 15 miles from a served town, and blocks excluded towns, Mooresville included at every distance", async () => {
     const allowed = await renderBooking(script, { miles: 9 });
     const allowedText = await priceBar(allowed, 9);
     check(allowedText.includes("Cash $25.00 · Card $25.75"), true, {
@@ -2637,83 +2638,43 @@ describe.each(scripts)("Two Trees towns and group radius %s", (script) => {
       loaded: script,
     });
 
-    // Donald, Nov 25, 2026: Mooresville is served for bars and parties up to 8.34 road miles from Two Trees (the Harris Teeter light).
-    const mooresville = await renderBooking(script, { miles: 8 });
-    check(
-      (
-        await priceBar(mooresville, 8, {
+    // Donald, Nov 25, 2026 9:50 PM: "Just take Mooresville out completely." No distance makes Mooresville served for Two Trees.
+    for (const miles of [3, 8, 8.34, 8.35]) {
+      const mooresville = await renderBooking(script, { miles });
+      check(
+        await priceBar(mooresville, miles, {
           pickup: "123 Main St, Mooresville NC 28115",
-        })
-      ).includes("Cash $25.00 · Card $25.75"),
-      true,
-      {
-        label: "Mooresville inside 8.34 miles quotes Two Trees",
-        actual: quoteText(mooresville.document),
-        source: "js/booking.js",
-        loaded: script,
-      },
-    );
-    await fillValid(mooresville, {
-      trip: "local",
-      pickup: "123 Main St, Mooresville NC 28115",
-      notes: "",
-    });
-    await submitForm(mooresville);
-    check(resultText(mooresville.document).includes("Request received"), true, {
-      label: "a Mooresville Two Trees request inside the flat side is sent",
-      actual: resultText(mooresville.document),
-      source: "js/booking.js",
-      loaded: script,
-    });
-    const flat = await renderBooking(script, { miles: 8.34 });
-    check(
-      (
-        await priceBar(flat, 8.34, {
-          pickup: "123 Main St, Mooresville NC 28115",
-        })
-      ).includes("Cash $25.00"),
-      true,
-      {
-        label: "exactly 8.34 miles in Mooresville is still served",
-        actual: quoteText(flat.document),
-        source: "js/booking.js",
-        loaded: script,
-      },
-    );
-    const beyond = await renderBooking(script, { miles: 8.35 });
-    check(
-      await priceBar(beyond, 8.35, {
+        }),
+        "out of our service area.",
+        {
+          label: `Mooresville at ${miles} miles is refused for Two Trees`,
+          actual: quoteText(mooresville.document),
+          source: "js/booking.js",
+          loaded: script,
+        },
+      );
+      await fillValid(mooresville, {
+        trip: "local",
         pickup: "123 Main St, Mooresville NC 28115",
-      }),
-      "out of our service area.",
-      {
-        label: "Mooresville past 8.34 miles is refused for Two Trees",
-        actual: quoteText(beyond.document),
+        notes: "",
+      });
+      await submitForm(mooresville);
+      check(
+        resultText(mooresville.document).includes("out of our service area."),
+        true,
+        {
+          label: `a Mooresville Two Trees request at ${miles} miles is not sent`,
+          actual: resultText(mooresville.document),
+          source: "js/booking.js",
+          loaded: script,
+        },
+      );
+      check(bookingPosts(mooresville.state).length, 0, {
+        label: "Mooresville sends no Two Trees booking",
         source: "js/booking.js",
         loaded: script,
-      },
-    );
-    await fillValid(beyond, {
-      trip: "local",
-      pickup: "123 Main St, Mooresville NC 28115",
-      notes: "",
-    });
-    await submitForm(beyond);
-    check(
-      resultText(beyond.document).includes("out of our service area."),
-      true,
-      {
-        label: "a Mooresville Two Trees request past the flat side is not sent",
-        actual: resultText(beyond.document),
-        source: "js/booking.js",
-        loaded: script,
-      },
-    );
-    check(bookingPosts(beyond.state).length, 0, {
-      label: "Mooresville past the flat side sends no Two Trees booking",
-      source: "js/booking.js",
-      loaded: script,
-    });
+      });
+    }
 
     const cornelius = await renderBooking(script, { miles: 5 });
     chooseTrip(cornelius.document, "local");
@@ -2731,37 +2692,22 @@ describe.each(scripts)("Two Trees towns and group radius %s", (script) => {
       loaded: script,
     });
 
-    const other = await renderBooking(script, { miles: 8 });
-    check(
-      (
-        await priceBar(other, 8, {
+    for (const miles of [8, 8.35]) {
+      const otherMoores = await renderBooking(script, { miles });
+      check(
+        await priceBar(otherMoores, miles, {
           bar: "bourbon-bobber",
           pickup: "123 Main St, Mooresville NC 28115",
-        })
-      ).includes("Cash $25.00"),
-      true,
-      {
-        label: "another bar from Mooresville inside 8.34 miles is quoted",
-        actual: quoteText(other.document),
-        source: "js/booking.js",
-        loaded: script,
-      },
-    );
-    const otherFar = await renderBooking(script, { miles: 8.35 });
-    check(
-      await priceBar(otherFar, 8.35, {
-        bar: "bourbon-bobber",
-        pickup: "123 Main St, Mooresville NC 28115",
-      }),
-      "Sorry, we don't service that area.",
-      {
-        label:
-          "another bar from Mooresville past the flat side keeps the flat refusal",
-        actual: quoteText(otherFar.document),
-        source: "js/booking.js",
-        loaded: script,
-      },
-    );
+        }),
+        "Sorry, we don't service that area.",
+        {
+          label: `another bar from Mooresville at ${miles} miles gets the flat refusal`,
+          actual: quoteText(otherMoores.document),
+          source: "js/booking.js",
+          loaded: script,
+        },
+      );
+    }
     const mapped = await renderBooking(script, {
       miles: 8,
       censusCity: "Charlotte",
@@ -2790,11 +2736,11 @@ describe.each(scripts)("Two Trees towns and group radius %s", (script) => {
     near.document.querySelector("#group-hours").value = "2";
     near.window.jQuery("#group-hours").trigger("change");
     near.document.querySelector("#booking-pickup").value =
-      "100 N Main St, Mooresville NC 28115";
+      "100 N Main St, Denver NC 28037";
     near.window.jQuery("#booking-pickup").trigger("blur");
     const nearText = await waitQuote(near);
     check(nearText.includes("Cash $250.00"), true, {
-      label: "19.9 miles across the lake still quotes the group",
+      label: "19.9 miles away still quotes the group",
       actual: nearText,
       source: "js/booking.js",
       loaded: script,
@@ -2808,13 +2754,13 @@ describe.each(scripts)("Two Trees towns and group radius %s", (script) => {
     await fillValid(near, {
       trip: "group",
       miles: 19.9,
-      pickup: "100 N Main St, Mooresville NC 28115",
-      notes: "lake rehearsal",
+      pickup: "100 N Main St, Denver NC 28037",
+      notes: "rehearsal",
     });
     near.state.miles = 19.9;
     await submitForm(near);
     check(resultText(near.document).includes("Request received"), true, {
-      label: "a group across the lake within 20 miles is accepted",
+      label: "a group within 20 miles is accepted",
       actual: resultText(near.document),
       source: "js/booking.js",
       loaded: script,
@@ -2825,7 +2771,7 @@ describe.each(scripts)("Two Trees towns and group radius %s", (script) => {
     far.document.querySelector("#group-hours").value = "2";
     far.window.jQuery("#group-hours").trigger("change");
     far.document.querySelector("#booking-pickup").value =
-      "100 N Main St, Mooresville NC 28115";
+      "100 N Main St, Denver NC 28037";
     far.window.jQuery("#booking-pickup").trigger("blur");
     check(await waitQuote(far), "out of our service area.", {
       label: "20.1 miles is outside the group radius",
@@ -2835,8 +2781,8 @@ describe.each(scripts)("Two Trees towns and group radius %s", (script) => {
     });
     await fillValid(far, {
       trip: "group",
-      pickup: "100 N Main St, Mooresville NC 28115",
-      notes: "lake rehearsal",
+      pickup: "100 N Main St, Denver NC 28037",
+      notes: "rehearsal",
     });
     far.state.miles = 20.1;
     await submitForm(far);
@@ -2848,6 +2794,39 @@ describe.each(scripts)("Two Trees towns and group radius %s", (script) => {
     });
     check(bookingPosts(far.state).length, 0, {
       label: "a group past 20 miles sends nothing",
+      source: "js/booking.js",
+      loaded: script,
+    });
+
+    // Mooresville is out completely: a group there is refused at any distance, with the flat refusal.
+    const moores = await renderBooking(script, { miles: 5 });
+    chooseTrip(moores.document, "group");
+    moores.document.querySelector("#group-hours").value = "2";
+    moores.window.jQuery("#group-hours").trigger("change");
+    moores.document.querySelector("#booking-pickup").value =
+      "100 N Main St, Mooresville NC 28115";
+    moores.window.jQuery("#booking-pickup").trigger("blur");
+    await waitQuote(moores);
+    await fillValid(moores, {
+      trip: "group",
+      pickup: "100 N Main St, Mooresville NC 28115",
+      notes: "rehearsal",
+    });
+    await submitForm(moores);
+    check(
+      resultText(moores.document).includes(
+        "Sorry, we don't service that area.",
+      ),
+      true,
+      {
+        label: "a Mooresville group is refused at 5 miles",
+        actual: resultText(moores.document),
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    check(bookingPosts(moores.state).length, 0, {
+      label: "a Mooresville group sends nothing",
       source: "js/booking.js",
       loaded: script,
     });

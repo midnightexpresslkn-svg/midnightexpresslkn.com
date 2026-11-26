@@ -1,6 +1,8 @@
 // Donald, Nov 25, 2026 (card t3003s10140): every bar and party ride is measured from the rider's pickup, using Two Trees as the
-// center of a 15 road-mile radius with a flat side on the Mooresville edge (8.34 road miles, the Harris Teeter light at Perth Rd).
-// A party's address has to be inside the same area. Mooresville is now served for bars and parties inside that flat side.
+// center of a 15 road-mile radius. A party's address has to be inside the same area.
+// Donald, Nov 25, 2026 9:50 PM: "Just take Mooresville out completely." Mooresville is refused for every ride type (airport, bar, party,
+// group), as a pickup or as a destination or party address, with the wording each ride already had. The 8.34 road-mile allowance
+// (118 Argus Ln, the Perth Rd light) is gone.
 import { afterEach, describe, it } from "vitest";
 import { check } from "./helpers/failure.js";
 import {
@@ -19,6 +21,7 @@ const SORRY = "Sorry, we don't service that area.";
 const FAR = "out of our service area.";
 const MOORES_PICK = "123 Main St, Mooresville NC 28115";
 const MOORES_PARTY = "300 Lake Norman Dr, Mooresville NC 28117";
+const ARGUS = "118 Argus Ln, Mooresville NC 28117";
 const DENVER = "123 Main Street, Denver NC 28037";
 
 afterEach(() => {
@@ -88,45 +91,20 @@ async function submitParty(view, pickup, party) {
 const sent = (text) => text.includes("Request received");
 
 describe.each(scripts)(
-  "15 mile radius and Mooresville flat side %s",
+  "15 mile radius, and Mooresville out completely %s",
   (script) => {
     const lbl = (label) => ({ label, source: "js/booking.js", loaded: script });
 
-    it("exposes the two limits and the reach helpers", async () => {
+    it("exposes the radius and the reach helpers; the Mooresville allowance is gone", async () => {
       const view = await renderBooking(script, { miles: 5 });
       const rides = view.window.MidnightRides;
       check(rides.LOCAL_MAX_MILES, 15, lbl("radius"));
-      check(rides.MOORESVILLE_MAX_MILES, 8.34, lbl("flat side"));
-      check(rides.localReachWhy(15, false), "", lbl("15 is inside"));
-      check(rides.localReachWhy(15.01, false), "far", lbl("15.01 is far"));
-      check(
-        rides.localReachWhy(8.34, true),
-        "",
-        lbl("8.34 Mooresville inside"),
-      );
-      check(rides.localReachWhy(8.35, true), "moores", lbl("8.35 past flat"));
-      check(
-        rides.localReachWhy(15.5, true),
-        "moores",
-        lbl("Mooresville first"),
-      );
-      check(
-        rides.localDenialText({ blockUnservedTowns: true }, "moores"),
-        rides.LOCAL_DENIAL,
-        lbl("TT moores"),
-      );
-      check(
-        rides.localDenialText({ blockUnservedTowns: true }, "far"),
-        rides.LOCAL_DENIAL,
-        lbl("TT far"),
-      );
-      check(rides.localDenialText({}, "moores"), SORRY, lbl("other moores"));
-      check(rides.localDenialText(null, "moores"), SORRY, lbl("party moores"));
-      check(
-        rides.localDenialText({}, "far"),
-        rides.LOCAL_DENIAL,
-        lbl("other far"),
-      );
+      check(rides.localReachWhy(15), "", lbl("15 is inside"));
+      check(rides.localReachWhy(15.01), "far", lbl("15.01 is far"));
+      check(rides.localReachWhy(8.35), "", lbl("8.35 is just a distance now"));
+      check(rides.MOORESVILLE_MAX_MILES, undefined, lbl("no flat side"));
+      check(rides.evaluateLocal, undefined, lbl("no Mooresville pass-through"));
+      check(rides.localDenialText, undefined, lbl("no Mooresville wording"));
       check(
         rides.isMooresvilleEnd("1 A St, Mooresville NC", {}),
         true,
@@ -154,56 +132,38 @@ describe.each(scripts)(
       );
     });
 
-    it("evaluateLocal lets a Mooresville end through and keeps every other refusal", async () => {
+    it("the shared checker refuses a Mooresville end, as a pickup or as a party address, and keeps every other answer", async () => {
       const { window } = await renderBooking(script, { miles: 5 });
-      const rides = window.MidnightRides;
+      const api = window.MidnightServiceArea;
       const decide = (pickup, destination) =>
-        rides.evaluateLocal({
+        api.evaluateTrip({
           pickup,
           destination,
           destinationIsAirfield: destination === "",
         });
-      check(decide(MOORES_PICK, "").ok, true, lbl("Mooresville pickup"));
+      for (const [pickup, destination, why] of [
+        [MOORES_PICK, "", "Mooresville pickup"],
+        [MOORES_PICK, MOORES_PARTY, "both Mooresville"],
+        [MOORES_PICK, DENVER, "Mooresville then Denver"],
+        [DENVER, MOORES_PARTY, "Denver then a Mooresville party address"],
+        [ARGUS, DENVER, "118 Argus Ln (inside 8.3 miles) pickup"],
+        [DENVER, ARGUS, "118 Argus Ln party address"],
+        [MOORES_PICK, "CLT", "Mooresville to an airport"],
+        ["CLT", MOORES_PARTY, "an airport pickup with a Mooresville end"],
+      ]) {
+        const d = decide(pickup, destination);
+        check([d.ok, d.code, d.message], [false, "outside", SORRY], lbl(why));
+      }
+      check(decide(DENVER, "").ok, true, lbl("served"));
       check(
-        decide(MOORES_PICK, MOORES_PARTY).ok,
-        true,
-        lbl("both Mooresville"),
-      );
-      check(
-        decide(MOORES_PICK, DENVER).ok,
-        true,
-        lbl("Mooresville then Denver"),
-      );
-      check(decide(MOORES_PICK, "CLT").ok, true, lbl("an airport end is fine"));
-      check(
-        decide("1 A St, Cornelius NC 28031", MOORES_PARTY).code,
-        "outside",
-        lbl("Cornelius stays out"),
-      );
-      check(
-        decide(MOORES_PICK, "2 B St, Cornelius NC 28031").code,
-        "outside",
-        lbl("party in Cornelius stays out"),
-      );
-      check(
-        decide(MOORES_PICK, "200 Oak St").code,
+        decide(DENVER, "200 Oak St").code,
         "unclear",
         lbl("no town stays unclear"),
       );
       check(
-        decide(MOORES_PICK, "200 Oak St").message,
-        window.MidnightServiceArea.UNCLEAR_MESSAGE,
-        lbl("unclear text"),
-      );
-      check(decide(DENVER, "").ok, true, lbl("served"));
-      check(
-        rides.evaluateLocal({
-          pickup: "CLT",
-          pickupIsAirfield: true,
-          destination: MOORES_PARTY,
-        }).ok,
-        true,
-        lbl("an airfield pickup with a Mooresville end"),
+        decide("1 A St, Cornelius NC 28031", DENVER).code,
+        "outside",
+        lbl("Cornelius stays out"),
       );
     });
 
@@ -329,129 +289,163 @@ describe.each(scripts)(
       );
     });
 
-    it("serves Mooresville to 8.34 road miles and refuses 8.35 for a party pickup and party address", async () => {
-      const okPlaces = {
-        [MOORES_PICK]: place(8.34, "Mooresville", "28115"),
-        [MOORES_PARTY]: place(8, "Mooresville", "28117"),
-      };
-      const ok = await renderBooking(script, { miles: 5, places: okPlaces });
-      check(
-        (
-          await quote(ok, { party: MOORES_PARTY, pickup: MOORES_PICK })
-        ).includes("Cash"),
-        true,
-        lbl("Mooresville party quote"),
-      );
-      check(
-        sent(await submitParty(ok, MOORES_PICK, MOORES_PARTY)),
-        true,
-        lbl("Mooresville both inside is sent"),
-      );
+    it("refuses a Mooresville party pickup and party address at any distance, 118 Argus Ln included, and sends nothing", async () => {
+      for (const miles of [3, 8.3, 8.34, 8.35, 12]) {
+        const both = await renderBooking(script, {
+          miles: 5,
+          places: {
+            [MOORES_PICK]: place(miles, "Mooresville", "28115"),
+            [MOORES_PARTY]: place(miles, "Mooresville", "28117"),
+            [DENVER]: place(5),
+          },
+        });
+        check(
+          await quote(both, { party: DENVER, pickup: MOORES_PICK }),
+          SORRY,
+          lbl(`pickup quote at ${miles}`),
+        );
+        check(
+          (await submitParty(both, MOORES_PICK, DENVER)).includes(SORRY),
+          true,
+          lbl(`pickup submit at ${miles}`),
+        );
+        check(
+          both.document
+            .querySelector("#pickup-error")
+            .textContent.includes(SORRY),
+          true,
+          lbl("pickup box"),
+        );
+        check(bookingPosts(both.state).length, 0, lbl("pickup sends nothing"));
 
-      const pickPast = await renderBooking(script, {
-        miles: 5,
+        const party = await renderBooking(script, {
+          miles: 5,
+          places: {
+            [MOORES_PARTY]: place(miles, "Mooresville", "28117"),
+            [DENVER]: place(5),
+          },
+        });
+        check(
+          await quote(party, { party: MOORES_PARTY, pickup: DENVER }),
+          SORRY,
+          lbl(`party address quote at ${miles}`),
+        );
+        check(
+          (await submitParty(party, DENVER, MOORES_PARTY)).includes(SORRY),
+          true,
+          lbl(`party address submit at ${miles}`),
+        );
+        check(
+          party.document
+            .querySelector("#party-address-error")
+            .textContent.includes(SORRY),
+          true,
+          lbl("party box"),
+        );
+        check(bookingPosts(party.state).length, 0, lbl("party sends nothing"));
+      }
+      const argus = await renderBooking(script, {
+        miles: 8.3,
         places: {
-          [MOORES_PICK]: place(8.35, "Mooresville", "28115"),
+          [ARGUS]: place(8.3, "Mooresville", "28117"),
           [DENVER]: place(5),
         },
       });
       check(
-        await quote(pickPast, { party: DENVER, pickup: MOORES_PICK }),
+        await quote(argus, { party: DENVER, pickup: ARGUS }),
         SORRY,
-        lbl("pickup past flat side quote"),
+        lbl("118 Argus Ln inside 8.3 miles is refused"),
       );
-      check(
-        (await submitParty(pickPast, MOORES_PICK, DENVER)).includes(SORRY),
-        true,
-        lbl("pickup past flat side submit"),
-      );
-      check(
-        pickPast.document
-          .querySelector("#pickup-error")
-          .textContent.includes(SORRY),
-        true,
-        lbl("pickup box"),
-      );
-
-      const partyPast = await renderBooking(script, {
-        miles: 5,
-        places: {
-          [DENVER]: place(5),
-          [MOORES_PARTY]: place(8.35, "Mooresville", "28117"),
-        },
-      });
-      check(
-        await quote(partyPast, { party: MOORES_PARTY, pickup: DENVER }),
-        SORRY,
-        lbl("party past flat side quote"),
-      );
-      check(
-        (await submitParty(partyPast, DENVER, MOORES_PARTY)).includes(SORRY),
-        true,
-        lbl("party past flat side submit"),
-      );
-      check(
-        partyPast.document
-          .querySelector("#party-address-error")
-          .textContent.includes(SORRY),
-        true,
-        lbl("party box"),
-      );
-      check(bookingPosts(partyPast.state).length, 0, lbl("nothing sent"));
     });
 
-    it("recognizes Mooresville from the geocoder or the ZIP when the text has no town", async () => {
-      const byGeo = await renderBooking(script, {
-        miles: 8,
+    it("refuses a Mooresville pickup for a bar: Two Trees says out of our service area, every other bar the flat refusal", async () => {
+      for (const [bar, wording] of [
+        ["two-trees", FAR],
+        ["bourbon-bobber", SORRY],
+        ["safari-miles", SORRY],
+      ]) {
+        for (const miles of [5, 8.3, 8.34, 8.35]) {
+          const view = await renderBooking(script, {
+            miles,
+            places: { [ARGUS]: place(miles, "Mooresville", "28117") },
+          });
+          check(
+            await quote(view, { bar, pickup: ARGUS }),
+            wording,
+            lbl(`${bar} from 118 Argus Ln at ${miles}`),
+          );
+          await fillValid(view, {
+            trip: "local",
+            bar,
+            pickup: ARGUS,
+            notes: "",
+          });
+          await submitForm(view);
+          check(
+            resultText(view.document).includes(wording),
+            true,
+            lbl(`${bar} submit at ${miles}`),
+          );
+          // The box under the field carries the shared service-area text (as it did before); the summary line carries Two Trees' own wording.
+          check(
+            view.document
+              .querySelector("#pickup-error")
+              .textContent.includes(SORRY),
+            true,
+            lbl("pickup box"),
+          );
+          check(bookingPosts(view.state).length, 0, lbl("nothing sent"));
+        }
+      }
+    });
+
+    it("recognizes Mooresville from the geocoder or the ZIP when the text has no town, and refuses it", async () => {
+      const geo = (miles) => ({
+        miles,
         censusCity: "Mooresville",
         censusState: "NC",
         censusZip: "28115",
       });
-      check(
-        (
-          await quote(byGeo, {
+      for (const miles of [8, 8.35]) {
+        check(
+          await quote(await renderBooking(script, geo(miles)), {
             bar: "bourbon-bobber",
             pickup: "100 Main Street",
-          })
-        ).includes("Cash"),
-        true,
-        lbl("geocoded Mooresville inside"),
-      );
-      const byGeoPast = await renderBooking(script, {
-        miles: 8.35,
-        censusCity: "Mooresville",
-        censusState: "NC",
-        censusZip: "28115",
-      });
+          }),
+          SORRY,
+          lbl(`geocoded Mooresville at ${miles}`),
+        );
+      }
       check(
-        await quote(byGeoPast, {
-          bar: "bourbon-bobber",
+        await quote(await renderBooking(script, geo(8)), {
+          bar: "two-trees",
           pickup: "100 Main Street",
         }),
-        SORRY,
-        lbl("geocoded Mooresville past"),
-      );
-      check(
-        await quote(
-          await renderBooking(script, {
-            miles: 8.35,
-            censusCity: "Mooresville",
-            censusState: "NC",
-            censusZip: "28115",
-          }),
-          { bar: "two-trees", pickup: "100 Main Street" },
-        ),
         FAR,
-        lbl("Two Trees geocoded Mooresville past"),
+        lbl("Two Trees geocoded Mooresville"),
       );
-      const byZip = await renderBooking(script, { miles: 9 });
+      const submitted = await renderBooking(script, geo(8));
+      await fillValid(submitted, {
+        trip: "local",
+        bar: "bourbon-bobber",
+        pickup: "100 Main Street",
+        notes: "",
+      });
+      await submitForm(submitted);
+      check(
+        resultText(submitted.document).includes(SORRY),
+        true,
+        lbl("geocoded Mooresville submit is refused"),
+      );
+      check(bookingPosts(submitted.state).length, 0, lbl("nothing sent"));
+      const byZip = await renderBooking(script, { miles: 5 });
       check(
         await quote(byZip, {
           bar: "bourbon-bobber",
           pickup: "123 Main St 28115",
         }),
         SORRY,
-        lbl("ZIP only Mooresville past"),
+        lbl("ZIP only Mooresville"),
       );
     });
 
@@ -462,7 +456,7 @@ describe.each(scripts)(
       });
       const text = await quote(unclear, {
         party: "200 Oak St",
-        pickup: MOORES_PICK,
+        pickup: DENVER,
       });
       check(
         text,
@@ -551,7 +545,7 @@ describe.each(scripts)(
       );
     });
 
-    it("leaves the airport from Mooresville and the group radius as they were", async () => {
+    it("refuses Mooresville for an airport ride (to the airport, from the airport, a private airfield pickup) and leaves the group radius at 20", async () => {
       const airport = await renderBooking(script, { miles: 5 });
       chooseTrip(airport.document, "airport");
       airport.document.querySelector("#booking-pickup").value = MOORES_PICK;
@@ -561,11 +555,18 @@ describe.each(scripts)(
         .jQuery("#booking-destination")
         .trigger("input")
         .trigger("blur");
-      check(
-        await waitQuote(airport),
-        SORRY,
-        lbl("airport Mooresville is still refused"),
-      );
+      check(await waitQuote(airport), SORRY, lbl("airport Mooresville quote"));
+      for (const direction of ["to", "from"]) {
+        const view = await renderBooking(script, { miles: 5 });
+        await fillValid(view, { pickup: ARGUS, destination: "CLT", direction });
+        await submitForm(view);
+        check(
+          resultText(view.document).includes(SORRY),
+          true,
+          lbl(`airport ${direction} Argus Ln submit is refused`),
+        );
+        check(bookingPosts(view.state).length, 0, lbl("airport sends nothing"));
+      }
       const group = await renderBooking(script, { miles: 19.9 });
       chooseTrip(group.document, "group");
       group.document.querySelector("#group-hours").value = "2";
@@ -576,6 +577,73 @@ describe.each(scripts)(
         (await waitQuote(group)).includes("Cash"),
         true,
         lbl("group 19.9 still quoted"),
+      );
+    });
+
+    it("refuses a Mooresville group pickup (typed town, ZIP, geocoder) with the flat refusal, and sends nothing", async () => {
+      const groupQuote = async (options, pickup) => {
+        const view = await renderBooking(script, options);
+        chooseTrip(view.document, "group");
+        view.document.querySelector("#group-hours").value = "2";
+        view.window.jQuery("#group-hours").trigger("change");
+        view.document.querySelector("#booking-pickup").value = pickup;
+        view.window.jQuery("#booking-pickup").trigger("blur");
+        return { view, text: await waitQuote(view) };
+      };
+      for (const [options, pickup, why] of [
+        [{ miles: 5 }, MOORES_PICK, "typed town"],
+        [{ miles: 5 }, ARGUS, "118 Argus Ln"],
+        [{ miles: 5 }, "100 Main St 28117", "ZIP only"],
+        [
+          {
+            miles: 5,
+            censusCity: "Mooresville",
+            censusState: "NC",
+            censusZip: "28115",
+          },
+          "100 Main Street",
+          "geocoder only",
+        ],
+      ]) {
+        const { text } = await groupQuote(options, pickup);
+        check(text, SORRY, lbl(`group quote, ${why}`));
+      }
+      const view = await renderBooking(script, { miles: 5 });
+      await fillValid(view, { trip: "group", pickup: ARGUS, hours: "3" });
+      await submitForm(view);
+      check(
+        resultText(view.document).includes(SORRY),
+        true,
+        lbl("group submit from Mooresville is refused"),
+      );
+      check(
+        view.document
+          .querySelector("#pickup-error")
+          .textContent.includes(SORRY),
+        true,
+        lbl("group pickup box shows it"),
+      );
+      check(bookingPosts(view.state).length, 0, lbl("group sends nothing"));
+      const served = await renderBooking(script, { miles: 19.9 });
+      await fillValid(served, { trip: "group", pickup: DENVER, hours: "3" });
+      await submitForm(served);
+      check(
+        sent(resultText(served.document)),
+        true,
+        lbl("a Denver group at 19.9 miles is still sent"),
+      );
+      // Groups have no town check (Nov 10): a group from Cornelius is not refused for its town; only Mooresville is out.
+      const cornelius = await renderBooking(script, { miles: 10 });
+      await fillValid(cornelius, {
+        trip: "group",
+        pickup: "10 Main St, Cornelius NC 28031",
+        hours: "3",
+      });
+      await submitForm(cornelius);
+      check(
+        sent(resultText(cornelius.document)),
+        true,
+        lbl("a Cornelius group is still sent (no town check for groups)"),
       );
     });
   },

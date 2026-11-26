@@ -1342,7 +1342,7 @@ describe("booking", () => {
         ["28687", "Statesville"],
       ];
 
-      // Donald, Nov 25, 2026: an airport ride from these towns gets the call-us text (Mooresville is still pending his answers).
+      // Donald, Nov 25, 2026: an airport ride from these towns gets the call-us text (Mooresville is out completely and keeps the flat refusal).
       const CALL_US =
         "We're sorry, you're a little out of our service area, but if you give us a call, we could probably help you.";
       const refusalFor = (town) =>
