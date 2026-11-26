@@ -1,5 +1,5 @@
-// Donald, Nov 25, 2026: every bar and party ride is inside a 15 road-mile radius around Two Trees, with Mooresville cut flat at
-// 8.34 road miles (the Harris Teeter light at Perth Rd). Set MELKN_SHOTS_DIR to save screenshots.
+// Donald, Nov 25, 2026: every bar and party ride is inside a 15 road-mile radius around Two Trees, and Mooresville is out completely
+// (9:50 PM: "Just take Mooresville out completely"), 118 Argus Ln (the old Harris Teeter allowance) included. Set MELKN_SHOTS_DIR to save screenshots.
 import {
   test,
   expect,
@@ -34,11 +34,17 @@ async function barQuote(page, { bar, pickup }) {
 
 async function shot(page, name) {
   await page.locator("#booking-quote").scrollIntoViewIfNeeded();
-  if (shots) await page.screenshot({ path: `${shots}/${name}.png` });
+  // The whole booking form, so the shot shows the typed address and the refusal together.
+  if (shots)
+    await page
+      .locator("form")
+      .filter({ has: page.locator("#booking-quote") })
+      .first()
+      .screenshot({ path: `${shots}/${name}.png` });
 }
 
-test.describe("15 mile radius and the Mooresville flat side", () => {
-  test("Mooresville inside 8.34 miles is quoted for Two Trees", async ({
+test.describe("15 mile radius, and Mooresville is out completely", () => {
+  test("Mooresville inside what used to be the 8.34 mile allowance is refused for Two Trees", async ({
     page,
   }) => {
     const state = await bookingMocks(page, { miles: 8.34 });
@@ -46,21 +52,88 @@ test.describe("15 mile radius and the Mooresville flat side", () => {
       bar: "two-trees",
       pickup: "10 Main St, Mooresville NC 28115",
     });
-    await expect(page.locator("#quote-details")).toContainText("Cash $25.00");
-    await shot(page, "reach-mooresville-inside-834");
+    await expect(page.locator("#quote-details")).toHaveText(FAR);
+    await shot(page, "mooresville-two-trees-refused");
+    await dayAndTime(page);
+    await request(page).click();
+    await expect(page.locator("#booking-success")).toContainText(FAR);
     expect(state.forms).toHaveLength(0);
   });
 
-  test("Mooresville past 8.34 miles is refused in the price box and on submit", async ({
+  test("a Mooresville bar ride is refused in the price box and on submit", async ({
     page,
   }) => {
-    const state = await bookingMocks(page, { miles: 8.4 });
+    const state = await bookingMocks(page, { miles: 5 });
     await barQuote(page, {
       bar: "bourbon-bobber",
       pickup: "10 Main St, Mooresville NC 28115",
     });
     await expect(page.locator("#quote-details")).toHaveText(SORRY);
-    await shot(page, "reach-mooresville-past-flat-side");
+    await shot(page, "mooresville-bar-refused");
+    await dayAndTime(page);
+    await request(page).click();
+    await expect(page.locator("#booking-success")).toContainText(SORRY);
+    expect(state.forms).toHaveLength(0);
+  });
+
+  test("118 Argus Ln, Mooresville (the old Harris Teeter allowance) is refused", async ({
+    page,
+  }) => {
+    const state = await bookingMocks(page, { miles: 8.3 });
+    await barQuote(page, {
+      bar: "bourbon-bobber",
+      pickup: "118 Argus Ln, Mooresville NC 28117",
+    });
+    await expect(page.locator("#quote-details")).toHaveText(SORRY);
+    await shot(page, "mooresville-argus-ln-refused");
+    await dayAndTime(page);
+    await request(page).click();
+    await expect(page.locator("#booking-success")).toContainText(SORRY);
+    expect(state.forms).toHaveLength(0);
+  });
+
+  test("a party from, or to, a Mooresville address is refused", async ({
+    page,
+  }) => {
+    const state = await bookingMocks(page, { miles: 5 });
+    await page.goto("/#booking");
+    await fillAirport(page, {});
+    await page
+      .getByRole("combobox", { name: "Trip type" })
+      .selectOption("local");
+    await page.locator("#local-kind").selectOption("party");
+    await page
+      .locator("#booking-pickup")
+      .fill("123 Main Street, Denver NC 28037");
+    await page.locator("#party-address").fill("118 Argus Ln, Mooresville NC");
+    await page.locator("#party-address").blur();
+    await expect(page.locator("#quote-details")).toHaveText(SORRY);
+    await shot(page, "mooresville-party-address-refused");
+    await page
+      .locator("#booking-pickup")
+      .fill("118 Argus Ln, Mooresville NC 28117");
+    await page.locator("#party-address").fill("200 Oak St, Sherrills Ford NC");
+    await page.locator("#party-address").blur();
+    await expect(page.locator("#quote-details")).toHaveText(SORRY);
+    expect(state.forms).toHaveLength(0);
+  });
+
+  test("a Mooresville group pickup is refused, and a Mooresville airport ride too", async ({
+    page,
+  }) => {
+    const state = await bookingMocks(page, { miles: 5 });
+    await page.goto("/#booking");
+    await fillAirport(page, {});
+    await page
+      .getByRole("combobox", { name: "Trip type" })
+      .selectOption("group");
+    await page
+      .locator("#booking-pickup")
+      .fill("118 Argus Ln, Mooresville NC 28117");
+    await expect(page.locator("#quote-details")).toHaveText(SORRY);
+    await shot(page, "mooresville-group-refused");
+    await page.reload();
+    await fillAirport(page, { pickup: "118 Argus Ln, Mooresville NC 28117" });
     await dayAndTime(page);
     await request(page).click();
     await expect(page.locator("#booking-success")).toContainText(SORRY);
@@ -109,6 +182,73 @@ test.describe("15 mile radius and the Mooresville flat side", () => {
     await page.locator("#party-address").blur();
     await expect(page.locator("#quote-details")).toHaveText(FAR);
     await shot(page, "reach-party-past-15-miles");
+    expect(state.forms).toHaveLength(0);
+  });
+
+  test("Blue Parrot, Toucan's, and Vitale Lakeside are off the bookable bar list", async ({
+    page,
+  }) => {
+    await bookingMocks(page, { miles: 6 });
+    await page.goto("/#booking");
+    await page
+      .getByRole("combobox", { name: "Trip type" })
+      .selectOption("local");
+    const gone = ["Blue Parrot", "Toucan's", "Vitale Lakeside"];
+    const list = page.locator("#local-bar-list");
+    await expect(list).toBeVisible();
+    const labels = await list.locator("li").allTextContents();
+    for (const name of gone) {
+      expect(labels, name + " must not be on the visible list").not.toContain(
+        name,
+      );
+    }
+    expect(labels).toEqual([
+      "Two Trees Bar and Grill",
+      "Bourbon & Bobbers",
+      "Joey's (Hwy 150)",
+      "Joey's (Natalie Commons)",
+      "16 Prime Steak and Seafood",
+      "Lake Norman Brewery",
+      "Latitudes",
+      "Lobster Dogs",
+      "Safari Miles",
+      "Royal Bliss",
+      "Sports Page Food and Spirits",
+    ]);
+    await page.locator("#local-kind").selectOption("bar");
+    const options = await page.locator("#bar-choice option").allTextContents();
+    for (const name of gone) {
+      expect(options, name + " must not be in the dropdown").not.toContain(
+        name,
+      );
+    }
+    const block = page.locator("#local-intro").locator("xpath=..");
+    await block.scrollIntoViewIfNeeded();
+    if (shots) {
+      await block.screenshot({
+        path: `${shots}/mooresville-bars-off-the-list.png`,
+      });
+    }
+  });
+
+  test("a Mooresville private airfield is refused when the home is in Denver", async ({
+    page,
+  }) => {
+    const state = await bookingMocks(page, { miles: 12 });
+    await page.goto("/#booking");
+    await fillAirport(page, { pickup: "123 Main Street, Denver NC 28037" });
+    await page
+      .getByRole("combobox", { name: "Airport", exact: true })
+      .selectOption("PRIVATE");
+    await page.locator("#airfield-name").fill("Smith Field");
+    await page
+      .locator("#airfield-address")
+      .fill("100 Runway Rd, Mooresville NC 28117");
+    await expect(page.locator("#quote-details")).toHaveText(SORRY);
+    await shot(page, "mooresville-private-airfield-refused");
+    await dayAndTime(page);
+    await request(page).click();
+    await expect(page.locator("#booking-success")).toContainText(SORRY);
     expect(state.forms).toHaveLength(0);
   });
 });

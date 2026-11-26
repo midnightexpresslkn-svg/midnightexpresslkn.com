@@ -1,6 +1,6 @@
 // Donald, Nov 25, 2026: an airport or (non-Two-Trees) bar ride from Cornelius, Davidson, Huntersville, Troutman or Statesville
 // gets the pop-up "We're sorry, you're a little out of our service area, but if you give us a call, we could probably help you."
-// Mooresville, parties, Two Trees and every other refusal keep their existing wording (Donald's Mooresville / Two Trees answers are pending).
+// Mooresville (out completely, Nov 25, 2026 9:50 PM), parties, Two Trees and every other refusal keep their existing wording.
 import { afterEach, describe, it } from "vitest";
 import { check } from "./helpers/failure.js";
 import {
@@ -244,15 +244,15 @@ describe.each(scripts)("call-us pop-up %s", (script) => {
     });
     await submitForm(tt);
     check(popup(tt.document), null, lbl("Two Trees has no pop-up"));
-    // 8.35 road miles is just past Donald's flat Mooresville side (8.34), so the old wording stays.
-    const moores = await renderBooking(script, { miles: 8.35 });
+    // Mooresville is out completely (Donald, Nov 25, 2026): the old flat wording, no pop-up, at any distance.
+    const moores = await renderBooking(script, { miles: 3 });
     check(
       await localQuote(moores, {
         bar: "bourbon-bobber",
         pickup: "10 Main St, Mooresville NC 28115",
       }),
       SORRY,
-      lbl("Mooresville bar quote past the flat side"),
+      lbl("Mooresville bar quote is refused at any distance"),
     );
     const party = await renderBooking(script, { miles: 8 });
     check(
