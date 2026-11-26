@@ -646,5 +646,114 @@ describe.each(scripts)(
         lbl("a Cornelius group is still sent (no town check for groups)"),
       );
     });
+
+    it("refuses every Mooresville listed bar at quote and submit, from a served pickup, and a Mooresville private airfield too", async () => {
+      for (const id of ["blue-parrot", "toucans", "vitale-lakeside"]) {
+        const view = await renderBooking(script, { miles: 6 });
+        check(
+          await quote(view, { bar: id, pickup: DENVER }),
+          SORRY,
+          lbl(id + " quote from Denver is the flat refusal"),
+        );
+        const sentView = await renderBooking(script, { miles: 6 });
+        await fillValid(sentView, {
+          trip: "local",
+          bar: id,
+          pickup: DENVER,
+          notes: "",
+        });
+        await submitForm(sentView);
+        check(
+          resultText(sentView.document).includes(SORRY),
+          true,
+          lbl(id + " submit is refused"),
+        );
+        check(
+          bookingPosts(sentView.state).length,
+          0,
+          lbl(id + " sends nothing"),
+        );
+      }
+      const field = await renderBooking(script, { miles: 12 });
+      chooseTrip(field.document, "airport");
+      field.document.querySelector("#airport-choice").value = "PRIVATE";
+      field.window.jQuery("#airport-choice").trigger("change");
+      field.document.querySelector("#airfield-name").value = "Smith Field";
+      field.document.querySelector("#airfield-address").value =
+        "100 Runway Rd, Mooresville NC 28117";
+      field.document.querySelector("#booking-pickup").value = DENVER;
+      field.window.jQuery("#booking-pickup").trigger("blur");
+      check(
+        await waitQuote(field),
+        SORRY,
+        lbl("Mooresville private airfield quote"),
+      );
+      await fillValid(field, {
+        pickup: DENVER,
+        airportId: "PRIVATE",
+        airfieldName: "Smith Field",
+        airfieldAddress: "100 Runway Rd, Mooresville NC 28117",
+      });
+      await submitForm(field);
+      check(
+        resultText(field.document).includes(SORRY),
+        true,
+        lbl("Mooresville private airfield submit is refused"),
+      );
+      check(bookingPosts(field.state).length, 0, lbl("airfield sends nothing"));
+      const airpark = await renderBooking(script, { miles: 8 });
+      await fillValid(airpark, {
+        pickup: "Lake Norman Airpark, Mooresville NC",
+        destination: DENVER,
+      });
+      await submitForm(airpark);
+      check(
+        resultText(airpark.document).includes(SORRY),
+        true,
+        lbl("Lake Norman Airpark in Mooresville is refused"),
+      );
+      check(
+        bookingPosts(airpark.state).length,
+        0,
+        lbl("airpark sends nothing"),
+      );
+      // No town in the typed text: the geocoder's city decides, for a pickup and for a private airfield.
+      const geoPick = await renderBooking(script, {
+        miles: 12,
+        censusCity: "Mooresville",
+        censusState: "NC",
+        censusZip: "28117",
+      });
+      chooseTrip(geoPick.document, "airport");
+      geoPick.document.querySelector("#airport-choice").value = "CLT";
+      geoPick.window.jQuery("#airport-choice").trigger("change");
+      geoPick.document.querySelector("#booking-pickup").value =
+        "100 Mystery Rd";
+      geoPick.window.jQuery("#booking-pickup").trigger("blur");
+      check(
+        await waitQuote(geoPick),
+        SORRY,
+        lbl("geocoded Mooresville airport pickup"),
+      );
+      const geoField = await renderBooking(script, {
+        miles: 12,
+        censusCity: "Mooresville",
+        censusState: "NC",
+        censusZip: "28117",
+      });
+      chooseTrip(geoField.document, "airport");
+      geoField.document.querySelector("#airport-choice").value = "PRIVATE";
+      geoField.window.jQuery("#airport-choice").trigger("change");
+      geoField.document.querySelector("#airfield-name").value = "Smith Field";
+      geoField.document.querySelector("#airfield-address").value =
+        "100 Runway Rd";
+      geoField.document.querySelector("#booking-pickup").value = DENVER;
+      geoField.window.jQuery("#booking-pickup").trigger("blur");
+      check(
+        await waitQuote(geoField),
+        SORRY,
+        lbl("geocoded Mooresville private airfield quote"),
+      );
+    });
   },
 );

@@ -150,9 +150,19 @@
     // ride (airport, bar, party, or group), as a pickup or as a destination or party address, so it is refused like any unserved town.
     var LOCAL_MAX_MILES = 15;
 
+    // Town or ZIP only (not classifyEnd): a private airfield in Mooresville still names the town, and classifyEnd would
+    // treat the airfield as an airport end and skip it. Donald, Nov 25, 2026 10:25 PM: Mooresville is out completely, listed
+    // bars and private airfields included.
     function isMooresvilleEnd(text, geo) {
-        var end = globalThis.MidnightServiceArea.classifyEnd(text, geo);
-        return end.status === 'outside' && String(end.town).toLowerCase() === 'mooresville';
+        var api = globalThis.MidnightServiceArea;
+        if (!api || typeof api.classifyAddress !== 'function') return false;
+        var fromText = api.classifyAddress(text);
+        if (fromText.status === 'outside' && String(fromText.town).toLowerCase() === 'mooresville') return true;
+        if (fromText.status === 'unclear' && geo) {
+            var fromGeo = api.classifyAddress([geo.city, geo.state, geo.zip].filter(Boolean).join(' '));
+            return fromGeo.status === 'outside' && String(fromGeo.town).toLowerCase() === 'mooresville';
+        }
+        return false;
     }
 
     // '' = inside; 'far' = past 15 road miles.
@@ -313,6 +323,12 @@
         // A group pickup has no town check (Nov 10), except Mooresville, which is out completely (Nov 25, 9:50 PM).
         if (groupVenue && decision.code === 'outside' && !isMooresvilleEnd(pickup, pickupGeo)) {
             decision = { ok: true, code: 'ok', message: '', pickupGeo: pickupGeo, destinationGeo: destinationGeo };
+        }
+        // Listed bars and private airfields skip the town check (they are treated as a fixed stop). Mooresville is the
+        // exception: refuse it here so a Blue Parrot / Toucan's / Vitale Lakeside ride, or a Mooresville airfield, is
+        // not booked (Donald, Nov 25, 2026 10:25 PM).
+        if (isMooresvilleEnd(pickup, pickupGeo) || isMooresvilleEnd(destination, destinationGeo)) {
+            decision = { ok: false, code: 'outside', message: OUT_OF_AREA_MESSAGE, pickupGeo: pickupGeo, destinationGeo: destinationGeo };
         }
         decision.pickupGeo = pickupGeo;
         decision.destinationGeo = destinationGeo;
@@ -3260,14 +3276,15 @@
         if(mode==='bar'&&barDenied()){hideMap();show(esc(rides.LOCAL_DENIAL));return;}
         if(mode!=='bar'&&mode!=='party'){hideMap();show('Choose a bar, restaurant, or party to see your price.');return;}
         var stop=null;
+        var api=globalThis.MidnightServiceArea;
         if(mode==='bar'){
             stop=rides.listedBar($('#bar-choice').val());
             if(!stop){hideMap();show('Choose a bar or restaurant to see your price.');return;}
+            if(rides.isMooresvilleEnd(stop.address,null)){hideMap();show(esc("Sorry, we don't service that area."));return;}
         }
         var party=$.trim($('#party-address').val()||'');
         if(mode==='party'&&party.length<6){hideMap();show('Enter your address and the party address to see your price.');return;}
         if(pick.length<6||!/\d/.test(pick)){hideMap();show('Enter your address to see your price.');return;}
-        var api=globalThis.MidnightServiceArea;
         var destText=mode==='bar'?stop.address:party;
         var prelim=api?api.evaluateTrip({pickup:pick,destination:destText,destinationIsAirfield:mode==='bar'}):{code:'unclear'};
         if(prelim.code==='outside'){hideMap();show(esc(rides.callUsFor('local',mode,stop,pick,null)?rides.CALL_US_MESSAGE:(mode==='bar'&&stop&&stop.blockUnservedTowns?rides.LOCAL_DENIAL:api.OUT_OF_AREA_MESSAGE)));return;}
@@ -3332,6 +3349,8 @@
         var api=globalThis.MidnightServiceArea;
         var forceAirfield=api&&api.isPrivateAirfield&&api.isPrivateAirfield(dest);
         var airfieldForQuote=privateRide||!!(forceAirfield&&!airport);
+        var rides=globalThis.MidnightRides;
+        if(api&&rides&&(rides.isMooresvilleEnd(pick,null)||rides.isMooresvilleEnd(dest,null))){hideMap();show(esc(api.OUT_OF_AREA_MESSAGE));return;}
         var prelim={code:'unclear'};
         if(api){
             prelim=api.evaluateTrip({
@@ -3348,6 +3367,7 @@
         geocode(pick).then(function(g){
             if(my!==seq)return;
             pickGeo={city:g.city||'',state:g.state||'',zip:g.zip||''};
+            if(rides.isMooresvilleEnd(pick,pickGeo))throw 'out';
             var decision=api.evaluateTrip({
                 pickup:pick,
                 destination:dest,
@@ -3359,6 +3379,8 @@
             if(!inArea(g))throw 'area';
             if(!privateRide)return driveMiles(g,airport);
             return geocode(dest).then(function(field){
+                var destGeo={city:field.city,state:field.state,zip:field.zip};
+                if(rides.isMooresvilleEnd(dest,destGeo))throw 'out';
                 return driveMiles(g,{
                     id:'airfield:'+field.lat.toFixed(5)+','+field.lon.toFixed(5),
                     lat:field.lat,

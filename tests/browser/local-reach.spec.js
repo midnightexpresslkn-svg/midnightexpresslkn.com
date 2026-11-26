@@ -184,4 +184,41 @@ test.describe("15 mile radius, and Mooresville is out completely", () => {
     await shot(page, "reach-party-past-15-miles");
     expect(state.forms).toHaveLength(0);
   });
+
+  test("a listed Mooresville bar is refused at quote time from a served pickup", async ({
+    page,
+  }) => {
+    const state = await bookingMocks(page, { miles: 6 });
+    await barQuote(page, {
+      bar: "blue-parrot",
+      pickup: "123 Main Street, Denver NC 28037",
+    });
+    await expect(page.locator("#quote-details")).toHaveText(SORRY);
+    await shot(page, "mooresville-listed-bar-refused");
+    await dayAndTime(page);
+    await request(page).click();
+    await expect(page.locator("#booking-success")).toContainText(SORRY);
+    expect(state.forms).toHaveLength(0);
+  });
+
+  test("a Mooresville private airfield is refused when the home is in Denver", async ({
+    page,
+  }) => {
+    const state = await bookingMocks(page, { miles: 12 });
+    await page.goto("/#booking");
+    await fillAirport(page, { pickup: "123 Main Street, Denver NC 28037" });
+    await page
+      .getByRole("combobox", { name: "Airport", exact: true })
+      .selectOption("PRIVATE");
+    await page.locator("#airfield-name").fill("Smith Field");
+    await page
+      .locator("#airfield-address")
+      .fill("100 Runway Rd, Mooresville NC 28117");
+    await expect(page.locator("#quote-details")).toHaveText(SORRY);
+    await shot(page, "mooresville-private-airfield-refused");
+    await dayAndTime(page);
+    await request(page).click();
+    await expect(page.locator("#booking-success")).toContainText(SORRY);
+    expect(state.forms).toHaveLength(0);
+  });
 });

@@ -621,8 +621,8 @@ describe.each(scripts)("local bars and group %s", (script) => {
   it("prices Vitale Lakeside and Sports Page, and maps the stale Sports Bar and Grill id to Two Trees", async () => {
     const view = await renderBooking(script, { miles: 8 });
     const text = await priceBar(view, 8, { bar: "vitale-lakeside" });
-    check(text.includes("Cash $25.00 · Card $25.75"), true, {
-      label: "Vitale Lakeside is priced from its stored address",
+    check(text, "Sorry, we don't service that area.", {
+      label: "Vitale Lakeside (a Mooresville bar) is refused at quote time",
       actual: text,
       source: "js/booking.js",
       loaded: script,
@@ -664,9 +664,9 @@ describe.each(scripts)("local bars and group %s", (script) => {
   it("prices a listed Mooresville bar and a geocoded Royal Bliss address", async () => {
     const parrot = await renderBooking(script, { miles: 6 });
     const parrotText = await priceBar(parrot, 6, { bar: "blue-parrot" });
-    check(parrotText.includes("Cash $20.00 · Card $20.60"), true, {
+    check(parrotText, "Sorry, we don't service that area.", {
       label:
-        "Blue Parrot is priced even though Mooresville is outside the town list",
+        "Blue Parrot (a Mooresville bar) is refused at quote time, even from a served pickup",
       actual: parrotText,
       source: "js/booking.js",
       loaded: script,
@@ -1740,21 +1740,21 @@ describe.each(scripts)("local bars and group %s", (script) => {
     const bare = await renderBooking(script, { miles: 4 });
     await fillValid(bare, { trip: "local", bar: "vitale-lakeside" });
     await submitForm(bare);
-    const vitale = JSON.parse(
-      bookingPosts(bare.state).find((request) =>
-        hostIs(request.url, "script.google.com"),
-      ).body,
-    );
     check(
-      vitale.destinationAddress,
-      "1459 River Highway, Mooresville, NC 28117",
+      resultText(bare.document).includes("Sorry, we don't service that area."),
+      true,
       {
-        label: "the request uses Vitale Lakeside's stored street address",
-        actual: vitale.destinationAddress,
+        label: "a Mooresville listed bar is refused on submit, nothing is sent",
+        actual: resultText(bare.document),
         source: "js/booking.js",
         loaded: script,
       },
     );
+    check(bookingPosts(bare.state).length, 0, {
+      label: "a Mooresville listed bar sends no booking",
+      source: "js/booking.js",
+      loaded: script,
+    });
     const stale = await renderBooking(script, {
       miles: 4,
       url: "/?type=local&bar=sports-bar-grill",

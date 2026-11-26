@@ -1638,7 +1638,7 @@ describe("booking", () => {
         refusal(colorado, "geocoded Denver CO");
       });
 
-      it("accepts a private airfield in Mooresville when the other end is Denver", async () => {
+      it("refuses a private airfield in Mooresville even when the other end is Denver", async () => {
         const view = await renderBooking(script);
         await fillValid(view, {
           name: "TEST, DO NOT BOOK",
@@ -1647,8 +1647,9 @@ describe("booking", () => {
           airport: "Yes",
         });
         await submitForm(view);
-        check(resultText(view.document).includes("Request received"), true, {
-          label: "Lake Norman Airpark to Denver is accepted",
+        refusal(view, "Lake Norman Airpark in Mooresville");
+        check(bookingPosts(view.state).length, 0, {
+          label: "a Mooresville airfield sends no booking",
           source: SOURCE.serviceArea,
           loaded: script,
         });
