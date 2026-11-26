@@ -352,6 +352,12 @@
         "concord passenger terminal",
         "concord regional passenger",
         "concord padgett regional",
+        // Donald, Nov 26, 2026: "Concord Regional" and "Concord airport" are Concord-Padgett Regional (JQF), the Allegiant terminal.
+        "kjqf",
+        "jqf",
+        "concord padgett",
+        "concord regional",
+        "concord airport",
       ],
     },
     {
@@ -391,19 +397,12 @@
     {
       id: "JQF",
       kind: "private",
-      name: "Concord Regional Airport",
+      name: "Concord private jets",
       menu: "Concord private jets",
-      typed: "Concord Regional",
+      typed: "Concord private jets",
       lat: 35.3856,
       lon: -80.71246,
-      aliases: [
-        "kjqf",
-        "jqf",
-        "concord padgett",
-        "concord regional",
-        "concord airport",
-        "9000 aviation",
-      ],
+      aliases: ["9000 aviation", "concord private jets"],
     },
     {
       id: "EQY",
@@ -473,7 +472,7 @@
     var generic = [];
     for (var j = 0; j < found.length; j++) {
       var id = found[j].id;
-      if (id === "CLT" || id === "JQF") generic.push(found[j]);
+      if (id === "CLT" || id === "JQF-PAX") generic.push(found[j]);
       else specific.push(found[j]);
     }
     if (specific.length > 1) return null;
