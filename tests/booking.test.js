@@ -414,8 +414,13 @@ describe("booking", () => {
       it.each([
         ["airport", "Charlotte Douglas Airport (CLT)"],
         ["the airport", "Charlotte Douglas Airport (CLT)"],
-        ["Concord Regional", "Concord Regional Airport"],
-        ["JQF", "Concord Regional Airport"],
+        ["Concord Regional", "Concord Regional passenger terminal (Allegiant)"],
+        [
+          "Concord Regional Airport",
+          "Concord Regional passenger terminal (Allegiant)",
+        ],
+        ["JQF", "Concord Regional passenger terminal (Allegiant)"],
+        ["9000 Aviation Blvd", "Concord private jets"],
       ])("prices %s as %s", async (destination, label) => {
         const view = await renderBooking(script, { miles: 40 });
         await showQuote(view, {
@@ -478,11 +483,22 @@ describe("booking", () => {
 
       it("prices each known airfield from its own door", async () => {
         const view = await renderBooking(script, { miles: 12 });
-        const airports = view.window.MidnightServiceArea.AIRPORTS;
+        const area = view.window.MidnightServiceArea;
+        const airports = area.AIRPORTS;
         for (const airport of airports) {
+          // The private-jets typed text is the original "Concord Regional", which now looks up as Concord-Padgett Regional
+          // (Donald, Nov 26, 2026). Use a unique alias when the typed text belongs to a different airport.
+          const viaTyped = area.lookupAirport(airport.typed);
+          const destination =
+            viaTyped && viaTyped.id !== airport.id
+              ? airport.aliases.find(
+                  (alias) =>
+                    (area.lookupAirport(alias) || {}).id === airport.id,
+                )
+              : airport.typed;
           await showQuote(view, {
             pickup: "123 Main Street, Denver NC 28037",
-            destination: airport.typed,
+            destination,
           });
           const routes = view.state.requests.filter(
             (request) => hostnameOf(request.url) === "router.project-osrm.org",
