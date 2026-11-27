@@ -60,7 +60,7 @@ test.describe("typed pickup time at phone width", () => {
     const sent = formText(state.forms[0]);
     expect(sent).toMatch(/\d{2}\/\d{2}\/\d{4} 19:30:00/);
     await expect.poll(() => state.calendars.length).toBe(1);
-    expect(decodeURIComponent(state.calendars[0])).toContain("19:30:00");
+    expect(JSON.parse(state.calendars[0]).pickupTime).toBe("19:30:00");
   });
 
   test("will not send without AM or PM, and names the problem", async ({
