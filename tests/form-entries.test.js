@@ -423,9 +423,10 @@ describe("form entries", () => {
           groupEvent: "No",
           durationMinutes: 120,
           contactAddress: "123 Main Street, Denver NC 28037",
+          quoteShown: "No",
         },
         {
-          label: "calendar JSON is unchanged",
+          label: "calendar JSON is unchanged apart from the quote flag",
           actual: calendar.body,
           source: "js/booking.js",
           loaded: script,
@@ -670,6 +671,7 @@ describe("form entries", () => {
           groupEvent: "No",
           durationMinutes: 120,
           contactAddress: "123 Main Street, Denver NC 28037",
+          quoteShown: "No",
         },
         {
           label: "round-trip calendar JSON is unchanged",
@@ -746,6 +748,7 @@ describe("form entries", () => {
           damageResponsibility: "Yes",
           hoursEntered: "3",
           hoursBilled: "3",
+          quoteShown: "No",
         },
         {
           label: "group calendar JSON is unchanged",
@@ -1240,6 +1243,7 @@ describe("form entries", () => {
           "pickupAddress",
           "pickupDate",
           "pickupTime",
+          "quoteShown",
           "returnDate",
           "returnTime",
           "roundTrip",

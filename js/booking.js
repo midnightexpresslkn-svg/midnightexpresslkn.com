@@ -951,14 +951,40 @@
      * no-cors + fire-and-forget so a calendar failure never blocks the customer request.
      * Best-effort calendar mirror after Google Form success (no-cors).
      */
-    function postBookingToCalendar(formData) {
+    function postBookingToCalendar(formData, quote) {
         return decideServiceArea(formData.pickupAddress, formData.destinationAddress).then(function(decision) {
             if (!decision.ok) return Promise.reject(serviceAreaError(decision));
-            return postCalendarPayload(formData);
+            return postCalendarPayload(formData, quote);
         });
     }
 
-    function postCalendarPayload(formData) {
+    /**
+     * Plain text of what the quote box showed: line breaks become "; " and the
+     * few entities the quote box writes are turned back into the characters the customer read.
+     */
+    function plainQuoteText(html) {
+        var entities = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'", '&middot;': '\u00b7' };
+        return String(html)
+            .replace(/<br\s*\/?>/gi, '; ')
+            .replace(/&(amp|lt|gt|quot|#39|middot);/g, function(found) { return entities[found]; })
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    /**
+     * Donald (Nov 19, 2026): the calendar summary must show the exact price this customer saw, cash and card,
+     * so he never charges something different. This copies the quote on screen when Request Booking was
+     * pressed (the same object the confirmation prints). Nothing is recalculated here.
+     */
+    function quoteForCalendar(quote) {
+        if (!quote) return { quoteShown: 'No' };
+        var detail = [plainQuoteText(quote.label)];
+        if (quote.legs) detail.push(plainQuoteText(quote.legs));
+        if (quote.deposit) detail.push(plainQuoteText(String(quote.deposit).split('<br>')[0]));
+        return { quoteShown: 'Yes', quoteCash: quote.cash, quoteCard: quote.card, quoteDetail: detail.join('. ') };
+    }
+
+    function postCalendarPayload(formData, quote) {
         var payload = {
             name: formData.name,
             phone: formData.phone,
@@ -992,6 +1018,7 @@
             payload.hoursEntered = formData.hoursEntered;
             payload.hoursBilled = formData.hoursBilled;
         }
+        $.extend(payload, quoteForCalendar(quote));
         return fetch(NEW_SCRIPT_URL, {
             method: 'POST',
             mode: 'no-cors',
@@ -2729,7 +2756,7 @@
 
                 // Best-effort calendar mirror to Apps Script
                 try {
-                    await postBookingToCalendar(formData);
+                    await postBookingToCalendar(formData, quoteAtSubmit);
                 } catch (calendarErr) {
                     console.warn('Calendar mirror error ignored:', calendarErr);
                 }
