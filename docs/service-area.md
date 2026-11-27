@@ -28,6 +28,17 @@ Every bar ride and every party is measured in **road miles from Two Trees** (Two
 
 A group event pickup may be up to **20 road miles** from Two Trees (it was 15), across the lake included. Farther gets "out of our service area."
 
+
+## Just a Ride (Nov 27, 2026)
+
+A **Ride** (point-to-point, not a bar or a party) uses a **30 road mile** radius from Two Trees. Both the pickup and the drop-off must be inside that radius. Past 30 miles gets "out of our service area."
+
+Charlotte is allowed on this form only, as a pickup or a drop-off, still inside the 30 mile radius. Bar, party, airport, and group rules for Charlotte are unchanged: Charlotte stays refused there.
+
+Mooresville, Cornelius, Davidson, Huntersville, Troutman, and Statesville stay out. They are refused with "Sorry, we don't service that area." There is no call-us pop-up on a Ride.
+
+Price: $3 a mile with a $15 minimum, rounded the same way as a bar or party fare (nearest $5, card is 3% over cash), until that $3-a-mile fare reaches the airport minimum ($65). From that mileage on (65 / 3 miles), the Ride uses the airport fare function exactly: max($65, $2.63 a mile), then the same rounding and card fee. The fare never goes down as miles go up.
+
 ## How an address is decided
 
 The checker lives in `js/service-area.js`. The booking form calls it before it posts to Google Forms and before it posts to the calendar Apps Script.

@@ -244,14 +244,14 @@ describe.each(scripts)("local bars and group %s", (script) => {
       view.document.querySelector("#local-kind-row").nextElementSibling.id,
       "local-intro",
       {
-        label: "the intro line sits under Bar, restaurant, or party",
+        label: "the intro line sits under Bar, restaurant, party, or ride",
         source: "js/booking.js",
         loaded: script,
       },
     );
     check(
       view.document.querySelector("#local-intro").textContent,
-      "Transportation to local bars, restaurants, and private parties, plus hourly group events.",
+      "Transportation to local bars, restaurants, private parties, and point-to-point rides, plus hourly group events.",
       {
         label: "the local intro uses Donald's line",
         source: "js/booking.js",
@@ -1772,7 +1772,7 @@ describe.each(scripts)("local bars and group %s", (script) => {
     await submitForm(neither);
     check(
       resultText(neither.document).includes(
-        "Please choose a bar, restaurant, or party",
+        "Please choose a bar, restaurant, party, or ride",
       ),
       true,
       {
@@ -2084,7 +2084,9 @@ describe.each(scripts)("local bars and group %s", (script) => {
     const view = await renderBooking(script);
     chooseTrip(view.document, "local");
     check(
-      (await waitQuote(view)).includes("Choose a bar, restaurant, or party"),
+      (await waitQuote(view)).includes(
+        "Choose a bar, restaurant, party, or ride",
+      ),
       true,
       {
         label: "local form waits for Bar or Party",
@@ -2174,7 +2176,9 @@ describe.each(scripts)("local bars and group %s", (script) => {
     failed.document.querySelector("#trip-type").value = "local";
     await new Promise((resolve) => setTimeout(resolve, 40));
     check(
-      quoteText(failed.document).includes("Choose a bar, restaurant, or party"),
+      quoteText(failed.document).includes(
+        "Choose a bar, restaurant, party, or ride",
+      ),
       true,
       {
         label: "a failed airport fare becomes the local quote",
@@ -2462,7 +2466,7 @@ const GROUP_DETAILS =
   "Please tell us about your group event (what it is, how many people, and anything we should know).";
 
 describe.each(scripts)("group description %s", (script) => {
-  it("blocks an empty group or airport note and keeps a bar note optional", async () => {
+  it("blocks an empty group or party note and keeps airport, bar, and Ride notes optional", async () => {
     const empty = await renderBooking(script, { miles: 4 });
     await fillValid(empty, { trip: "group", notes: "" });
     check(
@@ -2539,23 +2543,23 @@ describe.each(scripts)("group description %s", (script) => {
 
     const airport = await renderBooking(script, { miles: 10 });
     await fillValid(airport, { trip: "airport", notes: " \n " });
-    check(airport.document.querySelector("#booking-notes").required, true, {
-      label: "an airport note is required (Donald, Nov 16 2026)",
+    check(airport.document.querySelector("#booking-notes").required, false, {
+      label: "an airport note is optional (Donald, Nov 27 2026)",
       source: "js/booking.js",
       loaded: script,
     });
     check(
       airport.document.querySelector("#notes-label").textContent.trim(),
-      "Special Notes *",
+      "Special Notes",
       {
-        label: "an airport note is marked required",
+        label: "an airport note is not marked required",
         source: "js/booking.js",
         loaded: script,
       },
     );
     await submitForm(airport);
-    check(bookingPosts(airport.state).length, 0, {
-      label: "an airport ride with a blank note sends nothing",
+    check(resultText(airport.document).includes("Request received"), true, {
+      label: "an airport ride can be requested with no description",
       actual: resultText(airport.document),
       source: "js/booking.js",
       loaded: script,
@@ -2568,6 +2572,15 @@ describe.each(scripts)("group description %s", (script) => {
       source: "js/booking.js",
       loaded: script,
     });
+    check(
+      bar.document.querySelector("#notes-label").textContent.trim(),
+      "Special Notes",
+      {
+        label: "a bar note is not marked required",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
     await submitForm(bar);
     check(resultText(bar.document).includes("Request received"), true, {
       label: "a bar ride can be requested with no description",
@@ -2576,12 +2589,80 @@ describe.each(scripts)("group description %s", (script) => {
       loaded: script,
     });
 
+    const ride = await renderBooking(script, { miles: 10 });
+    await fillValid(ride, {
+      trip: "local",
+      localKind: "ride",
+      notes: "",
+      destination: "200 Oak St, Sherrills Ford NC",
+    });
+    check(ride.document.querySelector("#booking-notes").required, false, {
+      label: "a Ride note is optional",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    check(
+      ride.document.querySelector("#notes-label").textContent.trim(),
+      "Special Notes",
+      {
+        label: "a Ride note is not marked required",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    await submitForm(ride);
+    check(resultText(ride.document).includes("Request received"), true, {
+      label: "a Ride can be requested with no description",
+      actual: resultText(ride.document),
+      source: "js/booking.js",
+      loaded: script,
+    });
+
     const party = await renderBooking(script, { miles: 4 });
     await fillValid(party, { trip: "local", localKind: "party", notes: "" });
+    check(party.document.querySelector("#booking-notes").required, true, {
+      label: "a party note is required (Donald, Nov 27 2026)",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    check(
+      party.document.querySelector("#notes-label").textContent.trim(),
+      "Special Notes *",
+      {
+        label: "a party note is marked required",
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
     await submitForm(party);
-    check(resultText(party.document).includes("Request received"), true, {
-      label: "a party ride can be requested with no description",
-      actual: resultText(party.document),
+    check(
+      resultText(party.document).includes(
+        "Please tell us about the party (what it is, and anything we should know).",
+      ),
+      true,
+      {
+        label: "an empty party description is blocked",
+        actual: resultText(party.document),
+        source: "js/booking.js",
+        loaded: script,
+      },
+    );
+    check(bookingPosts(party.state).length, 0, {
+      label: "an empty party description sends nothing",
+      source: "js/booking.js",
+      loaded: script,
+    });
+
+    const partyTold = await renderBooking(script, { miles: 4 });
+    await fillValid(partyTold, {
+      trip: "local",
+      localKind: "party",
+      notes: "birthday at the house",
+    });
+    await submitForm(partyTold);
+    check(resultText(partyTold.document).includes("Request received"), true, {
+      label: "a party description lets the request through",
+      actual: resultText(partyTold.document),
       source: "js/booking.js",
       loaded: script,
     });
@@ -2590,24 +2671,16 @@ describe.each(scripts)("group description %s", (script) => {
     await fillValid(field, { trip: "airport", notes: "" });
     choosePrivate(field, "Smith Field", "100 Runway Rd, Charlotte NC 28202");
     field.document.querySelector("#booking-notes").value = "";
-    await submitForm(field);
-    check(bookingPosts(field.state).length, 0, {
-      label: "a private airfield ride also needs a note",
-      actual: resultText(field.document),
-      source: "js/booking.js",
-      loaded: script,
-    });
-    check(field.document.querySelector("#booking-notes").required, true, {
-      label: "a private airfield note is required like any airport ride",
-      source: "js/booking.js",
-      loaded: script,
-    });
-    field.document.querySelector("#booking-notes").value = "Meet at the FBO";
     field.document.querySelector("#booking-flight").value = "N123AB";
     await submitForm(field);
     check(resultText(field.document).includes("Request received"), true, {
-      label: "a private airfield accepts a tail number and a note",
+      label: "a private airfield accepts a tail number with no description",
       actual: resultText(field.document),
+      source: "js/booking.js",
+      loaded: script,
+    });
+    check(field.document.querySelector("#booking-notes").required, false, {
+      label: "a private airfield note is optional like any airport ride",
       source: "js/booking.js",
       loaded: script,
     });
