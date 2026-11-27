@@ -1,6 +1,5 @@
 // Donald (Nov 27, 2026): Special Notes is optional on airport, bar, and Just a ride.
 // Party (Special Notes *) and group (Trip Description *) stay required.
-import { mkdirSync } from "node:fs";
 import {
   test,
   expect,
@@ -15,6 +14,7 @@ import {
 } from "./helpers/booking-mocks.js";
 import { ui } from "./helpers/ui.js";
 
+const shots = process.env.MELKN_SHOTS_DIR;
 const PARTY_MSG =
   "Please tell us about the party (what it is, and anything we should know).";
 const GROUP_MSG =
@@ -146,17 +146,12 @@ test.describe("optional Special Notes on airport, bar, and Ride", () => {
       width: page.viewportSize().width,
       height: quote.y + quote.height - top.y + 32,
     };
-    mkdirSync("/workspace/site-ride-option-20261127/shots", {
-      recursive: true,
-    });
-    await page.screenshot({
-      path: "/workspace/site-ride-option-20261127/shots/notes-optional-airport.png",
-      clip,
-    });
-    await page.screenshot({
-      path: "/workspace/notes-optional-airport-20261127.png",
-      clip,
-    });
+    if (shots) {
+      await page.screenshot({
+        path: `${shots}/notes-optional-airport.png`,
+        clip,
+      });
+    }
     await ui.submit(page).click();
     await expect(ui.result(page)).toContainText("Request received");
   });

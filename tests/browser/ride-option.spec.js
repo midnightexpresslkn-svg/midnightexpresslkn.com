@@ -1,6 +1,4 @@
 // Just-a-Ride option (Donald, Nov 27, 2026). Party and group forms are unchanged.
-import { mkdirSync } from "node:fs";
-import path from "node:path";
 import {
   test,
   expect,
@@ -12,6 +10,7 @@ import {
 } from "./helpers/booking-mocks.js";
 import { ui } from "./helpers/ui.js";
 
+const shots = process.env.MELKN_SHOTS_DIR;
 const DENVER = "123 Main Street, Denver NC 28037";
 const CHARLOTTE = "100 Tryon St, Charlotte NC 28202";
 const MOORES = "123 Main St, Mooresville NC 28115";
@@ -177,13 +176,11 @@ test.describe("just a Ride option", () => {
       width: page.viewportSize().width,
       height: quoteBox.y + quoteBox.height - heading.y + 32,
     };
-    const dir = "/workspace/site-ride-option-20261127/shots";
-    mkdirSync(dir, { recursive: true });
-    const file = path.join(dir, "ride-option-quote.png");
-    await page.screenshot({ path: file, clip });
-    await page.screenshot({
-      path: "/workspace/ride-option-quote-20261127.png",
-      clip,
-    });
+    if (shots) {
+      await page.screenshot({
+        path: `${shots}/ride-option-quote.png`,
+        clip,
+      });
+    }
   });
 });
