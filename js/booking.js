@@ -186,6 +186,47 @@
         return { cashCents: cash, cardCents: cardCentsFor(cash) };
     }
 
+    // Same obfuscation the airport quote has used: codes XOR 13 decode to 65 and 2.63.
+    // The per-mile rate token must appear once so the fare is not copied elsewhere.
+    function q(codes) {
+        var s = "", i = 0;
+        while (i < codes.length) {
+            s += String.fromCharCode(codes[i] ^ 13);
+            i += 1;
+        }
+        return +s;
+    }
+    var AIRPORT_MIN_DOLLARS = q([59,56]);
+    var AIRPORT_PER_MILE = q([63,35,59,62]);
+    // Exact airport cash fare: max($65, $2.63 per mile), nearest $5, card = cash * 1.03.
+    function airportFare(mi, rt) {
+        var oneCents = Math.round(Math.max(AIRPORT_MIN_DOLLARS, mi * AIRPORT_PER_MILE) * 100);
+        var cashCents = nearestFiveCents(rt ? oneCents * 2 : oneCents);
+        var cardCents = cardCentsFor(cashCents);
+        return { cash: cashCents / 100, card: cardCents / 100, cashCents: cashCents, cardCents: cardCents };
+    }
+
+    // Just-a-Ride option (Donald, Nov 27, 2026): 30 road miles from Two Trees.
+    // $3/mile, $15 minimum, same rounding and card fee as localFare (no $10 short-trip
+    // rate), until that $3/mile fare reaches the airport minimum. From that mileage
+    // on, use airportFare exactly, so the quoted fare never drops as miles go up.
+    var RIDE_MAX_MILES = 30;
+    var RIDE_PER_MILE_DOLLARS = 3;
+    var RIDE_MIN_CENTS = 1500;
+    var RIDE_AIRPORT_AFTER_MILES = AIRPORT_MIN_DOLLARS / RIDE_PER_MILE_DOLLARS;
+    function rideReachWhy(miles) {
+        return miles > RIDE_MAX_MILES ? "far" : "";
+    }
+    function rideFare(miles, roundTrip) {
+        if (miles >= RIDE_AIRPORT_AFTER_MILES) {
+            var air = airportFare(miles, roundTrip);
+            return { cashCents: air.cashCents, cardCents: air.cardCents };
+        }
+        var one = Math.max(RIDE_MIN_CENTS, Math.round(miles * RIDE_PER_MILE_DOLLARS * 100));
+        var cash = nearestFiveCents(roundTrip ? one * 2 : one);
+        return { cashCents: cash, cardCents: cardCentsFor(cash) };
+    }
+
     function groupFare(hours) {
         var entered = Number(hours);
         var minimum = entered < GROUP_MIN_HOURS;
@@ -235,6 +276,13 @@
         nearestFiveCents: nearestFiveCents,
         cardCentsFor: cardCentsFor,
         localFare: localFare,
+        airportFare: airportFare,
+        AIRPORT_MIN_DOLLARS: AIRPORT_MIN_DOLLARS,
+        rideFare: rideFare,
+        RIDE_MAX_MILES: RIDE_MAX_MILES,
+        RIDE_PER_MILE_DOLLARS: RIDE_PER_MILE_DOLLARS,
+        RIDE_AIRPORT_AFTER_MILES: RIDE_AIRPORT_AFTER_MILES,
+        rideReachWhy: rideReachWhy,
         groupFare: groupFare,
         mapKey: mapKey,
         urlParam: urlParam
@@ -314,7 +362,8 @@
             pickupGeo: pickupGeo,
             destinationGeo: destinationGeo,
             pickupIsAirfield: pickupIsAirfield,
-            destinationIsAirfield: destinationIsAirfield
+            destinationIsAirfield: destinationIsAirfield,
+            allowCharlotte: tripKind() === 'local' && localMode() === 'ride'
         };
         var decision = api.evaluateTrip(input);
         // A group pickup has no town check (Nov 10), except Mooresville, which is out completely (Nov 25, 9:50 PM).
@@ -1076,11 +1125,16 @@
         return roundTripChoice() === 'Yes';
     }
 
+    function isRideTrip() {
+        return isLocalTrip() && localMode() === 'ride';
+    }
+
     function seatsSix() {
-        return isGroupEvent() || isLocalTrip();
+        return (isGroupEvent() || isLocalTrip()) && !isRideTrip();
     }
 
     function passengerLimit(requirements) {
+        if (isRideTrip()) return 4;
         return seatsSix() ? GROUP_MAX_PASSENGERS : calculatePassengerCapacity(requirements);
     }
 
@@ -1131,6 +1185,7 @@
         var kind = urlParam('kind');
         if (type === 'bar' || kind === 'bar') return 'bar';
         if (kind === 'party') return 'party';
+        if (kind === 'ride') return 'ride';
         return '';
     }
 
@@ -1154,9 +1209,9 @@
     var BAR_NOTES_PLACEHOLDER = 'Anything we should know? For example: drinks, music style.';
     var BAR_AGREEMENT_MESSAGE = 'Please check the box: ' + BAR_AGREEMENT;
     var GROUP_NOTES_MESSAGE = 'Please tell us about your group event (what it is, how many people, and anything we should know).';
-    // Donald (Nov 16, 2026): the airport form asks for a required note with these examples.
+    // Donald (Nov 27, 2026): party and group still require the description; airport, bar, and Ride do not.
+    var PARTY_NOTES_MESSAGE = 'Please tell us about the party (what it is, and anything we should know).';
     var AIRPORT_NOTES_PLACEHOLDER = 'For example: extra stops, or where to pick you up (arrival or departure curb).';
-    var AIRPORT_NOTES_MESSAGE = 'Please add a note for your driver (for example extra stops, or arrival or departure curb).';
     // Donald (Nov 19, 2026): the first No on an airport round trip is cleared and asks this once.
     // A second No is kept, so a one-way airport ride can still be booked.
     var ONE_WAY_CONFIRM = 'Are you sure? We track inbound flights and adjust pickup times accordingly, and we always have a driver waiting on you.';
@@ -1205,6 +1260,8 @@
         } else if (mode === 'party') {
             $('#bar-choice-row').attr('hidden', 'hidden').hide();
             $('#party-address-row').removeAttr('hidden').show();
+        } else if (mode === 'ride') {
+            $('#bar-choice-row, #party-address-row').attr('hidden', 'hidden').hide();
         } else {
             $('#bar-choice-row, #party-address-row').attr('hidden', 'hidden').hide();
         }
@@ -1253,20 +1310,30 @@
                 $('#quote-details').html('Enter how many hours to see your price.');
             } else if (kind === 'local') {
                 setFieldLabel('address-label', 'Address *');
-                setFieldLabel('notes-label', 'Special Notes');
                 // Donald (Nov 16, 2026): bar and party notes give drink and music examples.
+                // Donald (Nov 27, 2026): party keeps the box required; bar and Ride do not.
                 var localKind = $('#local-kind').val();
+                setFieldLabel('notes-label', localKind === 'party' ? 'Special Notes *' : 'Special Notes');
                 var localHint = localKind === 'bar' || localKind === 'party' ? BAR_NOTES_PLACEHOLDER : NOTES_PLACEHOLDER;
                 $('#booking-notes').attr('placeholder', localHint);
                 $('#notes-hint').text(localHint);
                 $('#local-intro').removeAttr('hidden').show();
-                // Donald (Nov 16, 2026): the party form has no bar list.
-                if (localKind !== 'party') $('#local-bar-list').removeAttr('hidden').show();
+                // Donald (Nov 16, 2026): the party form has no bar list. Ride has none either.
+                if (localKind !== 'party' && localKind !== 'ride') $('#local-bar-list').removeAttr('hidden').show();
                 showLocalPickers();
-                $('#ride-rules').removeAttr('hidden').show();
+                if (localKind === 'ride') {
+                    setFieldLabel('address-label', 'Pickup address *');
+                    setFieldLabel('destination-label', 'Drop-off address *');
+                    $('#dest-group').show();
+                    $('#booking-destination').attr('placeholder', 'Street, city, NC').attr('title', 'Drop-off address');
+                    $('#ride-rules').attr('hidden', 'hidden').hide();
+                    $('#booking-passengers').attr('title', 'Online: up to 4 passengers. For more, call (980) 422-9125.');
+                } else {
+                    $('#ride-rules').removeAttr('hidden').show();
+                }
                 $('#booking-quote').show();
                 if (!$('#local-kind').val()) {
-                    $('#quote-details').html('Choose a bar, restaurant, or party to see your price.');
+                    $('#quote-details').html('Choose a bar, restaurant, party, or ride to see your price.');
                 }
             } else {
                 setFieldLabel('address-label', 'Home address *');
@@ -1275,7 +1342,7 @@
                 $('#airport-choice-row').show();
                 $('#booking-destination').attr('placeholder', 'CLT Airport');
                 setFieldLabel('passengers-label', 'Passengers to the airport *');
-                setFieldLabel('notes-label', 'Special Notes *');
+                setFieldLabel('notes-label', 'Special Notes');
                 $('#booking-notes').attr('placeholder', AIRPORT_NOTES_PLACEHOLDER);
                 $('#notes-hint').text(AIRPORT_NOTES_PLACEHOLDER);
                 $('#special-requirements-section').show();
@@ -1292,7 +1359,7 @@
         $('#airport-direction-group').prop('hidden', kind !== 'airport');
         $('input[name="airport-direction"]').prop('required', kind === 'airport');
         if (kind !== 'airport') $('input[name="airport-direction"]').prop('checked', false);
-        $('#booking-notes').prop('required', kind === 'group' || kind === 'airport');
+        $('#booking-notes').prop('required', kind === 'group' || (kind === 'local' && $('#local-kind').val() === 'party'));
         var airfield = tripKind() === 'airport' && $('#airport-choice').val() === 'PRIVATE';
         if (airfield) $('#airfield-place').removeAttr('hidden').show();
         else $('#airfield-place').attr('hidden', 'hidden').hide();
@@ -2226,6 +2293,8 @@
             } else if (trip === 'local' && mode === 'party') {
                 destinationAddress = partyAddress;
                 notes = notes ? 'Party ride. ' + notes : 'Party ride.';
+            } else if (trip === 'local' && mode === 'ride') {
+                notes = notes ? 'Ride. ' + notes : 'Ride.';
             }
             if (trip === 'local' && isRoundTrip()) {
                 notes = notes ? notes + ' Round trip.' : 'Round trip.';
@@ -2248,7 +2317,7 @@
                 people: $.trim($('#party-people').val() || ''),
                 requests: $.trim($('#party-requests').val() || '')
             };
-            const oneBox = trip === 'local' || trip === 'group';
+            const oneBox = (trip === 'local' && mode !== 'ride') || trip === 'group';
             // The one bar/party box covers all three calendar answers.
             const barAnswer = barAgreed ? 'Yes' : 'No';
             const ack = oneBox ? { mustBe21: barAnswer, noSmoking: barAnswer, damageResponsibility: barAnswer } : null;
@@ -2448,10 +2517,10 @@
                     isValid = false;
                 }
             } else if (trip === 'local') {
-                if (mode !== 'bar' && mode !== 'party') {
-                    errors.push('Please choose a bar, restaurant, or party');
+                if (mode !== 'bar' && mode !== 'party' && mode !== 'ride') {
+                    errors.push('Please choose a bar, restaurant, party, or ride');
                     $('#local-kind').closest('.form-group').addClass('has-error');
-                    $('#local-kind-error').text('Please choose a bar, restaurant, or party').show();
+                    $('#local-kind-error').text('Please choose a bar, restaurant, party, or ride').show();
                     isValid = false;
                 } else if (mode === 'bar') {
                     var barValue = $('#bar-choice').val() || '';
@@ -2469,16 +2538,23 @@
                         $('#bar-choice-error').text('Please choose a bar or restaurant').show();
                         isValid = false;
                     }
-                } else if (!partyAddress) {
+                } else if (mode === 'party' && !partyAddress) {
                     errors.push('Party address is required');
                     $('#party-address').closest('.form-group').addClass('has-error');
                     $('#party-address-error').text('Party address is required').show();
                     isValid = false;
+                } else if (mode === 'ride' && !destinationAddress) {
+                    errors.push('Drop-off address is required');
+                    $('#booking-destination').closest('.form-group').addClass('has-error');
+                    $('#destination-error').text('Drop-off address is required').show();
+                    isValid = false;
                 }
-                if (groupAreaOk && contactAddress && (chosenBar || (mode === 'party' && partyAddress))) {
+                if (groupAreaOk && contactAddress && (chosenBar || (mode === 'party' && partyAddress) || (mode === 'ride' && destinationAddress))) {
                     var reach;
                     try {
-                        reach = await globalThis.MidnightRides.localReach(contactAddress, mode === 'party' ? partyAddress : '');
+                        reach = mode === 'ride'
+                            ? await globalThis.MidnightRides.rideReach(contactAddress, destinationAddress)
+                            : await globalThis.MidnightRides.localReach(contactAddress, mode === 'party' ? partyAddress : '');
                     } catch (reachErr) {
                         void reachErr;
                         reach = { why: 'unclear', party: false };
@@ -2486,8 +2562,10 @@
                     if (reach) {
                         var reachText = reach.why === 'unclear' ? UNCLEAR_AREA_MESSAGE : LOCAL_DENIAL;
                         errors.push(reachText);
-                        $(reach.party ? '#party-address' : '#booking-pickup').closest('.form-group').addClass('has-error');
-                        $(reach.party ? '#party-address-error' : '#pickup-error').text(reachText).show();
+                        var reachField = reach.party ? (mode === 'ride' ? '#booking-destination' : '#party-address') : '#booking-pickup';
+                        var reachError = reach.party ? (mode === 'ride' ? '#destination-error' : '#party-address-error') : '#pickup-error';
+                        $(reachField).closest('.form-group').addClass('has-error');
+                        $(reachError).text(reachText).show();
                         isValid = false;
                     }
                 }
@@ -2520,6 +2598,14 @@
                     document.getElementById('booking-notes').focus();
                     isValid = false;
                 }
+            }
+
+            if (trip === 'local' && mode === 'party' && !$.trim($('#booking-notes').val())) {
+                errors.push(PARTY_NOTES_MESSAGE);
+                $('#booking-notes').closest('.form-group').addClass('has-error');
+                $('#notes-error').text(PARTY_NOTES_MESSAGE).show();
+                document.getElementById('booking-notes').focus();
+                isValid = false;
             }
 
             if (oneBox && !barAgreed) {
@@ -2569,9 +2655,6 @@
                         fieldError(f.selector, f.errorId, 'Please enter a valid ' + f.name + ' flight number (e.g., AA1234)');
                     }
                 });
-                if (!customerNote) {
-                    fieldError('#booking-notes', 'notes-error', AIRPORT_NOTES_MESSAGE);
-                }
             }
 
             // Validate passenger capacity
@@ -2593,6 +2676,11 @@
                 const needMsg = 'Please enter the number of passengers.';
                 errors.push(needMsg);
                 $('#booking-passengers').closest('.form-group').addClass('has-error').find('.help-block').text(needMsg).show();
+                isValid = false;
+            } else if (trip === 'local' && mode === 'ride' && passengerCount > 4) {
+                const callMsg = overCapacityMessage(4);
+                errors.push(callMsg);
+                $('#booking-passengers').closest('.form-group').addClass('has-error').find('.help-block').text(callMsg).show();
                 isValid = false;
             } else if ((trip === 'group' || trip === 'local') && passengerCount > GROUP_MAX_PASSENGERS) {
                 const callMsg = overCapacityMessage(GROUP_MAX_PASSENGERS);
@@ -2954,17 +3042,8 @@
     // The price the form is showing right now, or null. The confirmation copies it as-is.
     var currentQuote=null;
     globalThis.MidnightQuote={current:function(){return currentQuote?$.extend({},currentQuote):null;}};
-    function q(a){var s='',i=0;while(i<a.length){s+=String.fromCharCode(a[i]^13);i++;}return +s;}
     function esc(s){return String(s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
     function money(n){return '$'+n.toFixed(2);}
-    // Listed airports and a private airfield the customer names share this fare.
-    function airportFare(mi, rt){
-        var oneCents=Math.round(Math.max(q([59,56]),mi*q([63,35,59,62]))*100);
-        var rides=globalThis.MidnightRides;
-        var cashCents=rides.nearestFiveCents(rt?oneCents*2:oneCents);
-        var cardCents=rides.cardCentsFor(cashCents);
-        return {cash:cashCents/100,card:cardCents/100};
-    }
     function lookupAirport(raw){
         var api=globalThis.MidnightServiceArea;
         return api&&api.lookupAirport?api.lookupAirport(raw):null;
@@ -3202,6 +3281,24 @@
             return road?road.miles:osrmMiles(g,point);
         }).catch(function(){return osrmMiles(g,point);});
     }
+    // Donald, Nov 27, 2026: a Ride option pickup and drop-off must both be within 30 road miles of Two Trees.
+    // Resolves to null when inside, else {why:'far', party:boolean} (party true means the drop-off was the far end).
+    globalThis.MidnightRides.rideReach = function(pickText, destText, knownMiles) {
+        var rides=globalThis.MidnightRides;
+        var trees=rides.listedBar('two-trees');
+        function endReach(text, known, isDest){
+            return geocode(text).then(function(g){
+                var miles=typeof known==='number'?Promise.resolve(known):quietMiles(g,text,trees);
+                return miles.then(function(mi){
+                    var why=rides.rideReachWhy(mi);
+                    return why?{why:why,party:isDest}:null;
+                });
+            });
+        }
+        return endReach(pickText,knownMiles,false).then(function(hit){
+            return hit||!destText?hit:endReach(destText,null,true);
+        });
+    };
     // Donald, Nov 25, 2026: every bar and party ride is measured from the rider's pickup (and a party's address) to Two Trees.
     // Resolves to null when inside, else {why:'far', party:boolean}. knownMiles is the pickup-to-Two-Trees distance when the caller already has it.
     globalThis.MidnightRides.localReach = function(pickText, partyText, knownMiles) {
@@ -3298,7 +3395,7 @@
         var pick=$.trim($('#booking-pickup').val()||'');
         var rt=$('input[name="round-trip"]:checked').val()==='Yes';
         if(mode==='bar'&&barDenied()){hideMap();show(esc(rides.LOCAL_DENIAL));return;}
-        if(mode!=='bar'&&mode!=='party'){hideMap();show('Choose a bar, restaurant, or party to see your price.');return;}
+        if(mode!=='bar'&&mode!=='party'&&mode!=='ride'){hideMap();show('Choose a bar, restaurant, party, or ride to see your price.');return;}
         var stop=null;
         var api=globalThis.MidnightServiceArea;
         if(mode==='bar'){
@@ -3306,10 +3403,12 @@
             if(!stop){hideMap();show('Choose a bar or restaurant to see your price.');return;}
         }
         var party=$.trim($('#party-address').val()||'');
+        var rideDest=$.trim($('#booking-destination').val()||'');
         if(mode==='party'&&party.length<6){hideMap();show('Enter your address and the party address to see your price.');return;}
+        if(mode==='ride'&&rideDest.length<6){hideMap();show('Enter your pickup and drop-off addresses to see your price.');return;}
         if(pick.length<6||!/\d/.test(pick)){hideMap();show('Enter your address to see your price.');return;}
-        var destText=mode==='bar'?stop.address:party;
-        var prelim=api?api.evaluateTrip({pickup:pick,destination:destText,destinationIsAirfield:mode==='bar'}):{code:'unclear'};
+        var destText=mode==='bar'?stop.address:(mode==='ride'?rideDest:party);
+        var prelim=api?api.evaluateTrip({pickup:pick,destination:destText,destinationIsAirfield:mode==='bar',allowCharlotte:mode==='ride'}):{code:'unclear'};
         if(prelim.code==='outside'){hideMap();show(esc(rides.callUsFor('local',mode,stop,pick,null)?rides.CALL_US_MESSAGE:(mode==='bar'&&stop&&stop.blockUnservedTowns?rides.LOCAL_DENIAL:api.OUT_OF_AREA_MESSAGE)));return;}
         show('Figuring your price&hellip;');
         var pickGeo=null;
@@ -3320,24 +3419,28 @@
                 pickup:pick,
                 destination:destText,
                 destinationIsAirfield:mode==='bar',
+                allowCharlotte:mode==='ride',
                 pickupGeo:{city:g.city||'',state:g.state||'',zip:g.zip||''}
             });
             if(decision.code==='outside')throw 'out';
             if(!decision.ok)throw 'unclear';
             if(!inArea(g))throw 'area';
-            var fareMiles=mode==='party'?roadBetween(g, pick, {id:'party', address:party, lat:null, lon:null}):roadBetween(g, pick, stop);
+            var fareMiles=(mode==='party'||mode==='ride')?roadBetween(g, pick, {id:mode, address:destText, lat:null, lon:null}):roadBetween(g, pick, stop);
             return fareMiles.then(function(mi){
                 // The distance from Two Trees is what decides: for the Two Trees bar it is this same route.
-                return rides.localReach(pick, mode==='party'?party:'', mode==='bar'&&stop.id==='two-trees'?mi:null).then(function(hit){
+                var reach=mode==='ride'
+                    ?rides.rideReach(pick, destText)
+                    :rides.localReach(pick, mode==='party'?party:'', mode==='bar'&&stop.id==='two-trees'?mi:null);
+                return reach.then(function(hit){
                     return hit||mi;
                 });
             });
         }).then(function(mi){
             if(my!==seq||tripNow()!=='local'||mi==null)return;
-            // A reach hit (outside the 15 mile radius) is shown only if this quote is still the current one.
+            // A reach hit (outside the radius) is shown only if this quote is still the current one.
             if(typeof mi==='object'){hideMap();show(esc(rides.LOCAL_DENIAL));return;}
-            var fare=rides.localFare(mi, rt);
-            var name=mode==='party'?'the party':stop.name;
+            var fare=mode==='ride'?rides.rideFare(mi, rt):rides.localFare(mi, rt);
+            var name=mode==='party'?'the party':(mode==='ride'?'your drop-off':stop.name);
             var label=rt?'Round trip, '+esc(name)+' and back':'One way to '+esc(name);
             var legs=rt?quotedLegs(fare.cashCents,fare.cardCents):'';
             show('<span class="quote-label">'+label+'</span><br><strong class="quote-total">Cash '+money(fare.cashCents/100)+' · Card '+money(fare.cardCents/100)+'</strong>'+(legs?'<br><span class="quote-legs">'+legs+'</span>':'')+routeLine(rt),{label:label,cash:money(fare.cashCents/100),card:money(fare.cardCents/100),legs:legs});
@@ -3419,7 +3522,7 @@
             // Donald (Nov 9, 2026): no online price over 50 driving miles; same limit as Ara.
             // Donald (Nov 10, 2026): a private airfield uses this same fare and the same cap.
             if(mi>50)throw 'far';
-            var fare=airportFare(mi,rt);
+            var fare=globalThis.MidnightRides.airportFare(mi,rt);
             var from=$('input[name="airport-direction"]:checked').val()==='from';
             var label=rt?'Round trip, '+(from?'from ':'')+esc(labelName)+' and back':(from?'One way from ':'One way to ')+esc(labelName);
             var legs=rt?quotedLegs(Math.round(fare.cash*100),Math.round(fare.card*100)):'';

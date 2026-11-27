@@ -82,7 +82,6 @@ async function submitParty(view, pickup, party) {
     localKind: "party",
     pickup,
     party,
-    notes: "",
   });
   await submitForm(view);
   return resultText(view.document);

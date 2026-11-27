@@ -42,7 +42,7 @@ test.describe("party form at phone width", () => {
       .getByRole("combobox", { name: "Trip type" })
       .selectOption("local");
     await page
-      .getByRole("combobox", { name: "Bar, restaurant, or party" })
+      .getByRole("combobox", { name: "Bar, restaurant, party, or ride" })
       .selectOption("party");
     const round = page.getByRole("group", { name: /Round trip/ });
     await expect(
@@ -65,7 +65,7 @@ test.describe("party form at phone width", () => {
       page.getByRole("checkbox", { name: "No smoking *" }),
     ).toBeHidden();
     await expect(
-      page.getByRole("textbox", { name: "Special Notes" }),
+      page.getByRole("textbox", { name: "Special Notes *" }),
     ).toHaveAttribute(
       "placeholder",
       "Anything we should know? For example: drinks, music style.",
@@ -88,7 +88,7 @@ test.describe("party form at phone width", () => {
     ]);
     if (shots) {
       await page
-        .getByRole("combobox", { name: "Bar, restaurant, or party" })
+        .getByRole("combobox", { name: "Bar, restaurant, party, or ride" })
         .evaluate((el) => el.scrollIntoView({ block: "start" }));
       await settled(page);
       await page.screenshot({ path: shots + "/melkn-party-form-top.png" });

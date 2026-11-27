@@ -8,7 +8,7 @@ export const ui = {
   airport: (page) =>
     page.getByRole("combobox", { name: "Airport", exact: true }),
   localKind: (page) =>
-    page.getByRole("combobox", { name: "Bar, restaurant, or party" }),
+    page.getByRole("combobox", { name: "Bar, restaurant, party, or ride" }),
   bar: (page) =>
     page.getByRole("combobox", { name: "Bar or restaurant", exact: true }),
   name: (page) => page.getByRole("textbox", { name: "Enter your full name" }),
@@ -17,10 +17,13 @@ export const ui = {
   email: (page) => page.getByRole("textbox", { name: "Enter valid email" }),
   passengers: (page) => page.getByRole("spinbutton", { name: /^Online:/ }),
   // The pickup label reads Home address, Address, Pickup address, or Pickup Address by trip type.
+  // Drop-off is its own field on Just a Ride, so this locator must not also match it.
   pickup: (page) =>
     page.getByRole("textbox", {
-      name: /^(home |pickup |drop-off )?address \*$/i,
+      name: /^(home |pickup )?address \*$/i,
     }),
+  dropoff: (page) =>
+    page.getByRole("textbox", { name: /^drop-off address \*$/i }),
   hours: (page) => page.getByRole("spinbutton", { name: "How many hours *" }),
   // The notes box is Special Notes (optional or required) or Trip Description by trip type.
   notes: (page) =>

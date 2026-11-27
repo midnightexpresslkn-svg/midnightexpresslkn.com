@@ -39,7 +39,7 @@ function calendarNotes(view) {
 }
 
 describe.each(scripts)("live edges %s", (script) => {
-  it("pads a January date and requires an airport note", async () => {
+  it("pads a January date and still accepts an airport form with no note", async () => {
     const view = await renderBooking(script);
     await fillValid(view, {
       trip: "airport",
@@ -47,21 +47,11 @@ describe.each(scripts)("live edges %s", (script) => {
       time: "09:00:00",
       notes: "",
     });
-    await submitForm(view);
-    check(formPosts(view.state).length, 0, {
-      label: "an airport request with no note is not sent",
+    check(view.document.querySelector("#booking-notes").required, false, {
+      label: "an airport note is optional",
       source: "js/booking.js",
       loaded: script,
     });
-    check(
-      view.document.querySelector("#notes-error").textContent,
-      "Please add a note for your driver (for example extra stops, or arrival or departure curb).",
-      {
-        label: "the note error names the examples",
-        source: "js/booking.js",
-        loaded: script,
-      },
-    );
     const notes = view.document.querySelector("#booking-notes");
     notes.value = "Curb 2";
     await submitForm(view);

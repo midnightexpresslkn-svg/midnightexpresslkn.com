@@ -76,7 +76,7 @@ test.describe("airport form at phone width", () => {
     await expect(back).toBeHidden();
     await expect(back).toHaveValue("");
     await expect(
-      page.getByRole("textbox", { name: /Special Notes \*/ }),
+      page.getByRole("textbox", { name: /^Special Notes$/ }),
     ).toHaveAttribute("placeholder", /extra stops.*arrival or departure curb/);
 
     // How many? is only required after Yes.
@@ -192,10 +192,13 @@ test.describe("airport form at phone width", () => {
     await page.getByRole("textbox", { name: /Special Notes/ }).fill("");
     await request(page).click();
     // Each message shows by its field and again in the list above the button.
+    // Special Notes is optional on airport rides (Donald, Nov 27 2026).
+    await expect(
+      page.getByText(/Please add a note for your driver/),
+    ).toHaveCount(0);
     for (const message of [
       "Please enter your departure flight number",
       "Please enter your arrival flight number",
-      /^Please add a note for your driver/,
     ]) {
       await expect(page.getByText(message)).toHaveCount(2);
       await expect(

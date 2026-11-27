@@ -484,6 +484,11 @@ export async function fillValid(view, overrides = {}) {
         doc.querySelector("#party-address"),
         overrides.party || "200 Oak St, Sherrills Ford NC",
       );
+    } else if (localKind === "ride") {
+      setControl(
+        doc.querySelector("#booking-destination"),
+        overrides.destination || "200 Oak St, Sherrills Ford NC",
+      );
     } else if (overrides.bar !== "") {
       const bar = doc.querySelector("#bar-choice");
       bar.value = overrides.bar || "two-trees";
@@ -544,6 +549,11 @@ export async function fillValid(view, overrides = {}) {
     setControl(doc.querySelector("#booking-notes"), "Family reunion");
   } else if (trip === "airport") {
     setControl(doc.querySelector("#booking-notes"), "Departure curb, please.");
+  } else if (trip === "local" && (overrides.localKind || "bar") === "party") {
+    setControl(
+      doc.querySelector("#booking-notes"),
+      "Drinks: water. Music: 90s pop.",
+    );
   }
   if (trip === "airport") {
     const direction =

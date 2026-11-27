@@ -575,13 +575,22 @@
     var required = [pickup, destination].filter(function (end) {
       return end.status !== "airport";
     });
+    // Ride trips may go to or from Charlotte. Bar, party, airport, and group
+    // calls leave allowCharlotte off, so Charlotte stays refused for them.
+    function charlotteOk(end) {
+      return (
+        data.allowCharlotte &&
+        end.status === "outside" &&
+        String(end.town).toLowerCase() === "charlotte"
+      );
+    }
     for (var i = 0; i < required.length; i++) {
-      if (required[i].status === "outside") {
+      if (required[i].status === "outside" && !charlotteOk(required[i])) {
         return { ok: false, code: "outside", message: OUT_OF_AREA_MESSAGE };
       }
     }
     for (var j = 0; j < required.length; j++) {
-      if (required[j].status !== "served") {
+      if (required[j].status !== "served" && !charlotteOk(required[j])) {
         return { ok: false, code: "unclear", message: UNCLEAR_MESSAGE };
       }
     }

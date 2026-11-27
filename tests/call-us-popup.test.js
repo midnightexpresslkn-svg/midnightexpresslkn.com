@@ -267,7 +267,6 @@ describe.each(scripts)("call-us pop-up %s", (script) => {
       trip: "local",
       localKind: "party",
       pickup: "10 Main St, Statesville NC 28677",
-      notes: "",
     });
     await submitForm(party);
     check(resultText(party.document), SORRY, lbl("party summary"));

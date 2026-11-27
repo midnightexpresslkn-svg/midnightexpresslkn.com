@@ -189,7 +189,7 @@ test.describe("booking page", () => {
     );
     await expectPresentButHidden(
       page.getByRole("textbox", {
-        name: "Enter your destination address",
+        name: /^destination address \*$/i,
         includeHidden: true,
       }),
     );
@@ -556,7 +556,7 @@ test.describe("booking page", () => {
     ).toHaveCount(0);
     await expectPresentButHidden(
       page.getByRole("textbox", {
-        name: "Enter your destination address",
+        name: /^destination address \*$/i,
         includeHidden: true,
       }),
     );
@@ -578,7 +578,7 @@ test.describe("booking page", () => {
     await ui.airport(page).selectOption("KIPJ");
     await expect(
       page.getByRole("textbox", {
-        name: "Enter your destination address",
+        name: /^destination address \*$/i,
         includeHidden: true,
       }),
     ).toHaveValue("KIPJ");
@@ -770,12 +770,12 @@ test.describe("new rides on a 375px phone", () => {
     await page.goto("/");
     await ui.tripType(page).selectOption("local");
     const intro = page.getByText(
-      "Transportation to local bars, restaurants, and private parties, plus hourly group events.",
+      "Transportation to local bars, restaurants, private parties, and point-to-point rides, plus hourly group events.",
       { exact: true },
     );
     await expect(intro).toBeVisible();
     await expect(intro).toHaveText(
-      "Transportation to local bars, restaurants, and private parties, plus hourly group events.",
+      "Transportation to local bars, restaurants, private parties, and point-to-point rides, plus hourly group events.",
     );
     const list = page.getByRole("list").filter({ hasText: names[1] });
     await expect(list).toBeVisible();
@@ -954,18 +954,18 @@ test.describe("group description on a 375px phone", () => {
     );
   });
 
-  test("an airport ride needs a description", async ({ page }) => {
+  test("an airport ride can omit the description", async ({ page }) => {
     const posts = await installMocks(page, { miles: 10 });
     await page.goto("/");
     await ui.tripType(page).selectOption("airport");
     await expect(
-      page.getByRole("textbox", { name: "Special Notes *", exact: true }),
+      page.getByRole("textbox", { name: "Special Notes", exact: true }),
     ).toBeVisible();
-    await expect(ui.notes(page)).toHaveAttribute("required", "");
+    await expect(ui.notes(page)).not.toHaveAttribute("required", "");
     await fillIdentity(page);
     await ui.airport(page).selectOption("CLT");
     await ui.pickup(page).fill("123 Main Street, Denver NC 28037");
-    await answerBags(page);
+    await answerBags(page, { note: "" });
     await answerRoundTrip(page);
     await ui.submit(page).click();
     await expect(ui.result(page)).toContainText("Request received");
@@ -990,14 +990,15 @@ test.describe("group description on a 375px phone", () => {
     expect(posts.length).toBeGreaterThan(0);
   });
 
-  test("a party ride can omit the description", async ({ page }) => {
+  test("a party ride still needs a description", async ({ page }) => {
     const posts = await installMocks(page, { miles: 4 });
     await page.goto("/");
     await ui.tripType(page).selectOption("local");
     await ui.localKind(page).selectOption("party");
     await expect(
-      page.getByRole("textbox", { name: "Special Notes", exact: true }),
+      page.getByRole("textbox", { name: "Special Notes *", exact: true }),
     ).toBeVisible();
+    await expect(ui.notes(page)).toHaveAttribute("required", "");
     await fillIdentity(page);
     await ui.partyAddress(page).fill("200 Oak St, Sherrills Ford NC");
     await ui.pickup(page).fill("123 Main Street, Denver NC 28037");
@@ -1008,21 +1009,23 @@ test.describe("group description on a 375px phone", () => {
     await answerRoundTrip(page);
     await agreeBar(page);
     await ui.submit(page).click();
-    await expect(ui.result(page)).toContainText("Request received");
-    expect(posts.length).toBeGreaterThan(0);
+    await expect(ui.result(page)).toContainText(
+      "Please tell us about the party (what it is, and anything we should know).",
+    );
+    expect(posts).toEqual([]);
   });
 
-  test("a private airfield needs a description too", async ({ page }) => {
+  test("a private airfield can omit the description too", async ({ page }) => {
     const posts = await installMocks(page, { miles: 40 });
     await page.goto("/");
     await ui.tripType(page).selectOption("airport");
     await ui.airport(page).selectOption("PRIVATE");
-    await expect(ui.notes(page)).toHaveAttribute("required", "");
+    await expect(ui.notes(page)).not.toHaveAttribute("required", "");
     await fillIdentity(page);
     await ui.airfieldName(page).fill("Smith Field");
     await ui.airfieldAddress(page).fill("100 Runway Rd, Charlotte NC 28202");
     await ui.pickup(page).fill("123 Main Street, Denver NC 28037");
-    await answerBags(page);
+    await answerBags(page, { note: "" });
     await answerRoundTrip(page);
     await ui.submit(page).click();
     await expect(ui.result(page)).toContainText("Request received");

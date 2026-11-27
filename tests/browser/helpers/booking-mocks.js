@@ -206,7 +206,7 @@ export async function fillAirport(
 export async function fillBar(page, { round = false, agree = true } = {}) {
   await page.getByRole("combobox", { name: "Trip type" }).selectOption("local");
   await page
-    .getByRole("combobox", { name: "Bar, restaurant, or party" })
+    .getByRole("combobox", { name: "Bar, restaurant, party, or ride" })
     .selectOption("bar");
   await page
     .getByRole("combobox", { name: "Bar or restaurant", exact: true })
@@ -380,7 +380,7 @@ export async function fillParty(
 ) {
   await page.getByRole("combobox", { name: "Trip type" }).selectOption("local");
   await page
-    .getByRole("combobox", { name: "Bar, restaurant, or party" })
+    .getByRole("combobox", { name: "Bar, restaurant, party, or ride" })
     .selectOption("party");
   await page
     .getByLabel("Party address *", { exact: true })
@@ -424,7 +424,7 @@ export async function fillParty(
     await page.getByLabel(/How many people for the ride back/).fill("4");
   }
   await page
-    .getByRole("textbox", { name: "Special Notes" })
+    .getByRole("textbox", { name: /^Special Notes/ })
     .fill("Drinks: water. Music: 90s pop.");
   await page
     .getByRole("textbox", { name: "Special requests" })

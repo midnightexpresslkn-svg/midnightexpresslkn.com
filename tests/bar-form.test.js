@@ -306,7 +306,7 @@ describe.each(scripts)("bar form %s", (script) => {
     await submitForm(view);
     check(
       resultText(view.document).includes(
-        "Please choose a bar, restaurant, or party",
+        "Please choose a bar, restaurant, party, or ride",
       ),
       true,
       {
