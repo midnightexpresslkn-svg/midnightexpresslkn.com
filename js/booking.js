@@ -270,6 +270,7 @@
         GROUP_DEPOSIT_RATE: GROUP_DEPOSIT_RATE,
         GROUP_HOURLY_CENTS: GROUP_HOURLY_CENTS,
         listedBar: listedBar,
+        parsePhone: parsePhone,
         LOCAL_MAX_MILES: LOCAL_MAX_MILES,
         isMooresvilleEnd: isMooresvilleEnd,
         localReachWhy: localReachWhy,
@@ -761,14 +762,71 @@
     // VALIDATION
     // =================================================================
 
+    // Phone numbers (Donald, Nov 27, 2026). A rider may type or paste a number any way: 7406270080, 740-627-0080,
+    // (740) 627-0080, 1-740-627-0080, +1 (740) 627-0080 (Apple Contacts), with spaces, dots, non-breaking spaces,
+    // or the invisible direction marks Apple adds. A US/Canada number is always saved as the same 10 digits as
+    // before (7406270080). Any other country is saved whole as + country code + number (+442079460958).
+    // Nothing is ever cut short: a number that is too long or too short is refused with a message instead.
+    var PHONE_HIDDEN_CHARS = /[\u00AD\u061C\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/g;
+    var PHONE_US_ERROR = 'Please enter a valid 10-digit phone number (like 740-627-0080), or start with + and your country code if you are outside the US';
+    var PHONE_WORLD_ERROR = 'Please enter a valid phone number with + and your country code (like +44 20 7946 0958)';
+
     /**
-     * Validate phone number (must be 10 digits)
-     * @param {string} phone - Phone number
-     * @returns {boolean}
+     * Read a phone number however it was typed or pasted.
+     * @param {*} raw - What is in the phone box
+     * @param {boolean} [tidy] - true while typing: drop letters and stray symbols instead of refusing them
+     * @returns {{text: string, kind: string, complete: boolean, saved: string, display: string, error: string}}
+     *   kind is 'empty', 'us' (US/Canada) or 'world'; saved is the value to send ('' until complete);
+     *   display is the tidy text to show in the box; error is the message when it is not valid.
      */
-    function validatePhone(phone) {
-        const digitsOnly = phone.replace(/\D/g, '');
-        return digitsOnly.length === 10;
+    function parsePhone(raw, tidy) {
+        let shown = String(raw == null ? '' : raw).normalize('NFKC').replace(PHONE_HIDDEN_CHARS, '').replace(/\s+/g, ' ').replace(/^ /, '');
+        if (tidy) shown = shown.replace(/[^\d\s().+-]/g, '').replace(/(?!^)\+/g, '').replace(/^ /, '');
+        // The text keeps a space typed at the end (the rider is still typing); the checks below ignore it.
+        const text = shown.trim();
+        const result = { text: text, kind: 'empty', complete: false, saved: '', display: '', error: '' };
+        if (!text) return result;
+        result.kind = 'us';
+        result.display = shown;
+        result.error = PHONE_US_ERROR;
+        if (!/^\+?[\d\s().-]*$/.test(text)) return result;
+        // Outside the US a number starts with + (or 00, or 011 when dialed from the US) and the country code.
+        let digits = text.replace(/\D/g, '');
+        let world = text.charAt(0) === '+';
+        if (world) {
+            // A trunk 0 written as (0) after the country code is not part of the number: +44 (0) 20 7946 0958
+            digits = text.replace(/\(\s*0\s*\)/g, '').replace(/\D/g, '');
+        } else if (digits.slice(0, 2) === '00' || digits.slice(0, 3) === '011') {
+            world = true;
+            digits = digits.replace(/^0{2}|^011/, '');
+        }
+        if (world && digits.charAt(0) !== '1') {
+            result.kind = 'world';
+            result.error = PHONE_WORLD_ERROR;
+            if (digits.charAt(0) !== '0' && digits.length >= 8 && digits.length <= 15) {
+                result.complete = true;
+                result.saved = '+' + digits;
+                result.error = '';
+            }
+            return result;
+        }
+        // US and Canada: a leading 1 is the country code (no area code starts with 1), so it is never part of the 10 digits.
+        const hadOne = digits.charAt(0) === '1';
+        const national = hadOne ? digits.slice(1) : digits;
+        if (national.length === 0) {
+            result.display = hadOne ? '+1' : '';
+            return result;
+        }
+        let formatted = '(' + national.substring(0, 3);
+        if (national.length > 3) formatted += ') ' + national.substring(3, 6);
+        if (national.length > 6) formatted += '-' + national.substring(6);
+        result.display = formatted;
+        if (/^[2-9]\d{2}[2-9]\d{6}$/.test(national)) {
+            result.complete = true;
+            result.saved = national;
+            result.error = '';
+        }
+        return result;
     }
 
     /**
@@ -2129,31 +2187,15 @@
             }
         });
 
-        // Auto-format phone as user types and validate
+        // Tidy the phone as it is typed or pasted (+1 (740) 627-0080 becomes (740) 627-0080) and validate
         $('#booking-phone').on('input', function() {
-            let value = $(this).val().replace(/\D/g, '');
-            if (value.length > 10) {
-                value = value.substring(0, 10);
-            }
-
-            // Format as (123) 456-7890
-            let formattedValue = '';
-            if (value.length > 0) {
-                if (value.length <= 3) {
-                    formattedValue = '(' + value;
-                } else if (value.length <= 6) {
-                    formattedValue = '(' + value.substring(0, 3) + ') ' + value.substring(3);
-                } else {
-                    formattedValue = '(' + value.substring(0, 3) + ') ' + value.substring(3, 6) + '-' + value.substring(6);
-                }
-            }
-
-            // Store the raw digits for validation and form submission
-            $(this).data('raw-value', value);
-            $(this).val(formattedValue);
+            const parsed = parsePhone($(this).val(), true);
+            // Store the saved number (US: 10 digits; other countries: + and the whole number) for submission
+            $(this).data('raw-value', parsed.saved);
+            if ($(this).val() !== parsed.display) $(this).val(parsed.display);
 
             // Clear error if phone becomes valid
-            if (validatePhone(value)) {
+            if (parsed.complete) {
                 $(this).closest('.form-group').find('.help-block').text('').hide();
             }
         });
@@ -2380,7 +2422,7 @@
             else if (partyRide && isRoundTrip()) dropoffAddress = party.dropoff;
             const formData = {
                 name: $('#booking-name').val().trim(),
-                phone: $('#booking-phone').data('raw-value') || $('#booking-phone').val().replace(/\D/g, ''),
+                phone: parsePhone($('#booking-phone').val()).saved,
                 email: $('#booking-email').val().trim(),
                 pickupDate: pickupDate,
                 pickupAddress: airportFrom() ? destinationAddress : contactAddress,
@@ -2438,14 +2480,14 @@
             }
 
             // Phone validation
-            const rawPhone = $('#booking-phone').data('raw-value') || $('#booking-phone').val().replace(/\D/g, '');
-            if (!rawPhone) {
+            const parsedPhone = parsePhone($('#booking-phone').val());
+            if (!parsedPhone.text) {
                 errors.push('Phone number is required');
                 $('#booking-phone').closest('.form-group').addClass('has-error').find('.help-block').text('Phone number is required').show();
                 isValid = false;
-            } else if (!validatePhone(rawPhone)) {
-                errors.push('Please enter a valid 10-digit phone number');
-                $('#booking-phone').closest('.form-group').addClass('has-error').find('.help-block').text('Please enter a valid 10-digit phone number').show();
+            } else if (!parsedPhone.complete) {
+                errors.push(parsedPhone.error);
+                $('#booking-phone').closest('.form-group').addClass('has-error').find('.help-block').text(parsedPhone.error).show();
                 isValid = false;
             }
 
