@@ -1058,6 +1058,11 @@
             durationMinutes: formData.durationMinutes,
             contactAddress: formData.contactAddress
         };
+        // Calendar script: which local ride this is. Only a Ride may have one Charlotte end (Donald, Nov 27, 2026).
+        if (formData.localKind) {
+            payload.localKind = formData.localKind;
+            if (formData.localKind === 'ride') payload.allowCharlotte = true;
+        }
         if (formData.mustBe21) {
             payload.mustBe21 = formData.mustBe21;
             payload.noSmoking = formData.noSmoking;
@@ -2163,6 +2168,11 @@
 
         // Trip type switches the form layout; group events are requested online and priced by the hour (refreshGroup)
         $('#trip-type').on('change', function() {
+            // "Just a ride" is on the first dropdown too; it opens Local with the Ride kind, the same as ?type=local&kind=ride.
+            if ($(this).val() === 'ride') {
+                $(this).val('local');
+                $('#local-kind').val('ride');
+            }
             $('#trip-type-error').text('').hide();
             $(this).closest('.form-group').removeClass('has-error');
             updateTripLayout();
@@ -2390,6 +2400,7 @@
                 returnTime: asksTripDetails ? returnTime : '',
                 specialRequirements: trip === 'airport' ? specialRequirements : [],
                 groupEvent: trip === 'group' ? 'Yes' : 'No',
+                localKind: trip === 'local' ? mode : '',
                 durationMinutes: durationMinutes,
                 contactAddress: contactAddress,
                 mustBe21: ack ? ack.mustBe21 : '',
@@ -2579,7 +2590,7 @@
             if (trip !== 'airport' && trip !== 'group' && trip !== 'local') {
                 errors.push('Please choose a trip type');
                 $('#trip-type').closest('.form-group').addClass('has-error');
-                $('#trip-type-error').text('Please choose Airport, Local Bars and Parties, or Group').show();
+                $('#trip-type-error').text('Please choose Airport, Local Bars and Parties, Just a ride, or Group').show();
                 isValid = false;
             }
 

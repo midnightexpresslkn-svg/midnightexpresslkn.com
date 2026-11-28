@@ -682,6 +682,15 @@ describe("booking", () => {
         );
         check(
           view.document.querySelector("#trip-type").options[3].textContent,
+          "Just a ride",
+          {
+            label: "Just a ride sits under Local Bars and Parties",
+            source: SOURCE.group,
+            loaded: script,
+          },
+        );
+        check(
+          view.document.querySelector("#trip-type").options[4].textContent,
           "Group",
           {
             label: "trip type still says Group",

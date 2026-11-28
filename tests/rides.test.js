@@ -216,13 +216,13 @@ describe.each(scripts)("local bars and group %s", (script) => {
     );
   });
 
-  it("lists Airport, then Local Bars and Parties, then Group", async () => {
+  it("lists Airport, then Local Bars and Parties, then Just a ride, then Group", async () => {
     const view = await renderBooking(script);
     check(
       [...view.document.querySelector("#trip-type").options].map(
         (option) => option.textContent,
       ),
-      ["Select…", "Airport", "Local Bars and Parties", "Group"],
+      ["Select…", "Airport", "Local Bars and Parties", "Just a ride", "Group"],
       {
         label: "trip menu order",
         source: "js/booking.js",
