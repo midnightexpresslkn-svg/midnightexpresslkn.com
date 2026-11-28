@@ -89,7 +89,7 @@ describe.each(scripts)("booking gaps %s", (script) => {
     });
     check(
       view.document.querySelector("#trip-type-error").textContent,
-      "Please choose Airport, Local Bars and Parties, or Group",
+      "Please choose Airport, Local Bars and Parties, Just a ride, or Group",
       {
         label: "the trip menu says how to choose",
         source: "js/booking.js",
