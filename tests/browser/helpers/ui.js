@@ -13,7 +13,7 @@ export const ui = {
     page.getByRole("combobox", { name: "Bar or restaurant", exact: true }),
   name: (page) => page.getByRole("textbox", { name: "Enter your full name" }),
   phone: (page) =>
-    page.getByRole("textbox", { name: "Enter 10 digit phone number" }),
+    page.getByRole("textbox", { name: "Enter your phone number" }),
   email: (page) => page.getByRole("textbox", { name: "Enter valid email" }),
   passengers: (page) => page.getByRole("spinbutton", { name: /^Online:/ }),
   // The pickup label reads Home address, Address, Pickup address, or Pickup Address by trip type.

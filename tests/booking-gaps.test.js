@@ -399,18 +399,32 @@ describe.each(scripts)("booking gaps %s", (script) => {
     });
   });
 
-  it("formats a phone number as the rider types and keeps ten digits", async () => {
+  it("formats a phone number as the rider types and never cuts digits off", async () => {
     const view = await renderBooking(script);
     const phone = view.document.querySelector("#booking-phone");
-    phone.value = "980422912599";
+    phone.value = "9804229125";
     phone.dispatchEvent(new view.window.Event("input", { bubbles: true }));
     check(phone.value, "(980) 422-9125", {
-      label: "extra digits are dropped and the rest is grouped",
+      label: "ten digits are grouped",
       source: "js/booking.js",
       loaded: script,
     });
     check(view.window.jQuery(phone).data("raw-value"), "9804229125", {
       label: "the stored phone is the ten digits",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    // This used to drop everything after the tenth digit, which saved Nikki Millburn's +1 number
+    // as 1740627008 (Nov 27, 2026). Extra digits now stay visible and the number is refused.
+    phone.value = "980422912599";
+    phone.dispatchEvent(new view.window.Event("input", { bubbles: true }));
+    check(phone.value, "(980) 422-912599", {
+      label: "extra digits stay visible",
+      source: "js/booking.js",
+      loaded: script,
+    });
+    check(view.window.jQuery(phone).data("raw-value"), "", {
+      label: "a number with extra digits is not stored",
       source: "js/booking.js",
       loaded: script,
     });
